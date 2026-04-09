@@ -55,6 +55,9 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
 
     try:
         result = asyncio.run(_run_snapshot(settings, AccountId(account_id), snap_date))
+        if result.success:
+            # Run detection asynchronously after a successful snapshot
+            asyncio.run(_run_detection(settings, AccountId(account_id), snap_date))
         return {
             "account_id": account_id,
             "snapshot_date": snapshot_date_iso,
@@ -99,6 +102,42 @@ async def _run_snapshot(settings: object, account_id: object, snap_date: date) -
             result = await use_case.execute(AccountId(str(account_id)), snap_date)
             _save_run(session, result)
             return result
+    finally:
+        await engine.dispose()
+
+
+async def _run_detection(settings: object, account_id: object, snap_date: date) -> None:
+    """Run the detection engine after a successful snapshot."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.run_detection import RunDetectionUseCase
+    from adcopilot.config import Settings
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.snapshot_repository import SqlSnapshotRepository
+
+    assert isinstance(settings, Settings)
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            from adcopilot.application.detection.registry import build_rule_engine
+            from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+                SqlRecommendationRepository,
+            )
+
+            rec_repo = SqlRecommendationRepository(session)
+            rule_engine = build_rule_engine(rec_repo)
+            use_case = RunDetectionUseCase(
+                snapshot_repo=SqlSnapshotRepository(session),
+                rec_repo=rec_repo,
+                rule_engine=rule_engine,
+                account_repo=SqlGoogleAdsAccountRepository(session),
+            )
+            await use_case.execute(AccountId(str(account_id)), snap_date)
+    except Exception:
+        logger.exception("detection failed (non-fatal)", account_id=str(account_id))
     finally:
         await engine.dispose()
 
