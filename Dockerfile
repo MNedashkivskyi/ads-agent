@@ -2,7 +2,7 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /app
 
-RUN pip install uv
+RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml ./
 RUN uv sync --no-dev --no-install-project
@@ -11,13 +11,15 @@ FROM python:3.12-slim AS runtime
 
 WORKDIR /app
 
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup --no-create-home appuser
 
 COPY --from=builder /app/.venv /app/.venv
 COPY adcopilot ./adcopilot
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 USER appuser
 
