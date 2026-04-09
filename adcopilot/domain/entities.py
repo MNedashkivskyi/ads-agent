@@ -33,6 +33,7 @@ class GoogleAdsAccount:
     is_manager: bool
     write_enabled: bool
     connected_at: datetime
+    needs_reauth: bool = False
 
 
 @dataclass(frozen=True)

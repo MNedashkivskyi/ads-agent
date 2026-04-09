@@ -18,6 +18,7 @@ def _model_to_domain(model: GoogleAdsAccountModel) -> GoogleAdsAccount:
         timezone=model.timezone,
         is_manager=model.is_manager,
         write_enabled=model.write_enabled,
+        needs_reauth=model.needs_reauth,
         connected_at=model.connected_at.replace(tzinfo=UTC)
         if model.connected_at.tzinfo is None
         else model.connected_at,
@@ -36,6 +37,7 @@ def _domain_to_model(
     model.timezone = account.timezone
     model.is_manager = account.is_manager
     model.write_enabled = account.write_enabled
+    model.needs_reauth = account.needs_reauth
     model.connected_at = account.connected_at
     return model
 
@@ -57,6 +59,15 @@ class SqlGoogleAdsAccountRepository:
         result = await self._session.execute(
             select(GoogleAdsAccountModel).where(
                 GoogleAdsAccountModel.user_id == uuid.UUID(user_id)
+            )
+        )
+        return [_model_to_domain(m) for m in result.scalars().all()]
+
+    async def list_active(self) -> list[GoogleAdsAccount]:
+        """Return all accounts that do not need re-authentication."""
+        result = await self._session.execute(
+            select(GoogleAdsAccountModel).where(
+                GoogleAdsAccountModel.needs_reauth == False  # noqa: E712
             )
         )
         return [_model_to_domain(m) for m in result.scalars().all()]
