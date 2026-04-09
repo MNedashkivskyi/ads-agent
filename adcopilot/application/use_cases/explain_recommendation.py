@@ -1,0 +1,85 @@
+"""ExplainRecommendation use case: generates plain-language explanation via LLM."""
+
+from __future__ import annotations
+
+import structlog
+
+from adcopilot.application.detection.templates import (
+    SYSTEM_PROMPT,
+    TEMPLATES,
+    format_micros_as_currency,
+)
+from adcopilot.application.ports.llm import LLMClient
+from adcopilot.application.ports.recommendation_repository import RecommendationRepository
+from adcopilot.domain.recommendation import RecommendationId
+
+logger = structlog.get_logger(__name__)
+
+
+def _build_prompt(template: str, evidence: dict[str, object], savings: str) -> str:
+    """Safely format a template with evidence values, never raising KeyError."""
+    # Collect all format keys from evidence plus computed values
+    fmt: dict[str, object] = {
+        "savings": savings,
+        # Common evidence aliases used across templates
+        "search_term": evidence.get("search_term", ""),
+        "clicks": evidence.get("clicks", 0),
+        "cost": evidence.get("cost_micros", 0),
+        "keyword": evidence.get("keyword_text", evidence.get("keyword", "")),
+        "keyword_text": evidence.get("keyword_text", ""),
+        "campaign": evidence.get("campaign_name", ""),
+        "ad_group": evidence.get("ad_group_name", ""),
+        "ad_id": evidence.get("ad_id", ""),
+        "roas": evidence.get("roas", 0.0),
+        "suggested_budget": evidence.get("suggested_budget_micros", 0),
+        "bleed_pct": float(evidence.get("bleed_ratio", 0) or 0) * 100,  # type: ignore[arg-type]
+        "impressions": evidence.get("impressions", 0),
+        "conversions": evidence.get("conversions", 0),
+    }
+    # Also merge all evidence keys directly for maximum flexibility
+    fmt.update({k: v for k, v in evidence.items() if k not in fmt})
+
+    try:
+        return template.format(**fmt)
+    except (KeyError, ValueError):
+        # Last-resort: return the template with savings injected literally
+        return f"{template}\n\nEstimated savings: {savings}"
+
+
+class ExplainRecommendationUseCase:
+    def __init__(self, llm: LLMClient, repo: RecommendationRepository) -> None:
+        self._llm = llm
+        self._repo = repo
+
+    async def execute(
+        self,
+        recommendation_id: RecommendationId,
+        language: str = "pl",
+    ) -> str:
+        rec = await self._repo.get(recommendation_id)
+        if rec is None:
+            raise ValueError(f"Recommendation {recommendation_id} not found")
+
+        savings_str = format_micros_as_currency(rec.estimated_monthly_savings_micros)
+        template = (
+            TEMPLATES.get(rec.kind, {}).get(language)
+            or TEMPLATES.get(rec.kind, {}).get("en")
+            or "Explain this recommendation: {evidence}"
+        )
+        user_prompt = _build_prompt(template, rec.evidence, savings_str)
+
+        explanation = await self._llm.complete(
+            system=SYSTEM_PROMPT,
+            user=user_prompt,
+            max_tokens=400,
+            temperature=0.3,
+        )
+
+        await self._repo.update_explanation(recommendation_id, explanation)
+        logger.info(
+            "recommendation explained",
+            rec_id=recommendation_id,
+            kind=rec.kind.value,
+            language=language,
+        )
+        return explanation
