@@ -36,6 +36,8 @@ services:
       redis:
         condition: service_healthy
     command: ["uvicorn", "adcopilot.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./adcopilot:/app/adcopilot
 
   worker:
     build: .
