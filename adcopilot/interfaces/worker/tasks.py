@@ -289,3 +289,55 @@ def run_nightly_snapshots() -> dict[str, object]:
 
     logger.info("nightly snapshots queued", count=len(account_ids), date=today)
     return {"queued": len(account_ids), "date": today}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    max_retries=3,
+    default_retry_delay=30,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    name="adcopilot.interfaces.worker.tasks.execute_recommendation_task",
+)
+def execute_recommendation_task(rec_id: str) -> dict[str, object]:
+    """Execute a single APPROVED recommendation against the Google Ads API."""
+    import asyncio
+
+    return asyncio.run(_run_execute_recommendation(rec_id))
+
+
+async def _run_execute_recommendation(rec_id: str) -> dict[str, object]:
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.execute_recommendation import ExecuteRecommendationUseCase
+    from adcopilot.config import get_settings
+    from adcopilot.domain.recommendation import RecommendationId
+    from adcopilot.infrastructure.db.repositories.audit_log_repository import SqlAuditLogRepository
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+    from adcopilot.infrastructure.google_ads.mutations_adapter import GoogleAdsMutationsAdapter
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            use_case = ExecuteRecommendationUseCase(
+                rec_repo=SqlRecommendationRepository(session),
+                audit_log_repo=SqlAuditLogRepository(session),
+                account_repo=SqlGoogleAdsAccountRepository(session),
+                credentials_repo=SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY),
+                mutations=GoogleAdsMutationsAdapter(settings),
+            )
+            result = await use_case.execute(RecommendationId(rec_id))
+    finally:
+        await engine.dispose()
+
+    logger.info("recommendation executed", rec_id=rec_id)
+    return {"rec_id": rec_id, "result": result}
