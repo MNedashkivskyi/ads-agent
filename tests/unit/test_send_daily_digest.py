@@ -139,7 +139,7 @@ async def test_sends_top_5_when_more_available() -> None:
 @pytest.mark.asyncio
 async def test_sends_all_when_fewer_than_5() -> None:
     recs = [_rec() for _ in range(3)]
-    uc, notifier = _make_uc(recs=recs)
+    uc, _notifier = _make_uc(recs=recs)
     result = await uc.execute(
         user_id=_USER_ID, telegram_chat_id=_CHAT_ID, account_ids=[_ACCOUNT_ID], today=_TODAY
     )

@@ -25,9 +25,13 @@ from adcopilot.application.detection.rules.rule_10_wrong_bidding_strategy import
     WrongBiddingStrategyRule,
 )
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
+from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
 
-def build_rule_engine(rec_repo: RecommendationRepository) -> RuleEngine:
+def build_rule_engine(
+    rec_repo: RecommendationRepository,
+    snooze_repo: SnoozeRepository | None = None,
+) -> RuleEngine:
     """Instantiate all detection rules and return a configured RuleEngine."""
     rules: list[DetectionRule] = [
         WastedSearchTermRule(),
@@ -41,4 +45,4 @@ def build_rule_engine(rec_repo: RecommendationRepository) -> RuleEngine:
         DeadKeywordRule(),
         WrongBiddingStrategyRule(),
     ]
-    return RuleEngine(rules=rules, rec_repo=rec_repo)
+    return RuleEngine(rules=rules, rec_repo=rec_repo, snooze_repo=snooze_repo)

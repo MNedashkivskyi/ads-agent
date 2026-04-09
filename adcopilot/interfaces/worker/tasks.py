@@ -126,9 +126,13 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
             from adcopilot.infrastructure.db.repositories.recommendation_repository import (
                 SqlRecommendationRepository,
             )
+            from adcopilot.infrastructure.db.repositories.snooze_repository import (
+                SqlSnoozeRepository,
+            )
 
             rec_repo = SqlRecommendationRepository(session)
-            rule_engine = build_rule_engine(rec_repo)
+            snooze_repo = SqlSnoozeRepository(session)
+            rule_engine = build_rule_engine(rec_repo, snooze_repo)
             use_case = RunDetectionUseCase(
                 snapshot_repo=SqlSnapshotRepository(session),
                 rec_repo=rec_repo,

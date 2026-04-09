@@ -28,6 +28,7 @@ __all__ = [
     "KeywordSnapshotModel",
     "OAuthCredentialsModel",
     "RecommendationModel",
+    "RecommendationSnoozeModel",
     "SearchTermSnapshotModel",
     "SnapshotRunModel",
     "UserModel",
@@ -233,6 +234,20 @@ class SnapshotRunModel(Base):
     ads: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class RecommendationSnoozeModel(Base):
+    __tablename__ = "recommendation_snoozes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    recommendation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(100), nullable=False)
+    target_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    snoozed_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

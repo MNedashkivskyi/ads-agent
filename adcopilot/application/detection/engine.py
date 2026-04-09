@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import structlog
 
 from adcopilot.application.detection.base import DetectionContext, DetectionRule
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
+from adcopilot.application.ports.snooze_repository import SnoozeRepository
 from adcopilot.domain.recommendation import Recommendation
 
 logger = structlog.get_logger(__name__)
@@ -16,9 +19,11 @@ class RuleEngine:
         self,
         rules: list[DetectionRule],
         rec_repo: RecommendationRepository,
+        snooze_repo: SnoozeRepository | None = None,
     ) -> None:
         self._rules = rules
         self._repo = rec_repo
+        self._snooze_repo = snooze_repo
 
     async def run(self, ctx: DetectionContext) -> list[Recommendation]:
         """Run all rules, deduplicate against existing PENDING, persist new ones."""
@@ -35,13 +40,26 @@ class RuleEngine:
         existing = await self._repo.list_pending(ctx.account.id)
         existing_keys = {(r.kind, r.target_hash) for r in existing}
 
-        # 3. Filter duplicates and persist
+        # 3. Load active snooze keys (kind_value, target_hash)
+        snoozed_keys: set[tuple[str, str]] = set()
+        if self._snooze_repo is not None:
+            now = datetime.now(UTC)
+            snoozed_keys = await self._snooze_repo.get_active_snooze_keys(ctx.account.id, now)
+
+        # 4. Filter duplicates and snoozed, then persist
         new_recs: list[Recommendation] = []
         for rec in candidates:
             key = (rec.kind, rec.target_hash)
             if key in existing_keys:
                 logger.debug(
                     "skipping duplicate recommendation",
+                    kind=rec.kind.value,
+                    target_hash=rec.target_hash[:8],
+                )
+                continue
+            if (rec.kind.value, rec.target_hash) in snoozed_keys:
+                logger.debug(
+                    "skipping snoozed recommendation",
                     kind=rec.kind.value,
                     target_hash=rec.target_hash[:8],
                 )
