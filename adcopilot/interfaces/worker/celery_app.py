@@ -24,6 +24,10 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.run_nightly_snapshots",
                     "schedule": crontab(hour=3, minute=0),
                 },
+                "daily-digests": {
+                    "task": "adcopilot.interfaces.worker.tasks.send_daily_digests_task",
+                    "schedule": crontab(hour=9, minute=0),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},

@@ -23,6 +23,7 @@ __all__ = [
     "AdSnapshotModel",
     "Base",
     "CampaignSnapshotModel",
+    "DigestSentLogModel",
     "GoogleAdsAccountModel",
     "KeywordSnapshotModel",
     "OAuthCredentialsModel",
@@ -233,6 +234,21 @@ class SnapshotRunModel(Base):
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class DigestSentLogModel(Base):
+    __tablename__ = "digest_sent_log"
+    __table_args__ = (
+        Index("uq_digest_sent_log_user_date", "user_id", "sent_date", unique=True),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    sent_date: Mapped[date] = mapped_column(Date, nullable=False)
+    recommendation_ids: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    sent_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
