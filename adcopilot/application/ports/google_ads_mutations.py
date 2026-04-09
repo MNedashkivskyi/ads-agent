@@ -38,3 +38,30 @@ class GoogleAdsMutationsPort(Protocol):
         campaign_id: int,
         new_budget_micros: int,
     ) -> None: ...
+
+    # --- Undo counterparts ---
+
+    async def enable_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        criterion_id: int,
+    ) -> None: ...
+
+    async def enable_ad(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        ad_id: int,
+    ) -> None: ...
+
+    async def remove_ad_group_negative_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None: ...

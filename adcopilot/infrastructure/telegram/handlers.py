@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import dataclasses
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
 from adcopilot.config import get_settings
@@ -63,3 +64,75 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         f"Your Telegram account has been linked successfully! Welcome, {user.email}."
     )
     logger.info("telegram linked", user_id=user_id, chat_id=chat_id)
+
+
+async def undo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/undo — lists the last executed recommendations with Undo buttons (7-day window)."""
+    if update.message is None:
+        return
+
+    chat_id = update.message.chat_id
+    settings = get_settings()
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            from sqlalchemy import select
+
+            from adcopilot.domain.entities import AccountId
+            from adcopilot.infrastructure.db.models import UserModel
+            from adcopilot.infrastructure.db.repositories.audit_log_repository import (
+                SqlAuditLogRepository,
+            )
+            from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+                SqlGoogleAdsAccountRepository,
+            )
+
+            result = await session.execute(
+                select(UserModel).where(UserModel.telegram_chat_id == chat_id)
+            )
+            user_model = result.scalar_one_or_none()
+            if user_model is None:
+                await update.message.reply_text(
+                    "Your Telegram account is not linked. Use /start with your link token."
+                )
+                return
+
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            audit_repo = SqlAuditLogRepository(session)
+
+            accounts = await account_repo.list_for_user(UserId(str(user_model.id)))
+            account_ids = [AccountId(a.id) for a in accounts]
+
+            since = datetime.now(UTC) - timedelta(days=7)
+            recent = await audit_repo.list_recent_executes(account_ids, since)
+
+            if not recent:
+                await update.message.reply_text(
+                    "No executed recommendations in the last 7 days. Nothing to undo."
+                )
+                return
+
+            # Deduplicate by recommendation_id, keep newest
+            seen: set[str] = set()
+            unique = []
+            for log in recent:
+                if log.recommendation_id not in seen:
+                    seen.add(log.recommendation_id)
+                    unique.append(log)
+                    if len(unique) == 5:
+                        break
+
+            await update.message.reply_text(
+                f"Your last {len(unique)} executed action(s) — tap Undo to reverse:"
+            )
+            for log in unique:
+                kind_label = log.kind.replace("_", " ").title()
+                ts = log.created_at.strftime("%Y-%m-%d %H:%M UTC")
+                text = f"{kind_label} — executed {ts}"
+                keyboard = InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("Undo", callback_data=f"undo_exec:{log.recommendation_id}")]]
+                )
+                await update.message.reply_text(text, reply_markup=keyboard)
+    finally:
+        await engine.dispose()
