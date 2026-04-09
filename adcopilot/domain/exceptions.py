@@ -20,3 +20,7 @@ class GoogleAdsRateLimited(AdCopilotError):
 
 class GoogleAdsUnavailable(AdCopilotError):
     pass
+
+
+class LLMError(AdCopilotError):
+    """Raised when the LLM backend fails (rate limit, timeout, API error)."""
