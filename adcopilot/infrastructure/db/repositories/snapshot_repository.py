@@ -7,6 +7,7 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adcopilot.application.ports.snapshot_repository import SnapshotData
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
@@ -14,6 +15,7 @@ from adcopilot.domain.snapshot import (
     CampaignSnapshot,
     KeywordSnapshot,
     SearchTermSnapshot,
+    SnapshotId,
 )
 from adcopilot.infrastructure.db.models import (
     AdGroupSnapshotModel,
@@ -261,3 +263,139 @@ class SqlSnapshotRepository:
         )
         row = result.scalar_one_or_none()
         return row
+
+    async def load_snapshot(self, account_id: AccountId, snapshot_date: date) -> SnapshotData:
+        """Load all five collections for an account on a given date."""
+        acct_uuid = uuid.UUID(account_id)
+
+        campaigns_res = await self._session.execute(
+            select(CampaignSnapshotModel).where(
+                CampaignSnapshotModel.account_id == acct_uuid,
+                CampaignSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        campaigns = [
+            CampaignSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                campaign_id=m.campaign_id,
+                name=m.name,
+                status=m.status,
+                channel_type=m.channel_type,
+                budget_micros=m.budget_micros,
+                bidding_strategy=m.bidding_strategy,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+                conv_value=m.conv_value,
+            )
+            for m in campaigns_res.scalars().all()
+        ]
+
+        ag_res = await self._session.execute(
+            select(AdGroupSnapshotModel).where(
+                AdGroupSnapshotModel.account_id == acct_uuid,
+                AdGroupSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        ad_groups = [
+            AdGroupSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                ad_group_id=m.ad_group_id,
+                campaign_id=m.campaign_id,
+                name=m.name,
+                status=m.status,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+            )
+            for m in ag_res.scalars().all()
+        ]
+
+        kw_res = await self._session.execute(
+            select(KeywordSnapshotModel).where(
+                KeywordSnapshotModel.account_id == acct_uuid,
+                KeywordSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        keywords = [
+            KeywordSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                criterion_id=m.criterion_id,
+                ad_group_id=m.ad_group_id,
+                text=m.text,
+                match_type=m.match_type,
+                status=m.status,
+                quality_score=m.quality_score,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+                ctr=m.ctr,
+                avg_cpc_micros=m.avg_cpc_micros,
+            )
+            for m in kw_res.scalars().all()
+        ]
+
+        st_res = await self._session.execute(
+            select(SearchTermSnapshotModel).where(
+                SearchTermSnapshotModel.account_id == acct_uuid,
+                SearchTermSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        search_terms = [
+            SearchTermSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                search_term=m.search_term,
+                ad_group_id=m.ad_group_id,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+                matched_keyword_id=m.matched_keyword_id,
+            )
+            for m in st_res.scalars().all()
+        ]
+
+        ad_res = await self._session.execute(
+            select(AdSnapshotModel).where(
+                AdSnapshotModel.account_id == acct_uuid,
+                AdSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        ads = [
+            AdSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                ad_id=m.ad_id,
+                ad_group_id=m.ad_group_id,
+                type=m.type,
+                status=m.status,
+                headlines_json=m.headlines_json,
+                descriptions_json=m.descriptions_json,
+                final_urls_json=m.final_urls_json,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+            )
+            for m in ad_res.scalars().all()
+        ]
+
+        return SnapshotData(
+            campaigns=campaigns,
+            ad_groups=ad_groups,
+            keywords=keywords,
+            search_terms=search_terms,
+            ads=ads,
+        )

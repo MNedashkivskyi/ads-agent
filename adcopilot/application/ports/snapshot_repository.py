@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
 from datetime import date
 from typing import Protocol
 
@@ -9,6 +12,17 @@ from adcopilot.domain.snapshot import (
     KeywordSnapshot,
     SearchTermSnapshot,
 )
+
+
+@dataclass
+class SnapshotData:
+    """All five snapshot collections for one account on one date."""
+
+    campaigns: list[CampaignSnapshot]
+    ad_groups: list[AdGroupSnapshot]
+    keywords: list[KeywordSnapshot]
+    search_terms: list[SearchTermSnapshot]
+    ads: list[AdSnapshot]
 
 
 class SnapshotRepository(Protocol):
@@ -35,3 +49,7 @@ class SnapshotRepository(Protocol):
     async def get_latest_snapshot_date(
         self, account_id: AccountId
     ) -> date | None: ...
+
+    async def load_snapshot(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> SnapshotData: ...
