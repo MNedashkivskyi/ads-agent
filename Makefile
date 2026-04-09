@@ -1,4 +1,4 @@
-.PHONY: install fmt lint type test up down migrate migrate-create
+.PHONY: install fmt lint type test test-all up down migrate migrate-create
 
 install:
 	uv sync --all-extras
