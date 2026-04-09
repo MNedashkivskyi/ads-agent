@@ -8,12 +8,15 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import get_settings
+from adcopilot.logging_config import configure_logging
+from adcopilot.middleware import RequestIdMiddleware
 
 logger = structlog.get_logger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
+    configure_logging()
     settings = get_settings()
     logger.info("adcopilot starting", env=settings.ENV)
     yield
@@ -22,6 +25,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app() -> FastAPI:
     application = FastAPI(title="AdCopilot", version="0.1.0", lifespan=lifespan)
+    application.add_middleware(RequestIdMiddleware)
 
     @application.get("/health")
     async def health() -> JSONResponse:

@@ -4,7 +4,6 @@ from collections.abc import AsyncGenerator
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.sql import text
 
 from adcopilot.infrastructure.db.models import Base
 
