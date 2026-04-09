@@ -74,3 +74,53 @@ class FakeGoogleAdsMutations:
                 "new_budget_micros": new_budget_micros,
             }
         )
+
+    async def enable_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        criterion_id: int,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "enable_keyword",
+                "customer_id": customer_id,
+                "ad_group_id": ad_group_id,
+                "criterion_id": criterion_id,
+            }
+        )
+
+    async def enable_ad(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        ad_id: int,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "enable_ad",
+                "customer_id": customer_id,
+                "ad_group_id": ad_group_id,
+                "ad_id": ad_id,
+            }
+        )
+
+    async def remove_ad_group_negative_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "remove_ad_group_negative_keyword",
+                "customer_id": customer_id,
+                "ad_group_id": ad_group_id,
+                "keyword_text": keyword_text,
+                "match_type": match_type,
+            }
+        )

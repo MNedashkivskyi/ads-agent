@@ -154,3 +154,102 @@ class GoogleAdsMutationsAdapter:
             raise
         except Exception as exc:
             raise GoogleAdsUnavailable(f"update_campaign_budget failed: {exc}") from exc
+
+    async def enable_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        criterion_id: int,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            ad_group_criterion_service = client.get_service("AdGroupCriterionService")
+            resource_name = ad_group_criterion_service.ad_group_criterion_path(
+                customer_id.replace("-", ""), ad_group_id, criterion_id
+            )
+            operation = client.get_type("AdGroupCriterionOperation")
+            criterion = operation.update
+            criterion.resource_name = resource_name
+            criterion.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
+            from google.protobuf import field_mask_pb2
+            operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
+            ad_group_criterion_service.mutate_ad_group_criteria(
+                customer_id=customer_id.replace("-", ""),
+                operations=[operation],
+            )
+            logger.info("keyword enabled", customer_id=customer_id, criterion_id=criterion_id)
+        except Exception as exc:
+            raise GoogleAdsUnavailable(f"enable_keyword failed: {exc}") from exc
+
+    async def enable_ad(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        ad_id: int,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            ad_group_ad_service = client.get_service("AdGroupAdService")
+            resource_name = ad_group_ad_service.ad_group_ad_path(
+                customer_id.replace("-", ""), ad_group_id, ad_id
+            )
+            operation = client.get_type("AdGroupAdOperation")
+            ad = operation.update
+            ad.resource_name = resource_name
+            ad.status = client.enums.AdGroupAdStatusEnum.ENABLED
+            from google.protobuf import field_mask_pb2
+            operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
+            ad_group_ad_service.mutate_ad_group_ads(
+                customer_id=customer_id.replace("-", ""),
+                operations=[operation],
+            )
+            logger.info("ad enabled", customer_id=customer_id, ad_id=ad_id)
+        except Exception as exc:
+            raise GoogleAdsUnavailable(f"enable_ad failed: {exc}") from exc
+
+    async def remove_ad_group_negative_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            ga_service = client.get_service("GoogleAdsService")
+            query = f"""
+                SELECT ad_group_criterion.resource_name
+                FROM ad_group_criterion
+                WHERE ad_group_criterion.ad_group ~ '{ad_group_id}'
+                  AND ad_group_criterion.negative = TRUE
+                  AND ad_group_criterion.keyword.text = '{keyword_text}'
+                  AND ad_group_criterion.keyword.match_type = '{match_type}'
+                LIMIT 1
+            """
+            response = ga_service.search(customer_id=customer_id.replace("-", ""), query=query)
+            resource_name = None
+            for row in response:
+                resource_name = row.ad_group_criterion.resource_name
+                break
+            if resource_name is None:
+                logger.warning(
+                    "negative keyword not found for removal",
+                    customer_id=customer_id,
+                    keyword=keyword_text,
+                )
+                return
+            ad_group_criterion_service = client.get_service("AdGroupCriterionService")
+            operation = client.get_type("AdGroupCriterionOperation")
+            operation.remove = resource_name
+            ad_group_criterion_service.mutate_ad_group_criteria(
+                customer_id=customer_id.replace("-", ""),
+                operations=[operation],
+            )
+            logger.info(
+                "negative keyword removed", customer_id=customer_id, keyword=keyword_text
+            )
+        except Exception as exc:
+            raise GoogleAdsUnavailable(f"remove_ad_group_negative_keyword failed: {exc}") from exc

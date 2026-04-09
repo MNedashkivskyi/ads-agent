@@ -1,0 +1,163 @@
+"""UndoRecommendationUseCase: reverses an EXECUTED recommendation within the 7-day window."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import structlog
+
+from adcopilot.application.ports.audit_log_repository import AuditLogRepository
+from adcopilot.application.ports.google_ads_mutations import GoogleAdsMutationsPort
+from adcopilot.application.ports.recommendation_repository import RecommendationRepository
+from adcopilot.application.ports.repositories import (
+    GoogleAdsAccountRepository,
+    OAuthCredentialsRepository,
+)
+from adcopilot.domain.audit_log import AuditLog
+from adcopilot.domain.recommendation import (
+    RecommendationId,
+    RecommendationKind,
+    RecommendationStatus,
+)
+
+logger = structlog.get_logger(__name__)
+
+UNDO_WINDOW_DAYS = 7
+
+
+class UndoRecommendationUseCase:
+    def __init__(
+        self,
+        rec_repo: RecommendationRepository,
+        audit_log_repo: AuditLogRepository,
+        account_repo: GoogleAdsAccountRepository,
+        credentials_repo: OAuthCredentialsRepository,
+        mutations: GoogleAdsMutationsPort,
+    ) -> None:
+        self._rec_repo = rec_repo
+        self._audit_log_repo = audit_log_repo
+        self._account_repo = account_repo
+        self._credentials_repo = credentials_repo
+        self._mutations = mutations
+
+    async def execute(self, rec_id: RecommendationId) -> dict[str, Any]:
+        rec = await self._rec_repo.get(rec_id)
+        if rec is None:
+            raise ValueError(f"Recommendation {rec_id} not found")
+        if rec.status != RecommendationStatus.EXECUTED:
+            raise ValueError(
+                f"Recommendation {rec_id} is not EXECUTED (status={rec.status.value})"
+            )
+
+        audit_log = await self._audit_log_repo.get_latest_execute(rec_id)
+        if audit_log is None:
+            raise ValueError(f"No EXECUTE audit log found for recommendation {rec_id}")
+
+        cutoff = datetime.now(UTC) - timedelta(days=UNDO_WINDOW_DAYS)
+        log_ts = audit_log.created_at
+        if log_ts.tzinfo is None:
+            log_ts = log_ts.replace(tzinfo=UTC)
+        if log_ts < cutoff:
+            raise ValueError(
+                f"Undo window expired: recommendation {rec_id} was executed more than "
+                f"{UNDO_WINDOW_DAYS} days ago"
+            )
+
+        account = await self._account_repo.get(rec.account_id)
+        if account is None:
+            raise ValueError(f"Account {rec.account_id} not found")
+        credentials = await self._credentials_repo.get(rec.account_id)
+        if credentials is None:
+            raise ValueError(f"No OAuth credentials for account {rec.account_id}")
+
+        result = await self._undo(
+            rec.kind,
+            audit_log,
+            rec.payload,
+            credentials.refresh_token,
+            account.customer_id,
+        )
+
+        await self._rec_repo.update_status(rec_id, RecommendationStatus.APPROVED)
+
+        undo_log = AuditLog.create_execute(
+            recommendation_id=rec_id,
+            account_id=rec.account_id,
+            kind=rec.kind.value,
+            payload={**result, "undone_audit_log_id": audit_log.id},
+            created_at=datetime.now(UTC),
+        )
+        # Override the action to UNDO
+        from dataclasses import replace as dc_replace
+        undo_log = dc_replace(undo_log, action="UNDO")
+        await self._audit_log_repo.save(undo_log)
+
+        logger.info("recommendation undone", rec_id=rec_id, kind=rec.kind.value)
+        return result
+
+    async def _undo(
+        self,
+        kind: RecommendationKind,
+        audit_log: AuditLog,
+        rec_payload: dict[str, Any],
+        refresh_token: str,
+        customer_id: str,
+    ) -> dict[str, Any]:
+        payload = audit_log.payload
+
+        if kind == RecommendationKind.PAUSE_KEYWORD:
+            ad_group_id = int(payload["ad_group_id"])
+            criterion_id = int(payload["criterion_id"])
+            await self._mutations.enable_keyword(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                ad_group_id=ad_group_id,
+                criterion_id=criterion_id,
+            )
+            return {"ad_group_id": ad_group_id, "criterion_id": criterion_id, "action": "enabled"}
+
+        if kind == RecommendationKind.PAUSE_AD:
+            ad_group_id = int(payload["ad_group_id"])
+            ad_id = int(payload["ad_id"])
+            await self._mutations.enable_ad(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                ad_group_id=ad_group_id,
+                ad_id=ad_id,
+            )
+            return {"ad_group_id": ad_group_id, "ad_id": ad_id, "action": "enabled"}
+
+        if kind == RecommendationKind.ADD_NEGATIVE_KEYWORD:
+            ad_group_id = int(payload["ad_group_id"])
+            keyword_text = str(payload["keyword_text"])
+            match_type = str(payload.get("match_type", "EXACT"))
+            await self._mutations.remove_ad_group_negative_keyword(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                ad_group_id=ad_group_id,
+                keyword_text=keyword_text,
+                match_type=match_type,
+            )
+            return {
+                "ad_group_id": ad_group_id,
+                "keyword_text": keyword_text,
+                "action": "negative_removed",
+            }
+
+        if kind == RecommendationKind.INCREASE_BUDGET:
+            campaign_id = int(payload["campaign_id"])
+            old_budget = int(rec_payload.get("current_budget_micros", 0))
+            await self._mutations.update_campaign_budget(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                new_budget_micros=old_budget,
+            )
+            return {
+                "campaign_id": campaign_id,
+                "restored_budget_micros": old_budget,
+                "action": "budget_restored",
+            }
+
+        raise ValueError(f"No undo logic for {kind.value}")

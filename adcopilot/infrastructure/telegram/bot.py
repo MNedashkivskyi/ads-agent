@@ -18,17 +18,25 @@ def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-
 
     from adcopilot.infrastructure.telegram.callback_handler import (
         recommendation_callback_handler,
+        undo_callback_handler,
     )
-    from adcopilot.infrastructure.telegram.handlers import start_handler
+    from adcopilot.infrastructure.telegram.handlers import start_handler, undo_handler
 
     app: Application = (  # type: ignore[type-arg]
         Application.builder().token(token).build()
     )
     app.add_handler(CommandHandler("start", start_handler))
+    app.add_handler(CommandHandler("undo", undo_handler))
     app.add_handler(
         CallbackQueryHandler(
             recommendation_callback_handler,
             pattern=r"^(approve|decline|snooze):",
+        )
+    )
+    app.add_handler(
+        CallbackQueryHandler(
+            undo_callback_handler,
+            pattern=r"^undo_exec:",
         )
     )
     return app

@@ -26,9 +26,8 @@ async def recommendation_callback_handler(
     if query is None or query.data is None:
         return
 
-    await query.answer()  # acknowledge the callback immediately
+    await query.answer()
 
-    # Parse callback data: "action:rec_id"
     parts = query.data.split(":", 1)
     if len(parts) != 2 or parts[0] not in _ACTION_LABELS:
         logger.warning("unknown callback data", data=query.data)
@@ -57,7 +56,6 @@ async def recommendation_callback_handler(
             rec_repo = SqlRecommendationRepository(session)
             account_repo = SqlGoogleAdsAccountRepository(session)
 
-            # Security: look up user by telegram_chat_id
             from sqlalchemy import select
 
             from adcopilot.domain.entities import UserId
@@ -72,15 +70,12 @@ async def recommendation_callback_handler(
                 return
 
             user_id = UserId(str(user_model.id))
-
-            # Load recommendation
             rec_id = RecommendationId(rec_id_str)
             rec = await rec_repo.get(rec_id)
             if rec is None:
                 await query.edit_message_text("Recommendation not found or already acted on.")
                 return
 
-            # Security: verify the recommendation belongs to this user's account
             user_accounts = await account_repo.list_for_user(user_id)
             user_account_ids = {a.id for a in user_accounts}
             if rec.account_id not in user_account_ids:
@@ -93,7 +88,6 @@ async def recommendation_callback_handler(
                 await query.edit_message_text("Unauthorized: this recommendation is not yours.")
                 return
 
-            # Execute the action
             if action == "approve":
                 from adcopilot.application.use_cases.approve_recommendation import (
                     ApproveRecommendationUseCase,
@@ -126,3 +120,99 @@ async def recommendation_callback_handler(
     label = _ACTION_LABELS[action]
     logger.info("recommendation action taken", action=action, rec_id=rec_id_str)
     await query.edit_message_text(f"✓ {label}")
+
+
+async def undo_callback_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Handle undo_exec:{rec_id} inline button presses."""
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+
+    await query.answer()
+
+    parts = query.data.split(":", 1)
+    if len(parts) != 2:
+        return
+
+    _, rec_id_str = parts
+    telegram_chat_id = query.from_user.id if query.from_user else None
+    if telegram_chat_id is None:
+        return
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            from sqlalchemy import select
+
+            from adcopilot.domain.entities import UserId
+            from adcopilot.domain.recommendation import RecommendationId
+            from adcopilot.infrastructure.db.models import UserModel
+            from adcopilot.infrastructure.db.repositories.audit_log_repository import (
+                SqlAuditLogRepository,
+            )
+            from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+                SqlGoogleAdsAccountRepository,
+            )
+            from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+                SqlOAuthCredentialsRepository,
+            )
+            from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+                SqlRecommendationRepository,
+            )
+            from adcopilot.infrastructure.google_ads.mutations_adapter import (
+                GoogleAdsMutationsAdapter,
+            )
+
+            result = await session.execute(
+                select(UserModel).where(UserModel.telegram_chat_id == telegram_chat_id)
+            )
+            user_model = result.scalar_one_or_none()
+            if user_model is None:
+                await query.edit_message_text("Unauthorized: Telegram account not linked.")
+                return
+
+            user_id = UserId(str(user_model.id))
+            rec_repo = SqlRecommendationRepository(session)
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            rec_id = RecommendationId(rec_id_str)
+            rec = await rec_repo.get(rec_id)
+            if rec is None:
+                await query.edit_message_text("Recommendation not found.")
+                return
+
+            # Security: verify ownership
+            user_accounts = await account_repo.list_for_user(user_id)
+            if rec.account_id not in {a.id for a in user_accounts}:
+                await query.edit_message_text("Unauthorized: this recommendation is not yours.")
+                return
+
+            from adcopilot.application.use_cases.undo_recommendation import (
+                UndoRecommendationUseCase,
+            )
+
+            use_case = UndoRecommendationUseCase(
+                rec_repo=rec_repo,
+                audit_log_repo=SqlAuditLogRepository(session),
+                account_repo=account_repo,
+                credentials_repo=SqlOAuthCredentialsRepository(
+                    session, settings.TOKEN_ENCRYPTION_KEY
+                ),
+                mutations=GoogleAdsMutationsAdapter(settings),
+            )
+            await use_case.execute(rec_id)
+
+    except ValueError as exc:
+        await query.edit_message_text(f"Cannot undo: {exc}")
+        return
+    except Exception:
+        logger.exception("undo callback error", rec_id=rec_id_str)
+        await query.edit_message_text("An error occurred while undoing. Please try again.")
+        return
+    finally:
+        await engine.dispose()
+
+    logger.info("recommendation undone via telegram", rec_id=rec_id_str)
+    await query.edit_message_text("✓ Action undone successfully.")
