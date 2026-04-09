@@ -1,7 +1,19 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, Integer, String, Text, func
+import sqlalchemy as sa
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -14,6 +26,7 @@ __all__ = [
     "GoogleAdsAccountModel",
     "KeywordSnapshotModel",
     "OAuthCredentialsModel",
+    "RecommendationModel",
     "SearchTermSnapshotModel",
     "SnapshotRunModel",
     "UserModel",
@@ -221,4 +234,37 @@ class SnapshotRunModel(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class RecommendationModel(Base):
+    __tablename__ = "recommendations"
+    __table_args__ = (
+        # Partial unique index: only one PENDING rec per (account, kind, target)
+        Index(
+            "uq_recommendations_pending",
+            "account_id",
+            "kind",
+            "target_hash",
+            unique=True,
+            postgresql_where=sa.text("status = 'PENDING'"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(100), nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING", index=True)
+    target: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    evidence: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    target_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    estimated_monthly_savings_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
