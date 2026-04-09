@@ -13,10 +13,10 @@ type:
 	uv run mypy adcopilot
 
 test:
-	uv run pytest tests/ -m "not integration"
+	uv run --python python pytest tests/ -m "not integration"
 
 test-all:
-	uv run pytest tests/
+	uv run --python python pytest tests/
 
 up:
 	docker compose up -d
