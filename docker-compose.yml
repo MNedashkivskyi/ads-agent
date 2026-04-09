@@ -47,7 +47,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["celery", "-A", "adcopilot.interfaces.worker", "worker", "--loglevel=info"]
+    command: ["celery", "-A", "adcopilot.interfaces.worker.celery_app:celery_app", "worker", "--loglevel=info", "-Q", "default"]
+
+  beat:
+    build: .
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["celery", "-A", "adcopilot.interfaces.worker.celery_app:celery_app", "beat", "--loglevel=info"]
 
 volumes:
   postgres_data:

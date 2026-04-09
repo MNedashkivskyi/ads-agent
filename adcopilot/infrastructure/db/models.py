@@ -5,6 +5,20 @@ from sqlalchemy import BigInteger, Boolean, Date, DateTime, Float, Integer, Stri
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+# Re-export for convenience
+__all__ = [
+    "AdGroupSnapshotModel",
+    "AdSnapshotModel",
+    "Base",
+    "CampaignSnapshotModel",
+    "GoogleAdsAccountModel",
+    "KeywordSnapshotModel",
+    "OAuthCredentialsModel",
+    "SearchTermSnapshotModel",
+    "SnapshotRunModel",
+    "UserModel",
+]
+
 
 class Base(DeclarativeBase):
     pass
@@ -188,4 +202,23 @@ class AdSnapshotModel(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class SnapshotRunModel(Base):
+    __tablename__ = "snapshot_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    campaigns: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ad_groups: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    keywords: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    search_terms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    ads: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
