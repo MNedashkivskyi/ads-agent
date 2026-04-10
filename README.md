@@ -81,6 +81,19 @@ adcopilot/
 
 See `.env.example` for all required and optional variables.
 
+### Telegram bot setup
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) and copy the token
+2. Set `TELEGRAM_BOT_TOKEN=<token>` in `.env`
+3. Run the one-time configuration script to register commands and descriptions:
+   ```bash
+   python scripts/setup_telegram_bot.py
+   ```
+4. Run the bot locally in polling mode:
+   ```bash
+   python scripts/run_bot.py
+   ```
+
 ### Google Ads setup
 
 To use Google Ads integration:
