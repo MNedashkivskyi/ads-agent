@@ -51,6 +51,10 @@ class UserModel(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notification_hour: Mapped[int] = mapped_column(Integer, nullable=False, default=9)
     language: Mapped[str] = mapped_column(String(10), nullable=False, default="pl")
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    subscription_status: Mapped[str] = mapped_column(String(50), nullable=False, default="trialing")
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

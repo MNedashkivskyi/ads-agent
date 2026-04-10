@@ -26,6 +26,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 def create_app() -> FastAPI:
     from adcopilot.interfaces.api.accounts import router as accounts_router
     from adcopilot.interfaces.api.auth import router as auth_router
+    from adcopilot.interfaces.api.billing import router as billing_router
     from adcopilot.interfaces.api.digest import router as digest_router
     from adcopilot.interfaces.api.oauth import router as oauth_router
     from adcopilot.interfaces.api.snapshots import router as snapshots_router
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     application.include_router(digest_router)
     application.include_router(users_router)
     application.include_router(accounts_router)
+    application.include_router(billing_router)
 
     @application.get("/health")
     async def health() -> JSONResponse:

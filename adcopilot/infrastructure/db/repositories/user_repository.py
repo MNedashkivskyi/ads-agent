@@ -21,6 +21,10 @@ def _model_to_domain(model: UserModel) -> User:
         password_hash=model.password_hash,
         notification_hour=model.notification_hour,
         language=model.language,
+        stripe_customer_id=model.stripe_customer_id,
+        subscription_status=model.subscription_status,
+        trial_ends_at=model.trial_ends_at,
+        subscription_id=model.subscription_id,
     )
 
 
@@ -34,6 +38,10 @@ def _domain_to_model(user: User, existing: UserModel | None = None) -> UserModel
     model.password_hash = user.password_hash
     model.notification_hour = user.notification_hour
     model.language = user.language
+    model.stripe_customer_id = user.stripe_customer_id
+    model.subscription_status = user.subscription_status
+    model.trial_ends_at = user.trial_ends_at
+    model.subscription_id = user.subscription_id
     return model
 
 
