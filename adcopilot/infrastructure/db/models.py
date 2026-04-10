@@ -47,6 +47,7 @@ class UserModel(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     telegram_chat_id: Mapped[int | None] = mapped_column(nullable=True)
     plan: Mapped[str] = mapped_column(String(50), nullable=False, default="starter")
+    notifications_paused: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -100,7 +100,8 @@ async def test_start_with_valid_token_links_account(
 
     update.message.reply_text.assert_called_once()
     call_text: str = update.message.reply_text.call_args[0][0]
-    assert "linked" in call_text.lower() or "welcome" in call_text.lower()
+    # Handler sends Polish confirmation message
+    assert "połączon" in call_text.lower() or "witaj" in call_text.lower()
 
 
 @patch("adcopilot.infrastructure.telegram.handlers.get_settings")
@@ -118,7 +119,8 @@ async def test_start_without_args_sends_instructions(mock_get_settings: MagicMoc
 
     update.message.reply_text.assert_called_once()
     call_text: str = update.message.reply_text.call_args[0][0]
-    assert "sign up" in call_text.lower() or "welcome" in call_text.lower()
+    # Handler now sends Polish welcome message
+    assert "adept" in call_text.lower() or "tryadept" in call_text.lower()
 
 
 @patch("adcopilot.infrastructure.telegram.handlers.get_settings")
@@ -136,4 +138,5 @@ async def test_start_with_invalid_token_sends_error(mock_get_settings: MagicMock
 
     update.message.reply_text.assert_called_once()
     call_text: str = update.message.reply_text.call_args[0][0]
-    assert "invalid" in call_text.lower() or "expired" in call_text.lower()
+    # Handler now sends Polish error message about expired link
+    assert "link" in call_text.lower() or "wygasł" in call_text.lower()

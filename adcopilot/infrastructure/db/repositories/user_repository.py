@@ -17,6 +17,7 @@ def _model_to_domain(model: UserModel) -> User:
         if model.created_at.tzinfo is None
         else model.created_at,
         plan=PlanTier(model.plan),
+        notifications_paused=model.notifications_paused,
     )
 
 
@@ -26,6 +27,7 @@ def _domain_to_model(user: User, existing: UserModel | None = None) -> UserModel
     model.email = user.email
     model.telegram_chat_id = user.telegram_chat_id
     model.plan = user.plan.value
+    model.notifications_paused = user.notifications_paused
     return model
 
 

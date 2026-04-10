@@ -20,6 +20,7 @@ class User:
     telegram_chat_id: int | None
     created_at: datetime
     plan: PlanTier
+    notifications_paused: bool = False
 
 
 @dataclass(frozen=True)

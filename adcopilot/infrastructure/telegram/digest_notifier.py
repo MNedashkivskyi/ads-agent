@@ -22,7 +22,7 @@ def _format_card(rec: Recommendation) -> str:
     emoji = _SEVERITY_EMOJI.get(rec.severity, "")
     savings = format_micros_as_currency(rec.estimated_monthly_savings_micros)
     kind_label = rec.kind.value.replace("_", " ").title()
-    header = f"{emoji} *{kind_label}* — save {savings}/mo"
+    header = f"{emoji} *{kind_label}* — oszczędności {savings}/mies."
     body = rec.explanation or kind_label
     return f"{header}\n{body}"
 
@@ -31,11 +31,22 @@ def _action_keyboard(rec_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("Approve", callback_data=f"approve:{rec_id}"),
-                InlineKeyboardButton("Decline", callback_data=f"decline:{rec_id}"),
-                InlineKeyboardButton("Snooze", callback_data=f"snooze:{rec_id}"),
+                InlineKeyboardButton("✅ Zatwierdź", callback_data=f"approve:{rec_id}"),
+                InlineKeyboardButton("❌ Odrzuć", callback_data=f"decline:{rec_id}"),
+                InlineKeyboardButton("💬 Szczegóły", callback_data=f"more:{rec_id}"),
+                InlineKeyboardButton("⏰ Odłóż", callback_data=f"snooze:{rec_id}"),
             ]
         ]
+    )
+
+
+def _digest_header(account_name: str, count: int, total_savings_micros: int) -> str:
+    savings = format_micros_as_currency(total_savings_micros)
+    n_word = "rekomendację" if count == 1 else "rekomendacji"
+    return (
+        f"📊 *Dzisiejszy raport — {account_name}*\n"
+        f"Znalazłem {count} {n_word} dla Twojego konta.\n"
+        f"Potencjalne oszczędności: ~{savings}/mies."
     )
 
 
@@ -46,7 +57,12 @@ class TelegramDigestNotifier:
         self._bot = Bot(token=bot_token)
 
     async def send_digest(self, chat_id: int, recommendations: list[Recommendation]) -> None:
-        header = f"*Your daily AdCopilot digest* — {len(recommendations)} recommendation(s)"
+        total_savings = sum(r.estimated_monthly_savings_micros for r in recommendations)
+        header = _digest_header(
+            account_name="Twoje konto",
+            count=len(recommendations),
+            total_savings_micros=total_savings,
+        )
         await self._bot.send_message(
             chat_id=chat_id,
             text=header,
