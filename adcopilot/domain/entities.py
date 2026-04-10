@@ -21,6 +21,9 @@ class User:
     created_at: datetime
     plan: PlanTier
     notifications_paused: bool = False
+    password_hash: str | None = None
+    notification_hour: int = 9
+    language: str = "pl"
 
 
 @dataclass(frozen=True)

@@ -18,6 +18,9 @@ def _model_to_domain(model: UserModel) -> User:
         else model.created_at,
         plan=PlanTier(model.plan),
         notifications_paused=model.notifications_paused,
+        password_hash=model.password_hash,
+        notification_hour=model.notification_hour,
+        language=model.language,
     )
 
 
@@ -28,6 +31,9 @@ def _domain_to_model(user: User, existing: UserModel | None = None) -> UserModel
     model.telegram_chat_id = user.telegram_chat_id
     model.plan = user.plan.value
     model.notifications_paused = user.notifications_paused
+    model.password_hash = user.password_hash
+    model.notification_hour = user.notification_hour
+    model.language = user.language
     return model
 
 
