@@ -214,6 +214,8 @@ async def _run_send_digests(settings: object) -> dict[str, object]:
     try:
         from sqlalchemy import select
 
+        _INACTIVE_STATUSES = {"past_due", "canceled", "unpaid"}
+
         async with AsyncSession(engine) as session, session.begin():
             result = await session.execute(
                 select(UserModel).where(
@@ -226,6 +228,24 @@ async def _run_send_digests(settings: object) -> dict[str, object]:
         notifier = TelegramDigestNotifier(bot_token=settings.TELEGRAM_BOT_TOKEN)
 
         for user_model in users:
+            if user_model.subscription_status in _INACTIVE_STATUSES:
+                try:
+                    from telegram import Bot
+
+                    if user_model.telegram_chat_id is not None:
+                        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+                        async with bot:
+                            await bot.send_message(
+                                chat_id=user_model.telegram_chat_id,
+                                text=(
+                                    "⚠️ Twoja subskrypcja jest nieaktywna. Odwiedź tryadept.com/app/billing, "
+                                    "aby wznowić dostęp."
+                                ),
+                            )
+                except Exception:
+                    logger.exception("failed to send inactive sub warning", user_id=str(user_model.id))
+                skipped += 1
+                continue
             try:
                 async with AsyncSession(engine) as session, session.begin():
                     account_repo = SqlGoogleAdsAccountRepository(session)
@@ -292,6 +312,79 @@ def run_nightly_snapshots() -> dict[str, object]:
 
     logger.info("nightly snapshots queued", count=len(account_ids), date=today)
     return {"queued": len(account_ids), "date": today}
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.send_trial_reminders_task")  # type: ignore[untyped-decorator]
+def send_trial_reminders_task() -> dict[str, object]:
+    """Send trial-ending reminder on day 12 of trial."""
+    import asyncio
+
+    from adcopilot.config import get_settings
+
+    settings = get_settings()
+    results = asyncio.run(_run_trial_reminders(settings))
+    logger.info("trial reminders sent", **results)
+    return results
+
+
+async def _run_trial_reminders(settings: object) -> dict[str, object]:
+    from datetime import datetime, timedelta
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import Settings
+    from adcopilot.infrastructure.db.models import UserModel
+
+    assert isinstance(settings, Settings)
+    if not settings.TELEGRAM_BOT_TOKEN:
+        return {"sent": 0, "skipped": 0, "reason": "no_bot_token"}
+
+    now = datetime.now(UTC)
+    # Day 12 = trial_ends_at is within 2 days from now
+    reminder_window_start = now + timedelta(days=1, hours=23)
+    reminder_window_end = now + timedelta(days=2, hours=1)
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    sent = 0
+    skipped = 0
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            result = await session.execute(
+                select(UserModel).where(
+                    UserModel.telegram_chat_id.isnot(None),
+                    UserModel.subscription_status == "trialing",
+                    UserModel.trial_ends_at.isnot(None),
+                    UserModel.trial_ends_at >= reminder_window_start,
+                    UserModel.trial_ends_at <= reminder_window_end,
+                )
+            )
+            users = result.scalars().all()
+
+        from telegram import Bot
+
+        for user_model in users:
+            if user_model.telegram_chat_id is None:
+                skipped += 1
+                continue
+            try:
+                bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+                async with bot:
+                    await bot.send_message(
+                        chat_id=user_model.telegram_chat_id,
+                        text=(
+                            "⏳ Twój 14-dniowy okres próbny kończy się za 2 dni. "
+                            "Odwiedź tryadept.com/app/billing, aby wybrać plan i kontynuować korzystanie z AdCopilot."
+                        ),
+                    )
+                sent += 1
+            except Exception:
+                logger.exception("trial reminder failed", user_id=str(user_model.id))
+                skipped += 1
+    finally:
+        await engine.dispose()
+
+    return {"sent": sent, "skipped": skipped}
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]

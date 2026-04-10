@@ -24,6 +24,10 @@ class User:
     password_hash: str | None = None
     notification_hour: int = 9
     language: str = "pl"
+    stripe_customer_id: str | None = None
+    subscription_status: str = "trialing"
+    trial_ends_at: datetime | None = None
+    subscription_id: str | None = None
 
 
 @dataclass(frozen=True)

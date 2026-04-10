@@ -28,6 +28,10 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.send_daily_digests_task",
                     "schedule": crontab(hour=9, minute=0),
                 },
+                "trial-reminders": {
+                    "task": "adcopilot.interfaces.worker.tasks.send_trial_reminders_task",
+                    "schedule": crontab(hour=10, minute=0),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},

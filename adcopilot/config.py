@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str | None = None
     LLM_API_KEY: str | None = None
 
+    STRIPE_SECRET_KEY: str | None = None
+    STRIPE_WEBHOOK_SECRET: str | None = None
+    STRIPE_STARTER_PRICE_ID: str | None = None
+    STRIPE_PRO_PRICE_ID: str | None = None
+    STRIPE_BUSINESS_PRICE_ID: str | None = None
+
     @property
     def is_production(self) -> bool:
         return self.ENV == "production"

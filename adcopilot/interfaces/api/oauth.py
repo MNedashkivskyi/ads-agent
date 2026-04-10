@@ -151,6 +151,20 @@ async def oauth_google_callback(
     acc_repo = SqlGoogleAdsAccountRepository(session)
     creds_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
 
+    # Enforce per-plan account limits
+    _PLAN_ACCOUNT_LIMITS: dict[str, int] = {
+        "starter": 1,
+        "growth": 3,
+        "pro": 10,
+    }
+    existing_accounts = await acc_repo.list_for_user(UserId(user_id))
+    account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
+    if len(existing_accounts) >= account_limit:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Account limit reached for {user.plan.value} plan ({account_limit} max). Upgrade to add more accounts.",
+        )
+
     linked_ids: list[str] = []
     for customer_id in customer_ids:
         account_id = AccountId(str(uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}")))
