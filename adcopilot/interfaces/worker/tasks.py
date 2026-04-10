@@ -216,7 +216,10 @@ async def _run_send_digests(settings: object) -> dict[str, object]:
 
         async with AsyncSession(engine) as session, session.begin():
             result = await session.execute(
-                select(UserModel).where(UserModel.telegram_chat_id.isnot(None))
+                select(UserModel).where(
+                    UserModel.telegram_chat_id.isnot(None),
+                    UserModel.notifications_paused.is_(False),
+                )
             )
             users = result.scalars().all()
 

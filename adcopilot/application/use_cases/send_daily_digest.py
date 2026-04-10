@@ -55,6 +55,7 @@ class SendDailyDigestUseCase:
         telegram_chat_id: int | None,
         account_ids: list[AccountId],
         today: date | None = None,
+        notifications_paused: bool = False,
     ) -> DigestResult:
         """Send a daily digest to the user.
 
@@ -63,10 +64,15 @@ class SendDailyDigestUseCase:
             telegram_chat_id: The user's Telegram chat ID (None = skip).
             account_ids: All Google Ads account IDs owned by the user.
             today: Override for the current date (for testing).
+            notifications_paused: If True, skip this user's digest.
         """
         if telegram_chat_id is None:
             logger.info("skipping digest: no telegram", user_id=user_id)
             return DigestResult(sent=False, count=0, reason="no_telegram")
+
+        if notifications_paused:
+            logger.info("skipping digest: notifications paused", user_id=user_id)
+            return DigestResult(sent=False, count=0, reason="paused")
 
         today = today or datetime.now(UTC).date()
 
