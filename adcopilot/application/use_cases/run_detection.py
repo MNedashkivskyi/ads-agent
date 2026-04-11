@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 import structlog
 
@@ -15,6 +15,8 @@ from adcopilot.domain.entities import AccountId
 from adcopilot.domain.recommendation import RecommendationSeverity
 
 logger = structlog.get_logger(__name__)
+
+_TREND_LOOKBACK_DAYS = 7
 
 
 class RunDetectionUseCase:
@@ -41,10 +43,18 @@ class RunDetectionUseCase:
             logger.warning("account not found, skipping detection", account_id=account_id)
             return {}
 
-        # 2. Load snapshot data
+        # 2. Load current snapshot data
         snapshot = await self._snapshot_repo.load_snapshot(account_id, snapshot_date)
 
-        # 3. Compute HistoricalStats from the snapshot itself (30-day proxy)
+        # 3. Load 7-day-ago snapshots for trend-based rules (Module 1).
+        #    These are best-effort — if no data exists the lists stay empty and
+        #    trend rules simply skip (they check for empty prev_* lists).
+        prev_date = snapshot_date - timedelta(days=_TREND_LOOKBACK_DAYS)
+        prev_campaigns, prev_ad_groups, prev_keywords = await _load_prev_snapshots(
+            self._snapshot_repo, account_id, prev_date
+        )
+
+        # 4. Compute HistoricalStats from the snapshot itself (30-day proxy)
         total_cost = sum(c.cost_micros for c in snapshot.campaigns)
         total_conversions = sum(c.conversions for c in snapshot.campaigns)
         avg_cpa = int(total_cost / total_conversions) if total_conversions > 0 else 0
@@ -55,7 +65,7 @@ class RunDetectionUseCase:
             days=30,
         )
 
-        # 4. Build context
+        # 5. Build context
         ctx = DetectionContext(
             account=account,
             campaigns=snapshot.campaigns,
@@ -65,12 +75,15 @@ class RunDetectionUseCase:
             ads=snapshot.ads,
             history=history,
             snapshot_date=snapshot_date,
+            prev_campaigns=prev_campaigns,
+            prev_ad_groups=prev_ad_groups,
+            prev_keywords=prev_keywords,
         )
 
-        # 5. Run rule engine
+        # 6. Run rule engine
         new_recs = await self._engine.run(ctx)
 
-        # 6. Aggregate by severity
+        # 7. Aggregate by severity
         counts: dict[str, int] = {s.value: 0 for s in RecommendationSeverity}
         for rec in new_recs:
             counts[rec.severity.value] += 1
@@ -83,3 +96,23 @@ class RunDetectionUseCase:
             by_severity=counts,
         )
         return counts
+
+
+async def _load_prev_snapshots(
+    snapshot_repo: SnapshotRepository,
+    account_id: AccountId,
+    prev_date: date,
+) -> tuple[list, list, list]:
+    """Load campaigns, ad groups, and keywords from prev_date.
+
+    Returns three empty lists if no data exists for that date (new accounts,
+    first run, or gap in snapshots).  Errors are swallowed so a missing
+    historical snapshot never blocks the current detection run.
+    """
+    try:
+        prev_campaigns = await snapshot_repo.get_campaigns_by_date(account_id, prev_date)
+        prev_ad_groups = await snapshot_repo.get_ad_groups_by_date(account_id, prev_date)
+        prev_keywords = await snapshot_repo.get_keywords_by_date(account_id, prev_date)
+        return prev_campaigns, prev_ad_groups, prev_keywords
+    except Exception:
+        return [], [], []

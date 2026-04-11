@@ -672,9 +672,10 @@ class TestRule05BroadMatchBleeding:
         assert self.rule.detect(ctx) == []
 
     def test_broad_keyword_with_no_matching_terms_skipped(self):
-        kw = self._make_broad_keyword(criterion_id=99)
-        # All terms match a different keyword id
-        terms = self._make_unrelated_terms(10, keyword_id=999)
+        # Rule now groups by ad_group_id. Put the keyword in ad_group 99
+        # and all search terms in ad_group 999 (different) — no match.
+        kw = _keyword(criterion_id=1, match_type="BROAD", text="shoes", ad_group_id=99)
+        terms = self._make_unrelated_terms(10, ad_group_id=999)
         ctx = _ctx(keywords=[kw], search_terms=terms)
         assert self.rule.detect(ctx) == []
 

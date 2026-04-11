@@ -34,16 +34,20 @@ class BroadMatchBleedingRule:
     def detect(self, ctx: DetectionContext) -> list[Recommendation]:
         recs: list[Recommendation] = []
 
-        # Index search terms by matched_keyword_id for fast lookup
-        st_by_keyword: dict[Any, list[Any]] = {}
+        # Index search terms by ad_group_id.  The Google Ads API does not
+        # reliably populate matched_keyword_id, so we approximate by treating
+        # all search terms in the same ad group as candidates for each broad
+        # keyword in that group.  Jaccard similarity still filters out terms
+        # that are genuinely unrelated to the keyword.
+        st_by_ad_group: dict[int, list[Any]] = {}
         for st in ctx.search_terms:
-            st_by_keyword.setdefault(st.matched_keyword_id, []).append(st)
+            st_by_ad_group.setdefault(st.ad_group_id, []).append(st)
 
         for kw in ctx.keywords:
             if kw.match_type.upper() != "BROAD":
                 continue
 
-            triggered = st_by_keyword.get(kw.criterion_id, [])
+            triggered = st_by_ad_group.get(kw.ad_group_id, [])
             if len(triggered) < _MIN_TRIGGERED_TERMS:
                 continue
 

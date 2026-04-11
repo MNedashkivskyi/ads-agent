@@ -16,6 +16,7 @@ RecommendationId = NewType("RecommendationId", str)
 
 
 class RecommendationKind(Enum):
+    # Module 0 — Hygiene
     ADD_NEGATIVE_KEYWORD = "ADD_NEGATIVE_KEYWORD"
     PAUSE_KEYWORD = "PAUSE_KEYWORD"
     PAUSE_AD = "PAUSE_AD"
@@ -26,6 +27,13 @@ class RecommendationKind(Enum):
     ADD_AD_VARIATION = "ADD_AD_VARIATION"
     INCREASE_BUDGET = "INCREASE_BUDGET"
     ADJUST_BIDDING_STRATEGY = "ADJUST_BIDDING_STRATEGY"
+    # Module 1 — Performance degradation & trends
+    CTR_DECLINE = "CTR_DECLINE"
+    CPA_SPIKE = "CPA_SPIKE"
+    CONVERSION_RATE_DROP = "CONVERSION_RATE_DROP"
+    IMPRESSION_SHARE_EROSION = "IMPRESSION_SHARE_EROSION"
+    SPEND_ACCELERATION = "SPEND_ACCELERATION"
+    QUALITY_SCORE_DETERIORATION = "QUALITY_SCORE_DETERIORATION"
 
 
 class RecommendationSeverity(Enum):
