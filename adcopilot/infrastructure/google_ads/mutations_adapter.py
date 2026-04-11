@@ -7,10 +7,17 @@ from typing import Any
 import structlog
 
 from adcopilot.config import Settings
-from adcopilot.domain.exceptions import GoogleAdsUnavailable
-from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter
+from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
+from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
 
 logger = structlog.get_logger(__name__)
+
+
+def _wrap_mutation_exc(operation: str, exc: Exception) -> Exception:
+    """Map a raw Google Ads exception to the appropriate domain exception."""
+    if is_google_auth_error(exc):
+        return GoogleAdsAuthError(str(exc))
+    return GoogleAdsUnavailable(f"{operation} failed: {exc}")
 
 
 class GoogleAdsMutationsAdapter:
@@ -49,8 +56,10 @@ class GoogleAdsMutationsAdapter:
                 operations=[criterion_operation],
             )
             logger.info("keyword paused", customer_id=customer_id, criterion_id=criterion_id)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
         except Exception as exc:
-            raise GoogleAdsUnavailable(f"pause_keyword failed: {exc}") from exc
+            raise _wrap_mutation_exc("pause_keyword", exc) from exc
 
     async def pause_ad(
         self,
@@ -76,8 +85,10 @@ class GoogleAdsMutationsAdapter:
                 operations=[operation],
             )
             logger.info("ad paused", customer_id=customer_id, ad_id=ad_id)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
         except Exception as exc:
-            raise GoogleAdsUnavailable(f"pause_ad failed: {exc}") from exc
+            raise _wrap_mutation_exc("pause_ad", exc) from exc
 
     async def add_ad_group_negative_keyword(
         self,
@@ -105,8 +116,10 @@ class GoogleAdsMutationsAdapter:
                 operations=[operation],
             )
             logger.info("negative keyword added", customer_id=customer_id, keyword=keyword_text)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
         except Exception as exc:
-            raise GoogleAdsUnavailable(f"add_ad_group_negative_keyword failed: {exc}") from exc
+            raise _wrap_mutation_exc("add_ad_group_negative_keyword", exc) from exc
 
     async def update_campaign_budget(
         self,
@@ -150,10 +163,10 @@ class GoogleAdsMutationsAdapter:
                 campaign_id=campaign_id,
                 new_budget_micros=new_budget_micros,
             )
-        except GoogleAdsUnavailable:
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
-            raise GoogleAdsUnavailable(f"update_campaign_budget failed: {exc}") from exc
+            raise _wrap_mutation_exc("update_campaign_budget", exc) from exc
 
     async def enable_keyword(
         self,
@@ -179,8 +192,10 @@ class GoogleAdsMutationsAdapter:
                 operations=[operation],
             )
             logger.info("keyword enabled", customer_id=customer_id, criterion_id=criterion_id)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
         except Exception as exc:
-            raise GoogleAdsUnavailable(f"enable_keyword failed: {exc}") from exc
+            raise _wrap_mutation_exc("enable_keyword", exc) from exc
 
     async def enable_ad(
         self,
@@ -206,8 +221,10 @@ class GoogleAdsMutationsAdapter:
                 operations=[operation],
             )
             logger.info("ad enabled", customer_id=customer_id, ad_id=ad_id)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
         except Exception as exc:
-            raise GoogleAdsUnavailable(f"enable_ad failed: {exc}") from exc
+            raise _wrap_mutation_exc("enable_ad", exc) from exc
 
     async def remove_ad_group_negative_keyword(
         self,
@@ -251,8 +268,10 @@ class GoogleAdsMutationsAdapter:
             logger.info(
                 "negative keyword removed", customer_id=customer_id, keyword=keyword_text
             )
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
         except Exception as exc:
-            raise GoogleAdsUnavailable(f"remove_ad_group_negative_keyword failed: {exc}") from exc
+            raise _wrap_mutation_exc("remove_ad_group_negative_keyword", exc) from exc
 
     async def change_keyword_match_type(
         self,
@@ -291,8 +310,10 @@ class GoogleAdsMutationsAdapter:
                 criterion_id=criterion_id,
                 match_type=match_type,
             )
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
         except Exception as exc:
-            raise GoogleAdsUnavailable(f"change_keyword_match_type failed: {exc}") from exc
+            raise _wrap_mutation_exc("change_keyword_match_type", exc) from exc
 
     async def set_campaign_bidding_strategy(
         self,
@@ -347,7 +368,7 @@ class GoogleAdsMutationsAdapter:
                 campaign_id=campaign_id,
                 bidding_strategy=bidding_strategy,
             )
-        except GoogleAdsUnavailable:
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
-            raise GoogleAdsUnavailable(f"set_campaign_bidding_strategy failed: {exc}") from exc
+            raise _wrap_mutation_exc("set_campaign_bidding_strategy", exc) from exc

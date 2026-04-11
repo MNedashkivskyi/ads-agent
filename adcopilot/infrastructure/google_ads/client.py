@@ -10,6 +10,30 @@ from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
 
 logger = structlog.get_logger(__name__)
 
+# Substrings (lower-cased) that indicate an OAuth/authentication failure.
+# These appear in Google Ads API error messages and in google-auth library
+# errors when the refresh token is invalid or has been revoked.
+_AUTH_ERROR_SIGNATURES = (
+    "unauthenticated",
+    "invalid credentials",
+    "invalid_grant",
+    "token has been expired or revoked",
+    "oauth_token_invalid",
+    "authenticationerror",
+    "access_denied",
+)
+
+
+def is_google_auth_error(exc: Exception) -> bool:
+    """Return True if *exc* represents an OAuth/authentication failure.
+
+    Detects both transient credential errors (expired access token that the
+    library could not refresh) and permanent errors (revoked refresh token,
+    invalid client_id/secret).
+    """
+    error_str = str(exc).lower()
+    return any(sig in error_str for sig in _AUTH_ERROR_SIGNATURES)
+
 
 class GoogleAdsClientAdapter:
     """Thin wrapper around the google-ads library.
@@ -35,6 +59,8 @@ class GoogleAdsClientAdapter:
             }
             return gads.GoogleAdsClient.load_from_dict(config)
         except Exception as exc:
+            if is_google_auth_error(exc):
+                raise GoogleAdsAuthError(f"OAuth credentials rejected: {exc}") from exc
             raise GoogleAdsUnavailable(f"Failed to build Google Ads client: {exc}") from exc
 
     async def list_accessible_customers(self, refresh_token: str) -> list[str]:
@@ -48,8 +74,7 @@ class GoogleAdsClientAdapter:
         except GoogleAdsAuthError:
             raise
         except Exception as exc:
-            error_str = str(exc).lower()
-            if "unauthenticated" in error_str or "invalid credentials" in error_str:
+            if is_google_auth_error(exc):
                 raise GoogleAdsAuthError(str(exc)) from exc
             raise GoogleAdsUnavailable(str(exc)) from exc
 
@@ -82,7 +107,6 @@ class GoogleAdsClientAdapter:
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
-            error_str = str(exc).lower()
-            if "unauthenticated" in error_str or "invalid credentials" in error_str:
+            if is_google_auth_error(exc):
                 raise GoogleAdsAuthError(str(exc)) from exc
             raise GoogleAdsUnavailable(str(exc)) from exc

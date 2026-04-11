@@ -25,3 +25,15 @@ class FakeTelegramNotifier:
                 "error_message": error_message,
             }
         )
+
+    async def send_reauth_required(
+        self, chat_id: int, account_name: str, reauth_url: str | None = None
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "send_reauth_required",
+                "chat_id": chat_id,
+                "account_name": account_name,
+                "reauth_url": reauth_url,
+            }
+        )
