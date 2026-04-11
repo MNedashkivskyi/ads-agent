@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -14,6 +12,7 @@ from jose import JWTError, jwt
 from telegram import Update
 
 from adcopilot.config import Settings, get_settings
+from adcopilot.infrastructure.telegram.bot import compute_webhook_secret
 
 logger = structlog.get_logger(__name__)
 
@@ -52,24 +51,28 @@ async def telegram_webhook(
     settings: Annotated[Settings, Depends(get_settings)],
     x_telegram_bot_api_secret_token: Annotated[str | None, Header()] = None,
 ) -> dict[str, str]:
-    """Receives Telegram webhook updates and forwards them to the bot Application."""
+    """Receive a Telegram webhook update and forward it to the bot Application.
+
+    The bot Application is initialised once at FastAPI startup (see
+    ``main.py`` lifespan) and stored in ``request.app.state.telegram_app``.
+    This endpoint does *not* build or teardown the Application — it simply
+    calls ``process_update`` on the already-running instance.
+    """
     if not settings.TELEGRAM_BOT_TOKEN:
         raise HTTPException(status_code=503, detail="Telegram bot not configured")
 
-    # Verify the secret token header
-    expected_secret = _compute_webhook_secret(settings.TELEGRAM_BOT_TOKEN)
+    # Verify the secret token header that Telegram sends on every update.
+    expected_secret = compute_webhook_secret(settings.TELEGRAM_BOT_TOKEN)
     if x_telegram_bot_api_secret_token != expected_secret:
         raise HTTPException(status_code=403, detail="Invalid webhook secret token")
 
+    tg_app = getattr(request.app.state, "telegram_app", None)
+    if tg_app is None:
+        raise HTTPException(status_code=503, detail="Telegram bot not initialised")
+
     body = await request.json()
-    update = Update.de_json(body, None)
-
-    from adcopilot.infrastructure.telegram.bot import build_telegram_app
-
-    app = build_telegram_app(settings)
-    await app.initialize()
-    await app.process_update(update)
-    await app.shutdown()
+    update = Update.de_json(body, tg_app.bot)
+    await tg_app.process_update(update)
 
     return {"ok": "true"}
 
@@ -100,8 +103,3 @@ async def _get_bot_username(bot_token: str) -> str:
     data = resp.json()
     username: str = data["result"]["username"]
     return username
-
-
-def _compute_webhook_secret(bot_token: str) -> str:
-    """Derive a webhook secret from the bot token (HMAC-SHA256 of token with key 'WebhookSecret')."""
-    return hmac.new(b"WebhookSecret", bot_token.encode(), hashlib.sha256).hexdigest()

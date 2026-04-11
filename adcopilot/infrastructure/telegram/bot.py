@@ -2,12 +2,38 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+
 import structlog
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler, MessageHandler, filters
 
 from adcopilot.config import Settings
 
 logger = structlog.get_logger(__name__)
+
+
+def compute_webhook_secret(bot_token: str) -> str:
+    """Derive a deterministic webhook secret from the bot token.
+
+    The same value is passed to ``setWebhook`` as ``secret_token`` and checked
+    against the ``X-Telegram-Bot-Api-Secret-Token`` header on every incoming
+    update.  Using the bot token as the key means we never need to store an
+    extra secret.
+    """
+    return hmac.new(b"WebhookSecret", bot_token.encode(), hashlib.sha256).hexdigest()
+
+
+async def register_webhook(bot: object, webhook_url: str, secret: str) -> None:
+    """Register ``webhook_url`` with the Telegram Bot API.
+
+    Idempotent — safe to call on every startup.
+    """
+    from telegram import Bot  # local import to avoid heavy top-level cost
+
+    assert isinstance(bot, Bot)
+    await bot.set_webhook(url=webhook_url, secret_token=secret)
+    logger.info("telegram webhook registered", url=webhook_url)
 
 
 def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-arg]
