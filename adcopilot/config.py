@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # When set, the app registers a Telegram webhook on startup and webhook
     # mode is used instead of polling.  Leave blank for local development.
     TELEGRAM_WEBHOOK_URL: str | None = None
+    # Public URL of the web application — used to build deep-links in Telegram
+    # messages (e.g. the re-authentication link sent when a Google Ads token
+    # is revoked).  Example: https://app.example.com
+    APP_URL: str | None = None
     LLM_API_KEY: str | None = None
 
     STRIPE_SECRET_KEY: str | None = None

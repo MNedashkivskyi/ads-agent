@@ -43,9 +43,11 @@ def _build_client(refresh_token: str, settings: Settings) -> Any:
 
 
 def _wrap_exc(exc: Exception) -> Exception:
-    error_str = str(exc).lower()
-    if "unauthenticated" in error_str or "invalid credentials" in error_str:
+    from adcopilot.infrastructure.google_ads.client import is_google_auth_error
+
+    if is_google_auth_error(exc):
         return GoogleAdsAuthError(str(exc))
+    error_str = str(exc).lower()
     if "quota" in error_str or "resource exhausted" in error_str:
         from adcopilot.domain.exceptions import GoogleAdsRateLimited
 

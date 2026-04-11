@@ -55,6 +55,17 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
 
     try:
         result = asyncio.run(_run_snapshot(settings, AccountId(account_id), snap_date))
+        # If the snapshot failed due to an auth error the use case already set
+        # needs_reauth=True on the account.  Notify the user so they know to
+        # reconnect their Google Ads account.
+        if not result.success and "GoogleAdsAuthError" in (result.error_message or ""):
+            try:
+                asyncio.run(_notify_reauth_required(account_id, settings))
+            except Exception:
+                logger.exception(
+                    "failed to send reauth notification after snapshot",
+                    account_id=account_id,
+                )
         if result.success:
             # Run detection asynchronously after a successful snapshot
             asyncio.run(_run_detection(settings, AccountId(account_id), snap_date))
@@ -398,17 +409,28 @@ async def _run_trial_reminders(settings: object) -> dict[str, object]:
 def execute_recommendation_task(self: object, rec_id: str) -> dict[str, object]:
     """Execute a single APPROVED recommendation against the Google Ads API.
 
-    Retries up to max_retries times with exponential back-off.  After the final
-    retry the recommendation is marked FAILED in the database and the user
-    receives a Telegram notification (if their chat_id is known).
+    Auth errors (revoked/expired refresh token) are caught immediately and
+    treated as permanent failures — retrying with the same bad token is
+    pointless.  For all other exceptions the task retries up to max_retries
+    times with exponential back-off; after the final retry the recommendation
+    is marked FAILED and the user receives a Telegram notification.
     """
     import asyncio
 
     from celery import Task  # type: ignore[import-untyped]
 
+    from adcopilot.domain.exceptions import GoogleAdsAuthError
+
     assert isinstance(self, Task)
     try:
         return asyncio.run(_run_execute_recommendation(rec_id))
+    except GoogleAdsAuthError:
+        # Permanent auth failure — mark rec FAILED, set needs_reauth, notify user.
+        try:
+            asyncio.run(_handle_auth_failure(rec_id))
+        except Exception:
+            logger.exception("failed to handle auth failure", rec_id=rec_id)
+        raise
     except Exception as exc:
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc) from exc
@@ -456,6 +478,123 @@ async def _run_execute_recommendation(rec_id: str) -> dict[str, object]:
 
     logger.info("recommendation executed", rec_id=rec_id)
     return {"rec_id": rec_id, "result": result}
+
+
+async def _handle_auth_failure(rec_id: str) -> None:
+    """Mark rec FAILED, set account.needs_reauth=True, and send a reauth notification."""
+    import dataclasses
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            rec_repo = SqlRecommendationRepository(session)
+            rec = await rec_repo.get(RecommendationId(rec_id))
+            if rec is None:
+                logger.error("recommendation not found during auth failure handling", rec_id=rec_id)
+                return
+
+            await rec_repo.update_status(RecommendationId(rec_id), RecommendationStatus.FAILED)
+
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            account = await account_repo.get(rec.account_id)
+            if account is None:
+                return
+
+            # Persist needs_reauth flag so the account is excluded from future
+            # nightly snapshots until the user reconnects.
+            updated_account = dataclasses.replace(account, needs_reauth=True)
+            await account_repo.save(updated_account)
+            logger.warning(
+                "account marked needs_reauth after auth failure",
+                account_id=account.id,
+                rec_id=rec_id,
+            )
+
+            if not settings.TELEGRAM_BOT_TOKEN:
+                return
+
+            user_repo = SqlUserRepository(session)
+            user = await user_repo.get_by_id(account.user_id)
+            if user is None or user.telegram_chat_id is None or user.notifications_paused:
+                return
+
+            reauth_url = (
+                f"{settings.APP_URL.rstrip('/')}/oauth/google/start?account_id={account.id}"
+                if settings.APP_URL
+                else None
+            )
+            from adcopilot.infrastructure.telegram.digest_notifier import TelegramDigestNotifier
+
+            notifier = TelegramDigestNotifier(bot_token=settings.TELEGRAM_BOT_TOKEN)
+            await notifier.send_reauth_required(
+                chat_id=user.telegram_chat_id,
+                account_name=account.descriptive_name,
+                reauth_url=reauth_url,
+            )
+    finally:
+        await engine.dispose()
+
+
+async def _notify_reauth_required(account_id: str, settings: object) -> None:
+    """Send a reauth notification for an account whose snapshot failed with an auth error.
+
+    The ``needs_reauth`` flag is already set by ``SnapshotAccountUseCase``; this
+    helper is responsible only for the Telegram notification.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import Settings
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
+
+    assert isinstance(settings, Settings)
+    if not settings.TELEGRAM_BOT_TOKEN:
+        return
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            account = await account_repo.get(AccountId(account_id))
+            if account is None:
+                return
+
+            user_repo = SqlUserRepository(session)
+            user = await user_repo.get_by_id(account.user_id)
+            if user is None or user.telegram_chat_id is None or user.notifications_paused:
+                return
+
+            reauth_url = (
+                f"{settings.APP_URL.rstrip('/')}/oauth/google/start?account_id={account.id}"
+                if settings.APP_URL
+                else None
+            )
+            from adcopilot.infrastructure.telegram.digest_notifier import TelegramDigestNotifier
+
+            notifier = TelegramDigestNotifier(bot_token=settings.TELEGRAM_BOT_TOKEN)
+            await notifier.send_reauth_required(
+                chat_id=user.telegram_chat_id,
+                account_name=account.descriptive_name,
+                reauth_url=reauth_url,
+            )
+    finally:
+        await engine.dispose()
 
 
 async def _handle_execution_failure(rec_id: str, error_message: str) -> None:

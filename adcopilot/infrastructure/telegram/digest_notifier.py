@@ -97,3 +97,23 @@ class TelegramDigestNotifier:
             rec_id=recommendation.id,
             kind=recommendation.kind.value,
         )
+
+    async def send_reauth_required(
+        self, chat_id: int, account_name: str, reauth_url: str | None = None
+    ) -> None:
+        """Notify the user that their Google Ads token is invalid and they must re-authorize."""
+        if reauth_url:
+            cta = f"Kliknij tutaj, aby ponownie połączyć konto: {reauth_url}"
+        else:
+            cta = "Zaloguj się ponownie w aplikacji, aby wznowić zarządzanie reklamami."
+        text = (
+            "\U0001f512 *Utracono dostęp do konta Google Ads*\n\n"
+            f"Token OAuth dla konta *{account_name}* wygasł lub został odwołany.\n\n"
+            f"{cta}"
+        )
+        await self._bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
+        logger.warning(
+            "reauth required notification sent",
+            chat_id=chat_id,
+            account_name=account_name,
+        )

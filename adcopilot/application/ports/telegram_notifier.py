@@ -13,3 +13,7 @@ class TelegramNotifier(Protocol):
     async def send_execution_failed(
         self, chat_id: int, recommendation: Recommendation, error_message: str
     ) -> None: ...
+
+    async def send_reauth_required(
+        self, chat_id: int, account_name: str, reauth_url: str | None = None
+    ) -> None: ...
