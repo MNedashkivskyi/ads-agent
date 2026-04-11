@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     GOOGLE_ADS_CLIENT_ID: str | None = None
     GOOGLE_ADS_CLIENT_SECRET: str | None = None
     TELEGRAM_BOT_TOKEN: str | None = None
+    # Public base URL of this service (e.g. https://app.example.com).
+    # When set, the app registers a Telegram webhook on startup and webhook
+    # mode is used instead of polling.  Leave blank for local development.
+    TELEGRAM_WEBHOOK_URL: str | None = None
     LLM_API_KEY: str | None = None
 
     STRIPE_SECRET_KEY: str | None = None
