@@ -8,13 +8,14 @@ from typing import Annotated
 
 import bcrypt
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from jose import jwt
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import Settings, get_settings
 from adcopilot.domain.entities import PlanTier, User, UserId
+from adcopilot.rate_limit import limiter
 
 logger = structlog.get_logger(__name__)
 
@@ -22,6 +23,11 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 _JWT_ALGORITHM = "HS256"
 _JWT_EXPIRY_DAYS = 30
+
+# Rate limits applied to auth endpoints.
+# Both limits are per source IP as extracted by _get_real_ip() in rate_limit.py.
+_LOGIN_LIMIT = "5/minute"
+_SIGNUP_LIMIT = "5/minute"
 
 
 class SignupRequest(BaseModel):
@@ -59,7 +65,9 @@ def _make_jwt(user_id: str, secret_key: str) -> str:
 
 
 @router.post("/signup", response_model=AuthResponse)
+@limiter.limit(_SIGNUP_LIMIT)
 async def signup(
+    request: Request,  # Required by slowapi for per-route rate limiting
     body: SignupRequest,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthResponse:
@@ -99,7 +107,9 @@ async def signup(
 
 
 @router.post("/login", response_model=AuthResponse)
+@limiter.limit(_LOGIN_LIMIT)
 async def login(
+    request: Request,  # Required by slowapi for per-route rate limiting
     body: LoginRequest,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthResponse:
