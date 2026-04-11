@@ -19,7 +19,43 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     configure_logging()
     settings = get_settings()
     logger.info("adcopilot starting", env=settings.ENV)
+
+    # --- Telegram bot lifecycle -------------------------------------------
+    # Build the Application once and keep it for the lifetime of the process.
+    # The webhook endpoint reads it from app.state instead of re-building it
+    # on every request.
+    if settings.TELEGRAM_BOT_TOKEN:
+        from adcopilot.infrastructure.telegram.bot import (
+            build_telegram_app,
+            compute_webhook_secret,
+            register_webhook,
+        )
+
+        tg_app = build_telegram_app(settings)
+        await tg_app.initialize()
+        application.state.telegram_app = tg_app
+        logger.info("telegram bot initialised")
+
+        if settings.TELEGRAM_WEBHOOK_URL:
+            webhook_url = settings.TELEGRAM_WEBHOOK_URL.rstrip("/") + "/telegram/webhook"
+            secret = compute_webhook_secret(settings.TELEGRAM_BOT_TOKEN)
+            try:
+                await register_webhook(tg_app.bot, webhook_url, secret)
+            except Exception as exc:
+                # Non-fatal: log and continue — updates won't arrive but the
+                # rest of the app still works.
+                logger.warning("telegram webhook registration failed", error=str(exc))
+    # ----------------------------------------------------------------------
+
     yield
+
+    # --- Telegram bot shutdown --------------------------------------------
+    tg_app = getattr(application.state, "telegram_app", None)
+    if tg_app is not None:
+        await tg_app.shutdown()
+        logger.info("telegram bot shut down")
+    # ----------------------------------------------------------------------
+
     logger.info("adcopilot shutting down")
 
 
