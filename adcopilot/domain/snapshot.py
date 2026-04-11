@@ -94,3 +94,6 @@ class AdSnapshot:
     clicks: int
     cost_micros: int
     conversions: float
+    # RSA ad strength reported by Google Ads (POOR / AVERAGE / GOOD / EXCELLENT).
+    # None for non-RSA ad types or when Google hasn't evaluated the ad yet.
+    ad_strength: str | None = None

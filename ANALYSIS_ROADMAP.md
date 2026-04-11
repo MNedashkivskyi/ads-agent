@@ -60,21 +60,21 @@ Basic checks every PPC specialist runs manually. These remain but are not suffic
 
 ## Module 2 — Ad Copy & Creative Intelligence
 
-**Goal:** Analyze the quality and relevance of ad copy using LLM. No competitor does this well.
+**Goal:** Analyze the quality and relevance of ad copy using heuristic token analysis. LLM is used only for the explanation step (existing `ExplainRecommendationUseCase`), keeping nightly batch jobs fast and cost-efficient.
 
-**Data infrastructure needed:**
-- `ad_group_ad.ad_strength` field in ad query
-- LLM analysis port extended with `analyze_ad_relevance(keywords, ads)` method
-- Templates for new recommendation kinds
+**Data infrastructure delivered:**
+- `ad_group_ad.ad_strength` field added to ad query + DB model + migration 0013
+- `prev_ads` historical snapshot added to `DetectionContext`
+- EN + PL explanation templates added for all 6 kinds
 
 | # | Rule | Kind | Severity | Triggers when | Status |
 |---|------|------|----------|--------------|--------|
-| 17 | Ad-keyword mismatch | `AD_KEYWORD_MISMATCH` | HIGH | LLM relevance score < 0.6 between top keywords and ad headlines | ⬜ |
-| 18 | Missing call-to-action | `MISSING_CTA` | MEDIUM | Ad copy contains no CTA verb (buy, sign up, get, call, book, try, start, learn) | ⬜ |
-| 19 | Weak RSA asset strength | `WEAK_RSA_STRENGTH` | MEDIUM | RSA ad_strength = "POOR" or < 8 unique headlines | ⬜ |
-| 20 | Ad fatigue | `AD_FATIGUE` | MEDIUM | Ad running >90 days with CTR declining >20% over last 30 days | ⬜ |
-| 21 | Headline redundancy | `REDUNDANT_HEADLINES` | LOW | ≥3 RSA headlines share >60% token overlap with each other | ⬜ |
-| 22 | Generic description | `GENERIC_DESCRIPTION` | LOW | Description lines contain no numbers, prices, or specific benefits (LLM-detected) | ⬜ |
+| 17 | Ad-keyword mismatch | `AD_KEYWORD_MISMATCH` | HIGH | Keyword token coverage in ad headlines < 35% | ✅ |
+| 18 | Missing call-to-action | `MISSING_CTA` | MEDIUM | Ad copy contains no CTA verb (EN + PL, regex) | ✅ |
+| 19 | Weak RSA asset strength | `WEAK_RSA_STRENGTH` | MEDIUM | RSA ad_strength = "POOR"/"AVERAGE" or < 8 unique headlines | ✅ |
+| 20 | Ad fatigue | `AD_FATIGUE` | MEDIUM | CTR dropped >25% WoW with stable impressions (±20%) | ✅ |
+| 21 | Headline redundancy | `REDUNDANT_HEADLINES` | LOW | ≥3 RSA headlines share >60% Jaccard token overlap | ✅ |
+| 22 | Generic description | `GENERIC_DESCRIPTION` | LOW | All descriptions lack digits, currency symbols, percentages, or anchor words | ✅ |
 
 ---
 

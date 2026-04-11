@@ -317,6 +317,7 @@ async def query_ads(
             ad_group_ad.ad_group,
             ad_group_ad.ad.type,
             ad_group_ad.status,
+            ad_group_ad.ad_strength,
             ad_group_ad.ad.responsive_search_ad.headlines,
             ad_group_ad.ad.responsive_search_ad.descriptions,
             ad_group_ad.ad.final_urls,
@@ -345,6 +346,14 @@ async def query_ads(
                 descriptions = [d.text for d in rsa.descriptions] if rsa else []
                 final_urls = list(ad.final_urls)
 
+                # ad_strength is an enum; convert to name string, None for UNSPECIFIED/UNKNOWN
+                strength_val = aga.ad_strength.name if hasattr(aga, "ad_strength") else None
+                ad_strength = (
+                    None
+                    if strength_val in (None, "UNSPECIFIED", "UNKNOWN", "PENDING", "NO_ADS", "")
+                    else strength_val
+                )
+
                 results.append(
                     AdSnapshot(
                         id=_make_id(),
@@ -361,6 +370,7 @@ async def query_ads(
                         clicks=m.clicks,
                         cost_micros=m.cost_micros,
                         conversions=m.conversions,
+                        ad_strength=ad_strength,
                     )
                 )
         return results

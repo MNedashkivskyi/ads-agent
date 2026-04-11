@@ -224,6 +224,7 @@ class AdSnapshotModel(Base):
     clicks: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     cost_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     conversions: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    ad_strength: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

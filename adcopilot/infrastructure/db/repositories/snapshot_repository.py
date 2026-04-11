@@ -235,6 +235,7 @@ class SqlSnapshotRepository:
                 "clicks": s.clicks,
                 "cost_micros": s.cost_micros,
                 "conversions": s.conversions,
+                "ad_strength": s.ad_strength,
             }
             for s in snapshots
         ]
@@ -251,6 +252,7 @@ class SqlSnapshotRepository:
                 "clicks": stmt.excluded.clicks,
                 "cost_micros": stmt.excluded.cost_micros,
                 "conversions": stmt.excluded.conversions,
+                "ad_strength": stmt.excluded.ad_strength,
                 "updated_at": text("now()"),
             },
         )
@@ -347,6 +349,37 @@ class SqlSnapshotRepository:
                 conversions=m.conversions,
                 ctr=m.ctr,
                 avg_cpc_micros=m.avg_cpc_micros,
+            )
+            for m in res.scalars().all()
+        ]
+
+    async def get_ads_by_date(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[AdSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(AdSnapshotModel).where(
+                AdSnapshotModel.account_id == acct_uuid,
+                AdSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        return [
+            AdSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                ad_id=m.ad_id,
+                ad_group_id=m.ad_group_id,
+                type=m.type,
+                status=m.status,
+                headlines_json=m.headlines_json,
+                descriptions_json=m.descriptions_json,
+                final_urls_json=m.final_urls_json,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+                ad_strength=m.ad_strength,
             )
             for m in res.scalars().all()
         ]
@@ -488,6 +521,7 @@ class SqlSnapshotRepository:
                 clicks=m.clicks,
                 cost_micros=m.cost_micros,
                 conversions=m.conversions,
+                ad_strength=m.ad_strength,
             )
             for m in ad_res.scalars().all()
         ]
