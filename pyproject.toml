@@ -27,6 +27,7 @@ dependencies = [
     "tenacity>=9.1.4",
     "bcrypt>=5.0.0",
     "stripe>=15.0.1",
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]

@@ -60,6 +60,10 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
 
 def create_app() -> FastAPI:
+    from slowapi import _rate_limit_exceeded_handler
+    from slowapi.errors import RateLimitExceeded
+    from slowapi.middleware import SlowAPIMiddleware
+
     from adcopilot.interfaces.api.accounts import router as accounts_router
     from adcopilot.interfaces.api.auth import router as auth_router
     from adcopilot.interfaces.api.billing import router as billing_router
@@ -68,8 +72,13 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.snapshots import router as snapshots_router
     from adcopilot.interfaces.api.telegram import router as telegram_router
     from adcopilot.interfaces.api.users import router as users_router
+    from adcopilot.rate_limit import limiter
 
     application = FastAPI(title="AdCopilot", version="0.1.0", lifespan=lifespan)
+    # Rate limiting — must be registered before SlowAPIMiddleware is added.
+    application.state.limiter = limiter
+    application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    application.add_middleware(SlowAPIMiddleware)
     application.add_middleware(RequestIdMiddleware)
     application.include_router(auth_router)
     application.include_router(oauth_router)
