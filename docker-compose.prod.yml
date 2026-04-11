@@ -1,0 +1,235 @@
+# Production Docker Compose — standalone file.
+#
+# This file does NOT inherit docker-compose.yml.  Run with:
+#
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Prerequisites:
+#   - Copy .env.example → .env.prod and fill in every value.
+#   - Set DOMAIN to your public hostname (e.g. app.example.com).
+#   - Build and push the image, then set APP_IMAGE to the registry tag.
+#     (See DEPLOYMENT.md for a step-by-step guide.)
+#
+# Key differences from docker-compose.yml (development):
+#   - Internal services (postgres, redis, app) bind NO host ports —
+#     only Caddy is reachable from outside the host.
+#   - Automatic HTTPS via Caddy + Let's Encrypt.
+#   - Multi-worker uvicorn (2 processes).
+#   - Celery worker with concurrency=4, prefetch-multiplier=1,
+#     max-tasks-per-child=200.
+#   - Memory and CPU limits on every container.
+#   - JSON log rotation on every container.
+#   - redis persistence disabled (cache-only workload; data in postgres).
+
+name: adcopilot-prod
+
+services:
+
+  # ── Database ────────────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: adcopilot
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: adcopilot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # No host port binding — only reachable within the compose network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adcopilot -d adcopilot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+          cpus: "0.25"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # ── Cache / Message broker ───────────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: >
+      redis-server
+      --maxmemory 200mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+    # No host port binding.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── FastAPI application ──────────────────────────────────────────────────────
+
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE is required (e.g. ghcr.io/you/ads-agent:sha-abc1234)}
+    restart: always
+    env_file: .env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # No host port — Caddy proxies to this container on the internal network.
+    command:
+      - uvicorn
+      - adcopilot.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --workers
+      - "2"
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - "*"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "1.0"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # ── Celery worker ────────────────────────────────────────────────────────────
+
+  worker:
+    image: ${APP_IMAGE:?APP_IMAGE is required}
+    restart: always
+    env_file: .env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      - celery
+      - -A
+      - adcopilot.interfaces.worker.celery_app:celery_app
+      - worker
+      - --loglevel=warning
+      - -Q
+      - default
+      - --concurrency=4        # 4 processes per worker container
+      - --prefetch-multiplier=1 # fetch one task at a time (fair scheduling)
+      - --max-tasks-per-child=200 # recycle workers to prevent memory leaks
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: "2.0"
+        reservations:
+          memory: 128M
+          cpus: "0.25"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "10"
+
+  # ── Celery beat (scheduler) ───────────────────────────────────────────────────
+
+  beat:
+    image: ${APP_IMAGE:?APP_IMAGE is required}
+    restart: always
+    env_file: .env.prod
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command:
+      - celery
+      - -A
+      - adcopilot.interfaces.worker.celery_app:celery_app
+      - beat
+      - --loglevel=warning
+      - --schedule
+      - /tmp/celerybeat-schedule
+    # Only a single beat instance must ever run — duplicate beats cause
+    # double-scheduled tasks.  The restart=always policy is intentional
+    # (beat is cheap; let the daemon recover it), but never scale this
+    # service beyond replicas: 1.
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+        reservations:
+          memory: 64M
+          cpus: "0.1"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # ── Reverse proxy + automatic TLS ────────────────────────────────────────────
+
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3 / QUIC
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # Let's Encrypt certificates (persisted)
+      - caddy_config:/config    # Caddy runtime config
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN is required (e.g. app.example.com)}
+    depends_on:
+      - app
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+        reservations:
+          memory: 32M
+          cpus: "0.1"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:

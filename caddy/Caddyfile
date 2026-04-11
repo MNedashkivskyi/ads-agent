@@ -1,0 +1,41 @@
+# Caddy reverse proxy configuration for AdCopilot.
+#
+# DOMAIN is injected from the environment by docker-compose.prod.yml.
+# Caddy automatically obtains and renews a Let's Encrypt TLS certificate
+# for this domain.  Ports 80 and 443 must be open on the host firewall.
+#
+# For local testing without a public domain, replace {$DOMAIN} with
+# "localhost" and Caddy will use a self-signed certificate.
+
+{$DOMAIN} {
+
+    # Forward all requests to the FastAPI app container.
+    reverse_proxy app:8000
+
+    # Harden HTTP response headers.
+    header {
+        # Prevent MIME sniffing
+        X-Content-Type-Options nosniff
+        # Disallow embedding in iframes (clickjacking protection)
+        X-Frame-Options DENY
+        # Force HTTPS for future requests (1 year)
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        # Limit referrer information sent to third-party sites
+        Referrer-Policy strict-origin-when-cross-origin
+        # Remove the Caddy "Server" header
+        -Server
+    }
+
+    # Structured access logging — persisted in the caddy_data volume.
+    log {
+        output file /data/access.log {
+            roll_size 20mb
+            roll_keep 5
+            roll_keep_for 720h  # 30 days
+        }
+        format json
+    }
+
+    # Encode responses with gzip / zstd where the client supports it.
+    encode zstd gzip
+}
