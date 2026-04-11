@@ -65,3 +65,20 @@ class GoogleAdsMutationsPort(Protocol):
         keyword_text: str,
         match_type: str,
     ) -> None: ...
+
+    async def change_keyword_match_type(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        criterion_id: int,
+        match_type: str,
+    ) -> None: ...
+
+    async def set_campaign_bidding_strategy(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        bidding_strategy: str,
+    ) -> None: ...

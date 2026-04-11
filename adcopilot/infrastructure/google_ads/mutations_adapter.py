@@ -253,3 +253,101 @@ class GoogleAdsMutationsAdapter:
             )
         except Exception as exc:
             raise GoogleAdsUnavailable(f"remove_ad_group_negative_keyword failed: {exc}") from exc
+
+    async def change_keyword_match_type(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        criterion_id: int,
+        match_type: str,
+    ) -> None:
+        """Update a keyword's match type (e.g. BROAD → PHRASE or EXACT)."""
+        try:
+            client = self._build_client(refresh_token)
+            ad_group_criterion_service = client.get_service("AdGroupCriterionService")
+            resource_name = ad_group_criterion_service.ad_group_criterion_path(
+                customer_id.replace("-", ""), ad_group_id, criterion_id
+            )
+            operation = client.get_type("AdGroupCriterionOperation")
+            criterion = operation.update
+            criterion.resource_name = resource_name
+            criterion.keyword.match_type = getattr(
+                client.enums.KeywordMatchTypeEnum,
+                match_type,
+                client.enums.KeywordMatchTypeEnum.PHRASE,
+            )
+            from google.protobuf import field_mask_pb2
+            operation.update_mask.CopyFrom(
+                field_mask_pb2.FieldMask(paths=["keyword.match_type"])
+            )
+            ad_group_criterion_service.mutate_ad_group_criteria(
+                customer_id=customer_id.replace("-", ""),
+                operations=[operation],
+            )
+            logger.info(
+                "keyword match type changed",
+                customer_id=customer_id,
+                criterion_id=criterion_id,
+                match_type=match_type,
+            )
+        except Exception as exc:
+            raise GoogleAdsUnavailable(f"change_keyword_match_type failed: {exc}") from exc
+
+    async def set_campaign_bidding_strategy(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        bidding_strategy: str,
+    ) -> None:
+        """Switch a campaign to a different bidding strategy.
+
+        Supported values: MAXIMIZE_CONVERSIONS, MAXIMIZE_CONVERSION_VALUE,
+        MAXIMIZE_CLICKS, TARGET_SPEND.
+        """
+        # Map strategy name → Campaign proto field name (oneof bidding_scheme).
+        _STRATEGY_FIELD: dict[str, str] = {
+            "MAXIMIZE_CONVERSIONS": "maximize_conversions",
+            "MAXIMIZE_CONVERSION_VALUE": "maximize_conversion_value",
+            "MAXIMIZE_CLICKS": "maximize_clicks",
+            "TARGET_SPEND": "target_spend",
+        }
+        field_name = _STRATEGY_FIELD.get(bidding_strategy.upper())
+        if field_name is None:
+            raise GoogleAdsUnavailable(
+                f"Unsupported bidding strategy for automated switching: {bidding_strategy}"
+            )
+        try:
+            client = self._build_client(refresh_token)
+            campaign_service = client.get_service("CampaignService")
+            resource_name = campaign_service.campaign_path(
+                customer_id.replace("-", ""), campaign_id
+            )
+            operation = client.get_type("CampaignOperation")
+            campaign = operation.update
+            campaign.resource_name = resource_name
+            # For proto3 oneof fields, CopyFrom an empty instance of the same
+            # message type marks the variant as selected without setting any
+            # sub-fields (uses defaults, which is correct for MAXIMIZE_CONVERSIONS
+            # and MAXIMIZE_CLICKS without a target CPA/ROAS).
+            sub_msg = getattr(campaign, field_name)
+            sub_msg.CopyFrom(type(sub_msg)())
+            from google.protobuf import field_mask_pb2
+            operation.update_mask.CopyFrom(
+                field_mask_pb2.FieldMask(paths=[field_name])
+            )
+            campaign_service.mutate_campaigns(
+                customer_id=customer_id.replace("-", ""),
+                operations=[operation],
+            )
+            logger.info(
+                "campaign bidding strategy changed",
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                bidding_strategy=bidding_strategy,
+            )
+        except GoogleAdsUnavailable:
+            raise
+        except Exception as exc:
+            raise GoogleAdsUnavailable(f"set_campaign_bidding_strategy failed: {exc}") from exc
