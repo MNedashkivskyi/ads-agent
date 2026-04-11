@@ -76,7 +76,10 @@ async def query_campaigns(
             metrics.clicks,
             metrics.cost_micros,
             metrics.conversions,
-            metrics.conversions_value
+            metrics.conversions_value,
+            metrics.search_impression_share,
+            metrics.search_budget_lost_impression_share,
+            metrics.search_rank_lost_impression_share
         FROM campaign
         WHERE segments.date = '{date_str}'
     """
@@ -90,6 +93,11 @@ async def query_campaigns(
                 c = row.campaign
                 b = row.campaign_budget
                 m = row.metrics
+
+                def _is_metric(v: float) -> float | None:
+                    """Return None for sentinel values Google uses when a metric is unavailable."""
+                    return None if v in (0.0, float("inf")) else v
+
                 results.append(
                     CampaignSnapshot(
                         id=_make_id(),
@@ -106,6 +114,13 @@ async def query_campaigns(
                         cost_micros=m.cost_micros,
                         conversions=m.conversions,
                         conv_value=m.conversions_value,
+                        search_impression_share=_is_metric(m.search_impression_share),
+                        search_budget_lost_impression_share=_is_metric(
+                            m.search_budget_lost_impression_share
+                        ),
+                        search_rank_lost_impression_share=_is_metric(
+                            m.search_rank_lost_impression_share
+                        ),
                     )
                 )
         return results

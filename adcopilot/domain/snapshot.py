@@ -23,6 +23,11 @@ class CampaignSnapshot:
     cost_micros: int
     conversions: float
     conv_value: float
+    # Impression share metrics — None when the campaign has no search channel
+    # data or insufficient impressions for Google to report the value.
+    search_impression_share: float | None = None
+    search_budget_lost_impression_share: float | None = None
+    search_rank_lost_impression_share: float | None = None
 
 
 @dataclass(frozen=True)

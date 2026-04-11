@@ -127,6 +127,9 @@ class CampaignSnapshotModel(Base):
     cost_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     conversions: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     conv_value: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    search_impression_share: Mapped[float | None] = mapped_column(Float, nullable=True)
+    search_budget_lost_impression_share: Mapped[float | None] = mapped_column(Float, nullable=True)
+    search_rank_lost_impression_share: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

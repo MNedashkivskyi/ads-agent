@@ -55,6 +55,9 @@ class SqlSnapshotRepository:
                 "cost_micros": s.cost_micros,
                 "conversions": s.conversions,
                 "conv_value": s.conv_value,
+                "search_impression_share": s.search_impression_share,
+                "search_budget_lost_impression_share": s.search_budget_lost_impression_share,
+                "search_rank_lost_impression_share": s.search_rank_lost_impression_share,
             }
             for s in snapshots
         ]
@@ -72,6 +75,9 @@ class SqlSnapshotRepository:
                 "cost_micros": stmt.excluded.cost_micros,
                 "conversions": stmt.excluded.conversions,
                 "conv_value": stmt.excluded.conv_value,
+                "search_impression_share": stmt.excluded.search_impression_share,
+                "search_budget_lost_impression_share": stmt.excluded.search_budget_lost_impression_share,
+                "search_rank_lost_impression_share": stmt.excluded.search_rank_lost_impression_share,
                 "updated_at": text("now()"),
             },
         )
@@ -254,6 +260,97 @@ class SqlSnapshotRepository:
     # Utilities
     # ------------------------------------------------------------------
 
+    async def get_campaigns_by_date(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[CampaignSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(CampaignSnapshotModel).where(
+                CampaignSnapshotModel.account_id == acct_uuid,
+                CampaignSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        return [
+            CampaignSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                campaign_id=m.campaign_id,
+                name=m.name,
+                status=m.status,
+                channel_type=m.channel_type,
+                budget_micros=m.budget_micros,
+                bidding_strategy=m.bidding_strategy,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+                conv_value=m.conv_value,
+                search_impression_share=m.search_impression_share,
+                search_budget_lost_impression_share=m.search_budget_lost_impression_share,
+                search_rank_lost_impression_share=m.search_rank_lost_impression_share,
+            )
+            for m in res.scalars().all()
+        ]
+
+    async def get_ad_groups_by_date(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[AdGroupSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(AdGroupSnapshotModel).where(
+                AdGroupSnapshotModel.account_id == acct_uuid,
+                AdGroupSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        return [
+            AdGroupSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                ad_group_id=m.ad_group_id,
+                campaign_id=m.campaign_id,
+                name=m.name,
+                status=m.status,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+            )
+            for m in res.scalars().all()
+        ]
+
+    async def get_keywords_by_date(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[KeywordSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(KeywordSnapshotModel).where(
+                KeywordSnapshotModel.account_id == acct_uuid,
+                KeywordSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        return [
+            KeywordSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                criterion_id=m.criterion_id,
+                ad_group_id=m.ad_group_id,
+                text=m.text,
+                match_type=m.match_type,
+                status=m.status,
+                quality_score=m.quality_score,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+                ctr=m.ctr,
+                avg_cpc_micros=m.avg_cpc_micros,
+            )
+            for m in res.scalars().all()
+        ]
+
     async def get_latest_snapshot_date(self, account_id: AccountId) -> date | None:
         result = await self._session.execute(
             select(CampaignSnapshotModel.snapshot_date)
@@ -290,6 +387,9 @@ class SqlSnapshotRepository:
                 cost_micros=m.cost_micros,
                 conversions=m.conversions,
                 conv_value=m.conv_value,
+                search_impression_share=m.search_impression_share,
+                search_budget_lost_impression_share=m.search_budget_lost_impression_share,
+                search_rank_lost_impression_share=m.search_rank_lost_impression_share,
             )
             for m in campaigns_res.scalars().all()
         ]

@@ -132,6 +132,94 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " Explain briefly in plain English."
         ),
     },
+    RecommendationKind.CTR_DECLINE: {
+        "pl": (
+            "Współczynnik klikalności (CTR) grupy reklam '{ad_group}' spadł o {ctr_drop_pct:.0f}%"
+            " w porównaniu do ubiegłego tygodnia (z {previous_ctr:.2%} do {current_ctr:.2%}),"
+            " przy stabilnej liczbie wyświetleń. Oznacza to, że reklamy stają się mniej"
+            " atrakcyjne dla użytkowników. Wytłumacz krótko możliwe przyczyny i co zrobić,"
+            " po polsku."
+        ),
+        "en": (
+            "Ad group '{ad_group}' CTR dropped {ctr_drop_pct:.0f}% week-over-week"
+            " (from {previous_ctr:.2%} to {current_ctr:.2%}) with stable impressions."
+            " This means the ads are becoming less compelling to searchers."
+            " Explain possible causes and what to review in plain English."
+        ),
+    },
+    RecommendationKind.CPA_SPIKE: {
+        "pl": (
+            "Koszt pozyskania klienta (CPA) w kampanii '{campaign}' wzrósł o"
+            " {cpa_spike_pct:.0f}% w porównaniu do ubiegłego tygodnia. Szacowane dodatkowe"
+            " koszty: {savings}/miesiąc. Wytłumacz możliwe przyczyny i działania naprawcze"
+            " krótko po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign}' cost-per-conversion spiked {cpa_spike_pct:.0f}%"
+            " week-over-week. Estimated extra monthly cost: {savings}."
+            " Explain possible causes (bids, competition, landing page) and what to check"
+            " in plain English."
+        ),
+    },
+    RecommendationKind.CONVERSION_RATE_DROP: {
+        "pl": (
+            "Współczynnik konwersji kampanii '{campaign}' spadł o {cvr_drop_pct:.0f}%"
+            " w porównaniu do ubiegłego tygodnia (z {previous_cvr:.2%} do {current_cvr:.2%})."
+            " Szacowane straty: {savings}/miesiąc. Wytłumacz możliwe przyczyny — np. strona"
+            " docelowa, oferta, targeting — po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign}' conversion rate dropped {cvr_drop_pct:.0f}%"
+            " week-over-week (from {previous_cvr:.2%} to {current_cvr:.2%})."
+            " Estimated lost value: {savings}/month."
+            " Explain possible causes — landing page, offer change, audience mismatch —"
+            " in plain English."
+        ),
+    },
+    RecommendationKind.IMPRESSION_SHARE_EROSION: {
+        "pl": (
+            "Udział w wyświetleniach (Impression Share) kampanii '{campaign}' spadł o"
+            " {drop_pp:.0%} w ciągu ostatniego tygodnia. Główna przyczyna:"
+            " {primary_cause}. Oznacza to, że Twoje reklamy są coraz rzadziej wyświetlane"
+            " potencjalnym klientom. Wytłumacz co to znaczy i jak to naprawić, po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign}' search impression share dropped {drop_pp:.0%} this week."
+            " Primary cause: {primary_cause}."
+            " Your ads are becoming less visible to potential customers."
+            " Explain what impression share is and how to recover it in plain English."
+        ),
+    },
+    RecommendationKind.SPEND_ACCELERATION: {
+        "pl": (
+            "Wydatki kampanii '{campaign}' wzrosły o {spend_growth_pct:.0f}% w porównaniu do"
+            " ubiegłego tygodnia, ale liczba konwersji pozostała płaska lub spadła."
+            " Szacowane zmarnowane dodatkowe wydatki: {savings}/miesiąc."
+            " Wytłumacz dlaczego to niepokojące i co sprawdzić, po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign}' spend grew {spend_growth_pct:.0f}% week-over-week but"
+            " conversions stayed flat or declined. Estimated wasted extra spend:"
+            " {savings}/month."
+            " Explain why this pattern is concerning and what to investigate in plain English."
+        ),
+    },
+    RecommendationKind.QUALITY_SCORE_DETERIORATION: {
+        "pl": (
+            "Wynik Jakości (Quality Score) słowa kluczowego '{keyword}' spadł z"
+            " {previous_quality_score} do {current_quality_score} punktów w ciągu"
+            " ostatniego tygodnia. Niższy QS oznacza wyższe koszty kliknięcia i gorsze"
+            " pozycje. Szacowane dodatkowe koszty: {savings}/miesiąc."
+            " Wytłumacz co mogło spowodować spadek i jak to naprawić, po polsku."
+        ),
+        "en": (
+            "Keyword '{keyword}' Quality Score dropped from {previous_quality_score} to"
+            " {current_quality_score} this week. Lower QS means higher CPCs and worse"
+            " ad positions. Estimated extra monthly cost: {savings}."
+            " Explain what could have caused the drop (ad relevance, landing page, CTR)"
+            " and how to fix it in plain English."
+        ),
+    },
 }
 
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Protocol
 
@@ -37,6 +37,11 @@ class DetectionContext:
     ads: list[AdSnapshot]
     history: HistoricalStats
     snapshot_date: date
+    # 7-day-ago snapshots for week-over-week trend rules (Module 1).
+    # Empty lists when no historical data is available (e.g. first snapshot).
+    prev_campaigns: list[CampaignSnapshot] = field(default_factory=list)
+    prev_ad_groups: list[AdGroupSnapshot] = field(default_factory=list)
+    prev_keywords: list[KeywordSnapshot] = field(default_factory=list)
 
 
 class DetectionRule(Protocol):

@@ -24,6 +24,20 @@ from adcopilot.application.detection.rules.rule_09_dead_keyword import DeadKeywo
 from adcopilot.application.detection.rules.rule_10_wrong_bidding_strategy import (
     WrongBiddingStrategyRule,
 )
+from adcopilot.application.detection.rules.rule_11_ctr_decline import CtrDeclineRule
+from adcopilot.application.detection.rules.rule_12_cpa_spike import CpaSpikeRule
+from adcopilot.application.detection.rules.rule_13_conversion_rate_drop import (
+    ConversionRateDropRule,
+)
+from adcopilot.application.detection.rules.rule_14_impression_share_erosion import (
+    ImpressionShareErosionRule,
+)
+from adcopilot.application.detection.rules.rule_15_spend_acceleration import (
+    SpendAccelerationRule,
+)
+from adcopilot.application.detection.rules.rule_16_quality_score_deterioration import (
+    QualityScoreDeteriorationRule,
+)
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -34,6 +48,7 @@ def build_rule_engine(
 ) -> RuleEngine:
     """Instantiate all detection rules and return a configured RuleEngine."""
     rules: list[DetectionRule] = [
+        # Module 0 — Hygiene
         WastedSearchTermRule(),
         ZeroConversionKeywordRule(),
         LowQualityScoreKeywordRule(),
@@ -44,5 +59,12 @@ def build_rule_engine(
         SingleAdInGroupRule(),
         DeadKeywordRule(),
         WrongBiddingStrategyRule(),
+        # Module 1 — Performance degradation & trends
+        CtrDeclineRule(),
+        CpaSpikeRule(),
+        ConversionRateDropRule(),
+        ImpressionShareErosionRule(),
+        SpendAccelerationRule(),
+        QualityScoreDeteriorationRule(),
     ]
     return RuleEngine(rules=rules, rec_repo=rec_repo, snooze_repo=snooze_repo)
