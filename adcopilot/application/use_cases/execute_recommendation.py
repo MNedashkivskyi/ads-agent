@@ -29,6 +29,11 @@ _EXECUTORS: dict[RecommendationKind, RecommendationExecutor] | None = None
 
 def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
     from adcopilot.application.executors.add_negative_keyword import AddNegativeKeywordExecutor
+    from adcopilot.application.executors.adjust_bidding_strategy import (
+        AdjustBiddingStrategyExecutor,
+    )
+    from adcopilot.application.executors.adjust_budget import AdjustBudgetExecutor
+    from adcopilot.application.executors.change_match_type import ChangeMatchTypeExecutor
     from adcopilot.application.executors.increase_budget import IncreaseBudgetExecutor
     from adcopilot.application.executors.pause_ad import PauseAdExecutor
     from adcopilot.application.executors.pause_keyword import PauseKeywordExecutor
@@ -38,6 +43,9 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
         PauseAdExecutor(),
         AddNegativeKeywordExecutor(),
         IncreaseBudgetExecutor(),
+        ChangeMatchTypeExecutor(),
+        AdjustBiddingStrategyExecutor(),
+        AdjustBudgetExecutor(),
     ]
     return {e.kind: e for e in execs}
 

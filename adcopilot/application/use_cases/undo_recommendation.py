@@ -160,4 +160,52 @@ class UndoRecommendationUseCase:
                 "action": "budget_restored",
             }
 
+        if kind == RecommendationKind.CHANGE_MATCH_TYPE:
+            ad_group_id = int(payload["ad_group_id"])
+            criterion_id = int(payload["criterion_id"])
+            old_match_type = str(payload.get("old_match_type", "BROAD"))
+            await self._mutations.change_keyword_match_type(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                ad_group_id=ad_group_id,
+                criterion_id=criterion_id,
+                match_type=old_match_type,
+            )
+            return {
+                "ad_group_id": ad_group_id,
+                "criterion_id": criterion_id,
+                "restored_match_type": old_match_type,
+                "action": "match_type_restored",
+            }
+
+        if kind == RecommendationKind.ADJUST_BIDDING_STRATEGY:
+            campaign_id = int(payload["campaign_id"])
+            old_strategy = str(payload.get("old_strategy", rec_payload.get("current_strategy", "")))
+            await self._mutations.set_campaign_bidding_strategy(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                bidding_strategy=old_strategy,
+            )
+            return {
+                "campaign_id": campaign_id,
+                "restored_strategy": old_strategy,
+                "action": "bidding_strategy_restored",
+            }
+
+        if kind == RecommendationKind.ADJUST_BUDGET:
+            campaign_id = int(payload["campaign_id"])
+            old_budget = int(rec_payload.get("current_budget_micros", 0))
+            await self._mutations.update_campaign_budget(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                new_budget_micros=old_budget,
+            )
+            return {
+                "campaign_id": campaign_id,
+                "restored_budget_micros": old_budget,
+                "action": "budget_restored",
+            }
+
         raise ValueError(f"No undo logic for {kind.value}")

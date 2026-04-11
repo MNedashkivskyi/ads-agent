@@ -9,6 +9,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from adcopilot.application.executors.add_negative_keyword import AddNegativeKeywordExecutor
+from adcopilot.application.executors.adjust_bidding_strategy import AdjustBiddingStrategyExecutor
+from adcopilot.application.executors.adjust_budget import AdjustBudgetExecutor
+from adcopilot.application.executors.change_match_type import ChangeMatchTypeExecutor
 from adcopilot.application.executors.increase_budget import IncreaseBudgetExecutor
 from adcopilot.application.executors.pause_ad import PauseAdExecutor
 from adcopilot.application.executors.pause_keyword import PauseKeywordExecutor
@@ -249,3 +252,87 @@ async def test_execute_calls_mutation_and_returns_result() -> None:
     result = await uc.execute(rec.id)
     assert len(mutations.calls) == 1
     assert result["criterion_id"] == 55
+
+
+# ---------------------------------------------------------------------------
+# ChangeMatchTypeExecutor
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_change_match_type_executor_calls_mutation() -> None:
+    mutations = FakeGoogleAdsMutations()
+    rec = _rec(
+        RecommendationKind.CHANGE_MATCH_TYPE,
+        payload={
+            "ad_group_id": 20,
+            "criterion_id": 77,
+            "current_match_type": "BROAD",
+            "suggested_match_type": "PHRASE",
+        },
+    )
+    executor = ChangeMatchTypeExecutor()
+    result = await executor.execute(rec, mutations, _REFRESH_TOKEN, _CUSTOMER_ID)
+    assert len(mutations.calls) == 1
+    call = mutations.calls[0]
+    assert call["method"] == "change_keyword_match_type"
+    assert call["ad_group_id"] == 20
+    assert call["criterion_id"] == 77
+    assert call["match_type"] == "PHRASE"
+    assert result["old_match_type"] == "BROAD"
+    assert result["new_match_type"] == "PHRASE"
+    assert result["action"] == "match_type_changed"
+
+
+# ---------------------------------------------------------------------------
+# AdjustBiddingStrategyExecutor
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_adjust_bidding_strategy_executor_calls_mutation() -> None:
+    mutations = FakeGoogleAdsMutations()
+    rec = _rec(
+        RecommendationKind.ADJUST_BIDDING_STRATEGY,
+        payload={
+            "campaign_id": 500,
+            "current_strategy": "MAXIMIZE_CLICKS",
+            "suggested_strategy": "MAXIMIZE_CONVERSIONS",
+        },
+    )
+    executor = AdjustBiddingStrategyExecutor()
+    result = await executor.execute(rec, mutations, _REFRESH_TOKEN, _CUSTOMER_ID)
+    assert len(mutations.calls) == 1
+    call = mutations.calls[0]
+    assert call["method"] == "set_campaign_bidding_strategy"
+    assert call["campaign_id"] == 500
+    assert call["bidding_strategy"] == "MAXIMIZE_CONVERSIONS"
+    assert result["old_strategy"] == "MAXIMIZE_CLICKS"
+    assert result["new_strategy"] == "MAXIMIZE_CONVERSIONS"
+    assert result["action"] == "bidding_strategy_changed"
+
+
+# ---------------------------------------------------------------------------
+# AdjustBudgetExecutor
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_adjust_budget_executor_calls_mutation() -> None:
+    mutations = FakeGoogleAdsMutations()
+    rec = _rec(
+        RecommendationKind.ADJUST_BUDGET,
+        payload={
+            "campaign_id": 300,
+            "current_budget_micros": 4_000_000,
+            "new_budget_micros": 3_000_000,
+        },
+    )
+    executor = AdjustBudgetExecutor()
+    result = await executor.execute(rec, mutations, _REFRESH_TOKEN, _CUSTOMER_ID)
+    assert len(mutations.calls) == 1
+    call = mutations.calls[0]
+    assert call["method"] == "update_campaign_budget"
+    assert call["campaign_id"] == 300
+    assert call["new_budget_micros"] == 3_000_000
+    assert result["action"] == "budget_adjusted"

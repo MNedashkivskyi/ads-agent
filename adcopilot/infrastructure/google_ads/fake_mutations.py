@@ -124,3 +124,37 @@ class FakeGoogleAdsMutations:
                 "match_type": match_type,
             }
         )
+
+    async def change_keyword_match_type(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        criterion_id: int,
+        match_type: str,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "change_keyword_match_type",
+                "customer_id": customer_id,
+                "ad_group_id": ad_group_id,
+                "criterion_id": criterion_id,
+                "match_type": match_type,
+            }
+        )
+
+    async def set_campaign_bidding_strategy(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        bidding_strategy: str,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "set_campaign_bidding_strategy",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "bidding_strategy": bidding_strategy,
+            }
+        )

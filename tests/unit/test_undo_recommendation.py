@@ -294,3 +294,118 @@ async def test_undo_saves_undo_audit_log() -> None:
     saved_log = uc._audit_log_repo.save.call_args.args[0]
     assert saved_log.action == "UNDO"
     assert saved_log.kind == RecommendationKind.PAUSE_KEYWORD.value
+
+
+# ---------------------------------------------------------------------------
+# CHANGE_MATCH_TYPE undo
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_undo_change_match_type_restores_old_match_type() -> None:
+    rec = _rec(
+        RecommendationKind.CHANGE_MATCH_TYPE,
+        payload={
+            "criterion_id": 77,
+            "ad_group_id": 20,
+            "current_match_type": "BROAD",
+            "suggested_match_type": "PHRASE",
+        },
+    )
+    log = AuditLog(
+        id=AuditLogId(str(uuid.uuid4())),
+        recommendation_id=rec.id,
+        account_id=rec.account_id,
+        kind=rec.kind.value,
+        action="EXECUTE",
+        payload={
+            "ad_group_id": 20,
+            "criterion_id": 77,
+            "old_match_type": "BROAD",
+            "new_match_type": "PHRASE",
+            "action": "match_type_changed",
+        },
+        created_at=_NOW,
+    )
+    uc, mutations = _make_uc(rec, log)
+    result = await uc.execute(rec.id)
+    assert mutations.calls[0]["method"] == "change_keyword_match_type"
+    assert mutations.calls[0]["criterion_id"] == 77
+    assert mutations.calls[0]["match_type"] == "BROAD"
+    assert result["action"] == "match_type_restored"
+    assert result["restored_match_type"] == "BROAD"
+
+
+# ---------------------------------------------------------------------------
+# ADJUST_BIDDING_STRATEGY undo
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_undo_adjust_bidding_strategy_restores_old_strategy() -> None:
+    rec = _rec(
+        RecommendationKind.ADJUST_BIDDING_STRATEGY,
+        payload={
+            "campaign_id": 500,
+            "current_strategy": "MAXIMIZE_CLICKS",
+            "suggested_strategy": "MAXIMIZE_CONVERSIONS",
+        },
+    )
+    log = AuditLog(
+        id=AuditLogId(str(uuid.uuid4())),
+        recommendation_id=rec.id,
+        account_id=rec.account_id,
+        kind=rec.kind.value,
+        action="EXECUTE",
+        payload={
+            "campaign_id": 500,
+            "old_strategy": "MAXIMIZE_CLICKS",
+            "new_strategy": "MAXIMIZE_CONVERSIONS",
+            "action": "bidding_strategy_changed",
+        },
+        created_at=_NOW,
+    )
+    uc, mutations = _make_uc(rec, log)
+    result = await uc.execute(rec.id)
+    assert mutations.calls[0]["method"] == "set_campaign_bidding_strategy"
+    assert mutations.calls[0]["campaign_id"] == 500
+    assert mutations.calls[0]["bidding_strategy"] == "MAXIMIZE_CLICKS"
+    assert result["action"] == "bidding_strategy_restored"
+    assert result["restored_strategy"] == "MAXIMIZE_CLICKS"
+
+
+# ---------------------------------------------------------------------------
+# ADJUST_BUDGET undo
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_undo_adjust_budget_restores_old_budget() -> None:
+    rec = _rec(
+        RecommendationKind.ADJUST_BUDGET,
+        payload={
+            "campaign_id": 300,
+            "current_budget_micros": 4_000_000,
+            "new_budget_micros": 3_000_000,
+        },
+    )
+    log = AuditLog(
+        id=AuditLogId(str(uuid.uuid4())),
+        recommendation_id=rec.id,
+        account_id=rec.account_id,
+        kind=rec.kind.value,
+        action="EXECUTE",
+        payload={
+            "campaign_id": 300,
+            "new_budget_micros": 3_000_000,
+            "action": "budget_adjusted",
+        },
+        created_at=_NOW,
+    )
+    uc, mutations = _make_uc(rec, log)
+    result = await uc.execute(rec.id)
+    assert mutations.calls[0]["method"] == "update_campaign_budget"
+    assert mutations.calls[0]["campaign_id"] == 300
+    assert mutations.calls[0]["new_budget_micros"] == 4_000_000
+    assert result["action"] == "budget_restored"
+    assert result["restored_budget_micros"] == 4_000_000

@@ -65,6 +65,7 @@ class BroadMatchBleedingRule:
             payload = {
                 "criterion_id": kw.criterion_id,
                 "ad_group_id": kw.ad_group_id,
+                "current_match_type": kw.match_type.upper(),
                 "suggested_match_type": "PHRASE",
             }
             evidence = {
