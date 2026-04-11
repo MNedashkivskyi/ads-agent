@@ -220,6 +220,99 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " and how to fix it in plain English."
         ),
     },
+    RecommendationKind.AD_KEYWORD_MISMATCH: {
+        "pl": (
+            "Reklama (ID {ad_id}) w grupie {ad_group_id} ma niskie dopasowanie treści do"
+            " słów kluczowych — tylko {coverage_pct:.0f}% tokenów słów kluczowych pojawia się"
+            " w nagłówkach reklamy. Google nagradza wyższe dopasowanie słów kluczowych do"
+            " reklamy lepszym Wynikiem Jakości i niższymi kosztami kliknięcia."
+            " Wytłumacz co to znaczy i jak poprawić nagłówki, po polsku."
+        ),
+        "en": (
+            "Ad (ID {ad_id}) in ad group {ad_group_id} has low keyword-to-ad relevance —"
+            " only {coverage_pct:.0f}% of keyword tokens appear in the ad headlines."
+            " Google rewards higher keyword-ad alignment with better Quality Score and"
+            " lower CPCs. Explain what this means and how to improve the headlines"
+            " in plain English."
+        ),
+    },
+    RecommendationKind.MISSING_CTA: {
+        "pl": (
+            "Reklama (ID {ad_id}) nie zawiera żadnego wezwania do działania (CTA) w"
+            " {headline_count} nagłówkach ani opisach. Reklamy bez CTA mają niższy"
+            " współczynnik klikalności i konwersji — użytkownicy muszą wiedzieć, co mają"
+            " zrobić. Wytłumacz jak dodać skuteczne CTA, po polsku."
+        ),
+        "en": (
+            "Ad (ID {ad_id}) has no call-to-action in any of its {headline_count} headlines"
+            " or descriptions. Ads without a CTA get lower CTR and conversion rates —"
+            " users need to be told what to do next."
+            " Explain how to add an effective CTA in plain English."
+        ),
+    },
+    RecommendationKind.WEAK_RSA_STRENGTH: {
+        "pl": (
+            "Responsywna reklama (ID {ad_id}) ma słabą ocenę jakości Google: {reason}."
+            " Niski Ad Strength oznacza mniej wyświetleń i gorsze wyniki algorytmu"
+            " optymalizacji. Google zaleca minimum 8 unikalnych nagłówków."
+            " Wytłumacz jak poprawić jakość reklamy, po polsku."
+        ),
+        "en": (
+            "Responsive search ad (ID {ad_id}) has weak Google ad strength: {reason}."
+            " Low Ad Strength means fewer impressions and worse algorithm optimisation."
+            " Google recommends at least 8 unique headlines."
+            " Explain how to improve ad strength in plain English."
+        ),
+    },
+    RecommendationKind.AD_FATIGUE: {
+        "pl": (
+            "Reklama (ID {ad_id}) wykazuje oznaki zmęczenia — CTR spadł o"
+            " {ctr_drop_pct:.0f}% w porównaniu do ubiegłego tygodnia (z {previous_ctr:.2%}"
+            " do {current_ctr:.2%}), przy stabilnej liczbie wyświetleń."
+            " Użytkownicy coraz częściej ignorują tę samą treść reklamy."
+            " Wytłumacz co to znaczy i jak odświeżyć kreację, po polsku."
+        ),
+        "en": (
+            "Ad (ID {ad_id}) shows signs of fatigue — CTR dropped {ctr_drop_pct:.0f}%"
+            " week-over-week (from {previous_ctr:.2%} to {current_ctr:.2%})"
+            " with stable impression volume."
+            " Users are increasingly scrolling past the same creative."
+            " Explain what ad fatigue is and how to refresh the copy in plain English."
+        ),
+    },
+    RecommendationKind.REDUNDANT_HEADLINES: {
+        "pl": (
+            "Responsywna reklama (ID {ad_id}) ma {redundant_headline_count} z"
+            " {total_headlines} nagłówków, które brzmią niemal identycznie."
+            " Algorytm Google ma wtedy mniej różnorodnych kombinacji do testowania,"
+            " co ogranicza naukę i osłabia wyniki. Każdy nagłówek powinien przekazywać"
+            " inny argument. Wytłumacz jak to poprawić, po polsku."
+        ),
+        "en": (
+            "Responsive search ad (ID {ad_id}) has {redundant_headline_count} out of"
+            " {total_headlines} headlines that say nearly the same thing."
+            " Google's algorithm has fewer unique combinations to test, limiting"
+            " learning and hurting ad strength."
+            " Each headline should communicate a different selling point."
+            " Explain how to diversify them in plain English."
+        ),
+    },
+    RecommendationKind.GENERIC_DESCRIPTION: {
+        "pl": (
+            "Wszystkie opisy reklamy (ID {ad_id}) są zbyt ogólne — nie zawierają żadnych"
+            " liczb, cen, procentów ani konkretnych korzyści."
+            " Treści takie jak 'Wysokiej jakości usługi' brzmią jak każda inna reklama."
+            " Konkretne dane ('Oszczędź 30%', 'Od 49 zł/mies.') budują zaufanie i"
+            " zwiększają klikalność. Wytłumacz jak dodać konkrety, po polsku."
+        ),
+        "en": (
+            "All descriptions in ad (ID {ad_id}) are generic — they contain no numbers,"
+            " prices, percentages, or specific claims."
+            " Copy like 'High quality service' sounds like every other ad."
+            " Specifics like 'Save 30%' or 'From €49/month' build trust and boost CTR."
+            " Explain how to make the descriptions more concrete in plain English."
+        ),
+    },
 }
 
 

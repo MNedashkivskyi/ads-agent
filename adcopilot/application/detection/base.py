@@ -37,11 +37,12 @@ class DetectionContext:
     ads: list[AdSnapshot]
     history: HistoricalStats
     snapshot_date: date
-    # 7-day-ago snapshots for week-over-week trend rules (Module 1).
+    # 7-day-ago snapshots for week-over-week trend rules (Modules 1 & 2).
     # Empty lists when no historical data is available (e.g. first snapshot).
     prev_campaigns: list[CampaignSnapshot] = field(default_factory=list)
     prev_ad_groups: list[AdGroupSnapshot] = field(default_factory=list)
     prev_keywords: list[KeywordSnapshot] = field(default_factory=list)
+    prev_ads: list[AdSnapshot] = field(default_factory=list)
 
 
 class DetectionRule(Protocol):

@@ -65,3 +65,7 @@ class SnapshotRepository(Protocol):
     async def get_keywords_by_date(
         self, account_id: AccountId, snapshot_date: date
     ) -> list[KeywordSnapshot]: ...
+
+    async def get_ads_by_date(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[AdSnapshot]: ...

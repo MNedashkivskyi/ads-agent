@@ -38,6 +38,18 @@ from adcopilot.application.detection.rules.rule_15_spend_acceleration import (
 from adcopilot.application.detection.rules.rule_16_quality_score_deterioration import (
     QualityScoreDeteriorationRule,
 )
+from adcopilot.application.detection.rules.rule_17_ad_keyword_mismatch import (
+    AdKeywordMismatchRule,
+)
+from adcopilot.application.detection.rules.rule_18_missing_cta import MissingCtaRule
+from adcopilot.application.detection.rules.rule_19_weak_rsa_strength import WeakRsaStrengthRule
+from adcopilot.application.detection.rules.rule_20_ad_fatigue import AdFatigueRule
+from adcopilot.application.detection.rules.rule_21_redundant_headlines import (
+    RedundantHeadlinesRule,
+)
+from adcopilot.application.detection.rules.rule_22_generic_description import (
+    GenericDescriptionRule,
+)
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -66,5 +78,12 @@ def build_rule_engine(
         ImpressionShareErosionRule(),
         SpendAccelerationRule(),
         QualityScoreDeteriorationRule(),
+        # Module 2 — Ad copy & creative intelligence
+        AdKeywordMismatchRule(),
+        MissingCtaRule(),
+        WeakRsaStrengthRule(),
+        AdFatigueRule(),
+        RedundantHeadlinesRule(),
+        GenericDescriptionRule(),
     ]
     return RuleEngine(rules=rules, rec_repo=rec_repo, snooze_repo=snooze_repo)

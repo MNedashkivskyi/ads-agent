@@ -50,7 +50,7 @@ class RunDetectionUseCase:
         #    These are best-effort — if no data exists the lists stay empty and
         #    trend rules simply skip (they check for empty prev_* lists).
         prev_date = snapshot_date - timedelta(days=_TREND_LOOKBACK_DAYS)
-        prev_campaigns, prev_ad_groups, prev_keywords = await _load_prev_snapshots(
+        prev_campaigns, prev_ad_groups, prev_keywords, prev_ads = await _load_prev_snapshots(
             self._snapshot_repo, account_id, prev_date
         )
 
@@ -78,6 +78,7 @@ class RunDetectionUseCase:
             prev_campaigns=prev_campaigns,
             prev_ad_groups=prev_ad_groups,
             prev_keywords=prev_keywords,
+            prev_ads=prev_ads,
         )
 
         # 6. Run rule engine
@@ -113,6 +114,7 @@ async def _load_prev_snapshots(
         prev_campaigns = await snapshot_repo.get_campaigns_by_date(account_id, prev_date)
         prev_ad_groups = await snapshot_repo.get_ad_groups_by_date(account_id, prev_date)
         prev_keywords = await snapshot_repo.get_keywords_by_date(account_id, prev_date)
-        return prev_campaigns, prev_ad_groups, prev_keywords
+        prev_ads = await snapshot_repo.get_ads_by_date(account_id, prev_date)
+        return prev_campaigns, prev_ad_groups, prev_keywords, prev_ads
     except Exception:
-        return [], [], []
+        return [], [], [], []
