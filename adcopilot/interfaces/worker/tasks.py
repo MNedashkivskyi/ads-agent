@@ -388,18 +388,37 @@ async def _run_trial_reminders(settings: object) -> dict[str, object]:
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
+    bind=True,
     max_retries=3,
     default_retry_delay=30,
-    autoretry_for=(Exception,),
     retry_backoff=True,
     retry_backoff_max=300,
     name="adcopilot.interfaces.worker.tasks.execute_recommendation_task",
 )
-def execute_recommendation_task(rec_id: str) -> dict[str, object]:
-    """Execute a single APPROVED recommendation against the Google Ads API."""
+def execute_recommendation_task(self: object, rec_id: str) -> dict[str, object]:
+    """Execute a single APPROVED recommendation against the Google Ads API.
+
+    Retries up to max_retries times with exponential back-off.  After the final
+    retry the recommendation is marked FAILED in the database and the user
+    receives a Telegram notification (if their chat_id is known).
+    """
     import asyncio
 
-    return asyncio.run(_run_execute_recommendation(rec_id))
+    from celery import Task  # type: ignore[import-untyped]
+
+    assert isinstance(self, Task)
+    try:
+        return asyncio.run(_run_execute_recommendation(rec_id))
+    except Exception as exc:
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc) from exc
+        # All retries exhausted — mark FAILED and notify the user.
+        error_message = str(exc) or type(exc).__name__
+        try:
+            asyncio.run(_handle_execution_failure(rec_id, error_message))
+        except Exception:
+            logger.exception("failed to handle execution failure", rec_id=rec_id)
+        raise
 
 
 async def _run_execute_recommendation(rec_id: str) -> dict[str, object]:
@@ -437,3 +456,60 @@ async def _run_execute_recommendation(rec_id: str) -> dict[str, object]:
 
     logger.info("recommendation executed", rec_id=rec_id)
     return {"rec_id": rec_id, "result": result}
+
+
+async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
+    """Mark the recommendation FAILED and send a Telegram notification to the user."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            rec_repo = SqlRecommendationRepository(session)
+            rec = await rec_repo.get(RecommendationId(rec_id))
+            if rec is None:
+                logger.error("recommendation not found during failure handling", rec_id=rec_id)
+                return
+
+            await rec_repo.update_status(RecommendationId(rec_id), RecommendationStatus.FAILED)
+            logger.warning(
+                "recommendation marked FAILED",
+                rec_id=rec_id,
+                kind=rec.kind.value,
+                error=error_message,
+            )
+
+            if not settings.TELEGRAM_BOT_TOKEN:
+                return
+
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            account = await account_repo.get(rec.account_id)
+            if account is None:
+                return
+
+            user_repo = SqlUserRepository(session)
+            user = await user_repo.get_by_id(account.user_id)
+            if user is None or user.telegram_chat_id is None or user.notifications_paused:
+                return
+
+            from adcopilot.infrastructure.telegram.digest_notifier import TelegramDigestNotifier
+
+            notifier = TelegramDigestNotifier(bot_token=settings.TELEGRAM_BOT_TOKEN)
+            await notifier.send_execution_failed(
+                chat_id=user.telegram_chat_id,
+                recommendation=rec,
+                error_message=error_message,
+            )
+    finally:
+        await engine.dispose()

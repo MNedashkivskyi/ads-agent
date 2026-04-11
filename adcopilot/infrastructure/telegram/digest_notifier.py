@@ -78,3 +78,22 @@ class TelegramDigestNotifier:
                 reply_markup=keyboard,
             )
         logger.info("digest sent via telegram", chat_id=chat_id, count=len(recommendations))
+
+    async def send_execution_failed(
+        self, chat_id: int, recommendation: Recommendation, error_message: str
+    ) -> None:
+        """Notify the user that an approved recommendation could not be executed."""
+        kind_label = recommendation.kind.value.replace("_", " ").title()
+        text = (
+            f"\u274c *Nie udało się wykonać rekomendacji*\n\n"
+            f"*Rodzaj:* {kind_label}\n"
+            f"*Błąd:* {error_message}\n\n"
+            "Spróbuj ponownie lub skontaktuj się z pomocą techniczną."
+        )
+        await self._bot.send_message(chat_id=chat_id, text=text, parse_mode="Markdown")
+        logger.warning(
+            "execution failed notification sent",
+            chat_id=chat_id,
+            rec_id=recommendation.id,
+            kind=recommendation.kind.value,
+        )

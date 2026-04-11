@@ -13,3 +13,15 @@ class FakeTelegramNotifier:
 
     async def send_digest(self, chat_id: int, recommendations: list[Recommendation]) -> None:
         self.calls.append({"chat_id": chat_id, "recommendations": list(recommendations)})
+
+    async def send_execution_failed(
+        self, chat_id: int, recommendation: Recommendation, error_message: str
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "send_execution_failed",
+                "chat_id": chat_id,
+                "recommendation": recommendation,
+                "error_message": error_message,
+            }
+        )
