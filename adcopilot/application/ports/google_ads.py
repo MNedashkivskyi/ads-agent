@@ -7,6 +7,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     CampaignSnapshot,
     KeywordSnapshot,
+    NegativeKeywordSnapshot,
     SearchTermSnapshot,
 )
 
@@ -45,3 +46,7 @@ class GoogleAdsClientPort(Protocol):
     async def query_ads(
         self, refresh_token: str, customer_id: str, snapshot_date: date
     ) -> list[AdSnapshot]: ...
+
+    async def query_negative_keywords(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[NegativeKeywordSnapshot]: ...

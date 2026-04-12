@@ -13,6 +13,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     CampaignSnapshot,
     KeywordSnapshot,
+    NegativeKeywordSnapshot,
     SearchTermSnapshot,
 )
 
@@ -43,6 +44,8 @@ class DetectionContext:
     prev_ad_groups: list[AdGroupSnapshot] = field(default_factory=list)
     prev_keywords: list[KeywordSnapshot] = field(default_factory=list)
     prev_ads: list[AdSnapshot] = field(default_factory=list)
+    # Negative keywords (campaign-level and ad-group-level) for Module 3 conflict detection.
+    negative_keywords: list[NegativeKeywordSnapshot] = field(default_factory=list)
 
 
 class DetectionRule(Protocol):

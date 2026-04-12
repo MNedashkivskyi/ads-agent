@@ -27,6 +27,7 @@ __all__ = [
     "DigestSentLogModel",
     "GoogleAdsAccountModel",
     "KeywordSnapshotModel",
+    "NegativeKeywordSnapshotModel",
     "OAuthCredentialsModel",
     "RecommendationModel",
     "RecommendationSnoozeModel",
@@ -225,6 +226,36 @@ class AdSnapshotModel(Base):
     cost_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     conversions: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     ad_strength: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class NegativeKeywordSnapshotModel(Base):
+    __tablename__ = "negative_keyword_snapshots"
+    __table_args__ = (
+        Index(
+            "uq_negative_keyword_snapshots",
+            "account_id",
+            "snapshot_date",
+            "campaign_id",
+            "ad_group_id",
+            "criterion_id",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    criterion_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    campaign_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    ad_group_id: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    match_type: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

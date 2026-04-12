@@ -29,6 +29,7 @@ class SnapshotResult:
     keywords: int
     search_terms: int
     ads: int
+    negative_keywords: int
     duration_seconds: float
     success: bool = True
     error_message: str | None = None
@@ -63,6 +64,7 @@ class SnapshotAccountUseCase:
                 keywords=0,
                 search_terms=0,
                 ads=0,
+                negative_keywords=0,
                 duration_seconds=time.monotonic() - start,
                 success=False,
                 error_message="Account not found",
@@ -79,6 +81,7 @@ class SnapshotAccountUseCase:
                 keywords=0,
                 search_terms=0,
                 ads=0,
+                negative_keywords=0,
                 duration_seconds=time.monotonic() - start,
                 success=False,
                 error_message="No credentials found",
@@ -87,14 +90,21 @@ class SnapshotAccountUseCase:
         refresh_token = creds.refresh_token
         customer_id = account.customer_id
 
-        # 3. Pull all 5 entity types in parallel
+        # 3. Pull all 6 entity types in parallel
         try:
-            campaigns, ad_groups, keywords, search_terms, ads = await asyncio.gather(
-                self._ads_client.query_campaigns(refresh_token, customer_id, snapshot_date),
-                self._ads_client.query_ad_groups(refresh_token, customer_id, snapshot_date),
-                self._ads_client.query_keywords(refresh_token, customer_id, snapshot_date),
-                self._ads_client.query_search_terms(refresh_token, customer_id, snapshot_date),
-                self._ads_client.query_ads(refresh_token, customer_id, snapshot_date),
+            campaigns, ad_groups, keywords, search_terms, ads, negative_keywords = (
+                await asyncio.gather(
+                    self._ads_client.query_campaigns(refresh_token, customer_id, snapshot_date),
+                    self._ads_client.query_ad_groups(refresh_token, customer_id, snapshot_date),
+                    self._ads_client.query_keywords(refresh_token, customer_id, snapshot_date),
+                    self._ads_client.query_search_terms(
+                        refresh_token, customer_id, snapshot_date
+                    ),
+                    self._ads_client.query_ads(refresh_token, customer_id, snapshot_date),
+                    self._ads_client.query_negative_keywords(
+                        refresh_token, customer_id, snapshot_date
+                    ),
+                )
             )
         except GoogleAdsAuthError as exc:
             logger.warning(
@@ -113,6 +123,7 @@ class SnapshotAccountUseCase:
                 keywords=0,
                 search_terms=0,
                 ads=0,
+                negative_keywords=0,
                 duration_seconds=time.monotonic() - start,
                 success=False,
                 error_message=f"GoogleAdsAuthError: {exc}",
@@ -125,6 +136,7 @@ class SnapshotAccountUseCase:
         await self._snapshot_repo.upsert_keywords(account_id, keywords)
         await self._snapshot_repo.upsert_search_terms(account_id, search_terms)
         await self._snapshot_repo.upsert_ads(account_id, ads)
+        await self._snapshot_repo.upsert_negative_keywords(account_id, negative_keywords)
 
         duration = time.monotonic() - start
         logger.info(
@@ -136,6 +148,7 @@ class SnapshotAccountUseCase:
             keywords=len(keywords),
             search_terms=len(search_terms),
             ads=len(ads),
+            negative_keywords=len(negative_keywords),
             duration_seconds=round(duration, 2),
         )
 
@@ -147,5 +160,6 @@ class SnapshotAccountUseCase:
             keywords=len(keywords),
             search_terms=len(search_terms),
             ads=len(ads),
+            negative_keywords=len(negative_keywords),
             duration_seconds=duration,
         )

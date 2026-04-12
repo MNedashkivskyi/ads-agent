@@ -97,3 +97,17 @@ class AdSnapshot:
     # RSA ad strength reported by Google Ads (POOR / AVERAGE / GOOD / EXCELLENT).
     # None for non-RSA ad types or when Google hasn't evaluated the ad yet.
     ad_strength: str | None = None
+
+
+@dataclass(frozen=True)
+class NegativeKeywordSnapshot:
+    id: SnapshotId
+    account_id: AccountId
+    snapshot_date: date
+    criterion_id: int
+    campaign_id: int
+    # ad_group_id = 0 means this is a campaign-level negative keyword.
+    # A non-zero value means it is scoped to that specific ad group.
+    ad_group_id: int
+    text: str
+    match_type: str  # EXACT, PHRASE, or BROAD

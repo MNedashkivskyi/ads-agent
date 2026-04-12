@@ -15,6 +15,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     CampaignSnapshot,
     KeywordSnapshot,
+    NegativeKeywordSnapshot,
     SearchTermSnapshot,
     SnapshotId,
 )
@@ -373,6 +374,95 @@ async def query_ads(
                         ad_strength=ad_strength,
                     )
                 )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
+async def query_negative_keywords(
+    refresh_token: str,
+    customer_id: str,
+    snapshot_date: date,
+    settings: Settings,
+) -> list[NegativeKeywordSnapshot]:
+    """Fetch campaign-level and ad-group-level negative keywords."""
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    results: list[NegativeKeywordSnapshot] = []
+
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+
+        # --- Campaign-level negatives ---
+        campaign_neg_query = """
+            SELECT
+                campaign_criterion.criterion_id,
+                campaign.id,
+                campaign_criterion.keyword.text,
+                campaign_criterion.keyword.match_type
+            FROM campaign_criterion
+            WHERE campaign_criterion.type = 'KEYWORD'
+              AND campaign_criterion.negative = TRUE
+        """
+        try:
+            stream = service.search_stream(customer_id=cid, query=campaign_neg_query)
+            for batch in stream:
+                for row in batch.results:
+                    cc = row.campaign_criterion
+                    results.append(
+                        NegativeKeywordSnapshot(
+                            id=_make_id(),
+                            account_id=account_id,
+                            snapshot_date=snapshot_date,
+                            criterion_id=cc.criterion_id,
+                            campaign_id=row.campaign.id,
+                            ad_group_id=0,
+                            text=cc.keyword.text,
+                            match_type=cc.keyword.match_type.name,
+                        )
+                    )
+        except Exception as exc:
+            logger.warning("failed to fetch campaign-level negative keywords", error=str(exc))
+
+        # --- Ad-group-level negatives ---
+        ag_neg_query = """
+            SELECT
+                ad_group_criterion.criterion_id,
+                ad_group_criterion.ad_group,
+                campaign.id,
+                ad_group_criterion.keyword.text,
+                ad_group_criterion.keyword.match_type
+            FROM ad_group_criterion
+            WHERE ad_group_criterion.type = 'KEYWORD'
+              AND ad_group_criterion.negative = TRUE
+        """
+        try:
+            stream = service.search_stream(customer_id=cid, query=ag_neg_query)
+            for batch in stream:
+                for row in batch.results:
+                    agc = row.ad_group_criterion
+                    ag_resource = agc.ad_group
+                    ag_id = int(ag_resource.split("/")[-1]) if ag_resource else 0
+                    results.append(
+                        NegativeKeywordSnapshot(
+                            id=_make_id(),
+                            account_id=account_id,
+                            snapshot_date=snapshot_date,
+                            criterion_id=agc.criterion_id,
+                            campaign_id=row.campaign.id,
+                            ad_group_id=ag_id,
+                            text=agc.keyword.text,
+                            match_type=agc.keyword.match_type.name,
+                        )
+                    )
+        except Exception as exc:
+            logger.warning(
+                "failed to fetch ad-group-level negative keywords", error=str(exc)
+            )
+
         return results
     except (GoogleAdsAuthError, GoogleAdsUnavailable):
         raise

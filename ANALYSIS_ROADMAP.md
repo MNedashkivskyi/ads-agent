@@ -82,18 +82,20 @@ Basic checks every PPC specialist runs manually. These remain but are not suffic
 
 **Goal:** Detect structural problems that prevent campaigns from performing, regardless of bids and budgets.
 
-**Data infrastructure needed:**
-- Cross-campaign keyword comparison (load all keywords across all accounts at once)
-- Negative keyword lists (new GAQL query: `shared_set`, `shared_criterion`)
-- Campaign-level negative keywords
+**Data infrastructure delivered:**
+- `NegativeKeywordSnapshot` domain entity + `negative_keyword_snapshots` DB table (migration 0014)
+- GAQL queries for both campaign-level and ad-group-level negative keywords
+- `negative_keywords` field added to `SnapshotData`, `DetectionContext`, and `SnapshotResult`
+- `query_negative_keywords` added to `GoogleAdsClientPort` and infrastructure implementation
+- EN + PL explanation templates for all 5 kinds
 
 | # | Rule | Kind | Severity | Triggers when | Status |
 |---|------|------|----------|--------------|--------|
-| 23 | Overstuffed ad group | `OVERSTUFFED_AD_GROUP` | HIGH | Ad group has >15 enabled keywords | ⬜ |
-| 24 | Keyword cannibalization | `KEYWORD_CANNIBALIZATION` | HIGH | Same keyword text in ≥2 active ad groups/campaigns | ⬜ |
-| 25 | Negative keyword conflict | `NEGATIVE_KEYWORD_CONFLICT` | CRITICAL | A negative keyword is blocking a positive keyword in another group in the same campaign | ⬜ |
-| 26 | Orphaned campaign | `ORPHANED_CAMPAIGN` | MEDIUM | Campaign has budget > 0 but all ad groups paused or empty | ⬜ |
-| 27 | Match type redundancy | `MATCH_TYPE_REDUNDANCY` | LOW | Same keyword text added as both broad and exact in same ad group | ⬜ |
+| 23 | Overstuffed ad group | `OVERSTUFFED_AD_GROUP` | HIGH | Ad group has > 15 enabled keywords | ✅ |
+| 24 | Keyword cannibalization | `KEYWORD_CANNIBALIZATION` | HIGH | Same keyword text in ≥ 2 active ad groups/campaigns | ✅ |
+| 25 | Negative keyword conflict | `NEGATIVE_KEYWORD_CONFLICT` | CRITICAL | A negative keyword blocks a positive keyword in the same campaign or ad group | ✅ |
+| 26 | Orphaned campaign | `ORPHANED_CAMPAIGN` | MEDIUM | Campaign enabled with budget > 0 but all ad groups paused or removed | ✅ |
+| 27 | Match type redundancy | `MATCH_TYPE_REDUNDANCY` | LOW | Same keyword text added as both BROAD and EXACT/PHRASE in the same ad group | ✅ |
 
 ---
 

@@ -17,6 +17,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     CampaignSnapshot,
     KeywordSnapshot,
+    NegativeKeywordSnapshot,
     SearchTermSnapshot,
     SnapshotId,
 )
@@ -128,6 +129,13 @@ class FakeGoogleAdsClient:
             raise GoogleAdsAuthError("invalid credentials")
         return []
 
+    async def query_negative_keywords(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[NegativeKeywordSnapshot]:
+        if self._raise_auth_error:
+            raise GoogleAdsAuthError("invalid credentials")
+        return []
+
 
 class FakeSnapshotRepository:
     def __init__(self) -> None:
@@ -136,6 +144,7 @@ class FakeSnapshotRepository:
         self.keywords: list[KeywordSnapshot] = []
         self.search_terms: list[SearchTermSnapshot] = []
         self.ads: list[AdSnapshot] = []
+        self.negative_keywords: list[NegativeKeywordSnapshot] = []
 
     async def upsert_campaigns(
         self, account_id: AccountId, snapshots: list[CampaignSnapshot]
@@ -172,6 +181,11 @@ class FakeSnapshotRepository:
         self, account_id: AccountId, snapshots: list[AdSnapshot]
     ) -> None:
         self.ads.extend(snapshots)
+
+    async def upsert_negative_keywords(
+        self, account_id: AccountId, snapshots: list[NegativeKeywordSnapshot]
+    ) -> None:
+        self.negative_keywords.extend(snapshots)
 
     async def get_latest_snapshot_date(self, account_id: AccountId) -> date | None:
         dates = [s.snapshot_date for s in self.campaigns if s.account_id == account_id]
