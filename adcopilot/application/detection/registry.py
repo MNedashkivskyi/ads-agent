@@ -63,6 +63,19 @@ from adcopilot.application.detection.rules.rule_26_orphaned_campaign import Orph
 from adcopilot.application.detection.rules.rule_27_match_type_redundancy import (
     MatchTypeRedundancyRule,
 )
+from adcopilot.application.detection.rules.rule_28_device_bid_adjustment import (
+    DeviceBidAdjustmentRule,
+)
+from adcopilot.application.detection.rules.rule_29_geo_exclusion import GeoExclusionRule
+from adcopilot.application.detection.rules.rule_30_ad_schedule_adjustment import (
+    AdScheduleAdjustmentRule,
+)
+from adcopilot.application.detection.rules.rule_31_day_of_week_bid_adjustment import (
+    DayOfWeekBidAdjustmentRule,
+)
+from adcopilot.application.detection.rules.rule_32_add_audience_signals import (
+    AddAudienceSignalsRule,
+)
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -104,5 +117,11 @@ def build_rule_engine(
         NegativeKeywordConflictRule(),
         OrphanedCampaignRule(),
         MatchTypeRedundancyRule(),
+        # Module 4 — Audience & targeting intelligence
+        DeviceBidAdjustmentRule(),
+        GeoExclusionRule(),
+        AdScheduleAdjustmentRule(),
+        DayOfWeekBidAdjustmentRule(),
+        AddAudienceSignalsRule(),
     ]
     return RuleEngine(rules=rules, rec_repo=rec_repo, snooze_repo=snooze_repo)

@@ -5,7 +5,12 @@ from typing import Protocol
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
+    AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    DayOfWeekPerformanceSnapshot,
+    DevicePerformanceSnapshot,
+    GeoPerformanceSnapshot,
+    HourPerformanceSnapshot,
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
@@ -50,3 +55,23 @@ class GoogleAdsClientPort(Protocol):
     async def query_negative_keywords(
         self, refresh_token: str, customer_id: str, snapshot_date: date
     ) -> list[NegativeKeywordSnapshot]: ...
+
+    async def query_device_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[DevicePerformanceSnapshot]: ...
+
+    async def query_geo_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[GeoPerformanceSnapshot]: ...
+
+    async def query_hour_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[HourPerformanceSnapshot]: ...
+
+    async def query_day_of_week_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[DayOfWeekPerformanceSnapshot]: ...
+
+    async def query_audience_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[AudiencePerformanceSnapshot]: ...
