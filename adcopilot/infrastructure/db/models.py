@@ -24,7 +24,9 @@ __all__ = [
     "AuditLogModel",
     "AudiencePerformanceSnapshotModel",
     "Base",
+    "CampaignExtensionSnapshotModel",
     "CampaignSnapshotModel",
+    "ConversionActionSnapshotModel",
     "DayOfWeekPerformanceSnapshotModel",
     "DevicePerformanceSnapshotModel",
     "DigestSentLogModel",
@@ -37,6 +39,7 @@ __all__ = [
     "RecommendationModel",
     "RecommendationSnoozeModel",
     "SearchTermSnapshotModel",
+    "SitelinkPerformanceSnapshotModel",
     "SnapshotRunModel",
     "UserModel",
 ]
@@ -436,6 +439,60 @@ class ConversionActionSnapshotModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+class CampaignExtensionSnapshotModel(Base):
+    __tablename__ = "campaign_extension_snapshots"
+    __table_args__ = (
+        Index(
+            "uq_campaign_extension_snapshots",
+            "account_id",
+            "snapshot_date",
+            "campaign_id",
+            "extension_type",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    campaign_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    extension_type: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class SitelinkPerformanceSnapshotModel(Base):
+    __tablename__ = "sitelink_performance_snapshots"
+    __table_args__ = (
+        Index(
+            "uq_sitelink_performance_snapshots",
+            "account_id",
+            "snapshot_date",
+            "campaign_id",
+            "asset_id",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    campaign_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    asset_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    impressions: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    clicks: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
 
 class SnapshotRunModel(Base):
     __tablename__ = "snapshot_runs"

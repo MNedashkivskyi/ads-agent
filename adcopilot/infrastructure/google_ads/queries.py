@@ -14,6 +14,7 @@ from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
     AudiencePerformanceSnapshot,
+    CampaignExtensionSnapshot,
     CampaignSnapshot,
     ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
@@ -23,6 +24,7 @@ from adcopilot.domain.snapshot import (
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
+    SitelinkPerformanceSnapshot,
     SnapshotId,
 )
 
@@ -679,6 +681,108 @@ async def query_hour_performance(
                         clicks=m.clicks,
                         cost_micros=m.cost_micros,
                         conversions=m.conversions,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
+async def query_campaign_extensions(
+    refresh_token: str,
+    customer_id: str,
+    snapshot_date: date,
+    settings: Settings,
+) -> list[CampaignExtensionSnapshot]:
+    """Fetch which extension types are attached to each campaign.
+
+    Queries ``campaign_extension_setting`` for SITELINK, CALLOUT, and
+    STRUCTURED_SNIPPET extension types.  Returns one snapshot per
+    (campaign, extension_type) pair so that rules 41–43 can cheaply check
+    whether a campaign is missing a given extension.
+    """
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    query = """
+        SELECT
+            campaign.id,
+            campaign_extension_setting.extension_type
+        FROM campaign_extension_setting
+        WHERE campaign_extension_setting.extension_type IN (
+            'SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET'
+        )
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[CampaignExtensionSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                ext_type = row.campaign_extension_setting.extension_type.name
+                if ext_type in ("UNSPECIFIED", "UNKNOWN"):
+                    continue
+                results.append(
+                    CampaignExtensionSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=snapshot_date,
+                        campaign_id=row.campaign.id,
+                        extension_type=ext_type,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
+async def query_sitelink_performance(
+    refresh_token: str,
+    customer_id: str,
+    snapshot_date: date,
+    settings: Settings,
+) -> list[SitelinkPerformanceSnapshot]:
+    """Fetch daily click + impression metrics for sitelink assets per campaign.
+
+    Queries ``campaign_asset`` filtered to SITELINK assets for a single day.
+    Rule 44 loads a 30-day window of these snapshots from the DB, aggregates
+    by asset_id, and flags low-performing sitelinks (CTR < 0.5%, ≥500
+    impressions).
+    """
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    date_str = snapshot_date.isoformat()
+    query = f"""
+        SELECT
+            campaign.id,
+            asset.id,
+            metrics.impressions,
+            metrics.clicks
+        FROM campaign_asset
+        WHERE asset.type = 'SITELINK'
+          AND segments.date = '{date_str}'
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[SitelinkPerformanceSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                m = row.metrics
+                results.append(
+                    SitelinkPerformanceSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=snapshot_date,
+                        campaign_id=row.campaign.id,
+                        asset_id=row.asset.id,
+                        impressions=m.impressions,
+                        clicks=m.clicks,
                     )
                 )
         return results

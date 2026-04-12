@@ -21,6 +21,7 @@ _DEVICE_LOOKBACK_DAYS = 7
 _GEO_LOOKBACK_DAYS = 30
 _HOUR_LOOKBACK_DAYS = 30
 _DOW_LOOKBACK_DAYS = 30
+_SITELINK_LOOKBACK_DAYS = 30
 
 
 class RunDetectionUseCase:
@@ -75,6 +76,11 @@ class RunDetectionUseCase:
         except Exception:
             conversion_actions = []
 
+        # 3d. Load ad extension data for Module 7 rules (best-effort).
+        campaign_extensions, sitelink_performance = await _load_extension_data(
+            self._snapshot_repo, account_id, snapshot_date
+        )
+
         # 4. Compute HistoricalStats from the snapshot itself (30-day proxy)
         total_cost = sum(c.cost_micros for c in snapshot.campaigns)
         total_conversions = sum(c.conversions for c in snapshot.campaigns)
@@ -107,6 +113,8 @@ class RunDetectionUseCase:
             day_of_week_performance=day_of_week_performance,
             audience_performance=audience_performance,
             conversion_actions=conversion_actions,
+            campaign_extensions=campaign_extensions,
+            sitelink_performance=sitelink_performance,
         )
 
         # 6. Run rule engine
@@ -152,6 +160,27 @@ async def _load_targeting_performance(
         return device, geo, hour, dow, audience
     except Exception:
         return [], [], [], [], []
+
+
+async def _load_extension_data(
+    snapshot_repo: SnapshotRepository,
+    account_id: AccountId,
+    snapshot_date: date,
+) -> tuple[list, list]:
+    """Load ad extension data for Module 7 rules (best-effort).
+
+    Returns (campaign_extensions, sitelink_performance).  Both lists are empty
+    on any failure so a missing extension snapshot never blocks detection.
+    """
+    try:
+        start_date = snapshot_date - timedelta(days=_SITELINK_LOOKBACK_DAYS - 1)
+        extensions = await snapshot_repo.get_campaign_extensions(account_id, snapshot_date)
+        sitelinks = await snapshot_repo.get_sitelink_performance(
+            account_id, start_date, snapshot_date
+        )
+        return extensions, sitelinks
+    except Exception:
+        return [], []
 
 
 async def _load_prev_snapshots(

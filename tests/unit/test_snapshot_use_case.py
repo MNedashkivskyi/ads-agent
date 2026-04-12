@@ -16,6 +16,7 @@ from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
     AudiencePerformanceSnapshot,
+    CampaignExtensionSnapshot,
     CampaignSnapshot,
     ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
@@ -25,6 +26,7 @@ from adcopilot.domain.snapshot import (
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
+    SitelinkPerformanceSnapshot,
     SnapshotId,
 )
 
@@ -184,6 +186,20 @@ class FakeGoogleAdsClient:
             raise GoogleAdsAuthError("invalid credentials")
         return []
 
+    async def query_campaign_extensions(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[CampaignExtensionSnapshot]:
+        if self._raise_auth_error:
+            raise GoogleAdsAuthError("invalid credentials")
+        return []
+
+    async def query_sitelink_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[SitelinkPerformanceSnapshot]:
+        if self._raise_auth_error:
+            raise GoogleAdsAuthError("invalid credentials")
+        return []
+
 
 class FakeSnapshotRepository:
     def __init__(self) -> None:
@@ -262,6 +278,16 @@ class FakeSnapshotRepository:
 
     async def upsert_conversion_actions(
         self, account_id: AccountId, snapshots: list[ConversionActionSnapshot]
+    ) -> None:
+        pass
+
+    async def upsert_campaign_extensions(
+        self, account_id: AccountId, snapshots: list[CampaignExtensionSnapshot]
+    ) -> None:
+        pass
+
+    async def upsert_sitelink_performance(
+        self, account_id: AccountId, snapshots: list[SitelinkPerformanceSnapshot]
     ) -> None:
         pass
 
