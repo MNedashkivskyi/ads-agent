@@ -28,6 +28,8 @@ class CampaignSnapshot:
     search_impression_share: float | None = None
     search_budget_lost_impression_share: float | None = None
     search_rank_lost_impression_share: float | None = None
+    # Bidding target — only populated for TARGET_CPA campaigns; None otherwise.
+    target_cpa_micros: int | None = None
 
 
 @dataclass(frozen=True)

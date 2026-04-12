@@ -462,6 +462,80 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " Explain how to set a day-of-week bid adjustment in plain English."
         ),
     },
+    # ── Module 5 — Budget & Bidding Strategy ──────────────────────────────────
+    RecommendationKind.REALLOCATE_BUDGET: {
+        "pl": (
+            "Kampania '{receiver_campaign_name}' ma ROAS {receiver_roas} i wykorzystuje"
+            " {receiver_budget_utilisation:.0%} budżetu (ograniczona budżetem),"
+            " podczas gdy kampania '{donor_campaign_name}' ma ROAS {donor_roas}"
+            " i wydaje tylko {donor_budget_utilisation:.0%} budżetu."
+            " Przeniesienie budżetu z gorzej działającej kampanii do lepszej poprawi"
+            " łączny zwrot z inwestycji konta."
+            " Wytłumacz jak zmienić budżety kampanii, po polsku."
+        ),
+        "en": (
+            "Campaign '{receiver_campaign_name}' has a ROAS of {receiver_roas} but is"
+            " budget-constrained at {receiver_budget_utilisation:.0%} utilisation,"
+            " while '{donor_campaign_name}' has a ROAS of {donor_roas} and only"
+            " spends {donor_budget_utilisation:.0%} of its budget."
+            " Moving budget from the under-performer to the top performer will improve"
+            " the account's overall return."
+            " Explain how to reallocate campaign budgets in plain English."
+        ),
+    },
+    RecommendationKind.IMPROVE_QUALITY_SCORE: {
+        "pl": (
+            "Kampania '{campaign_name}' traci {search_rank_lost_impression_share:.0%}"
+            " wyświetleń z powodu niskiego Ad Rank (jakość reklamy i strony docelowej)."
+            " Poprawa trafności reklamy, oczekiwanego CTR i jakości strony docelowej"
+            " zwiększy Ad Rank bez podwyżki stawek."
+            " Wytłumacz jak poprawić wynik jakości (Quality Score), po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign_name}' is losing {search_rank_lost_impression_share:.0%}"
+            " of eligible impressions due to low Ad Rank (ad quality and landing-page"
+            " experience)."
+            " Improving ad relevance, expected CTR, and landing-page quality raises"
+            " Ad Rank without increasing bids."
+            " Explain how to improve Quality Score in plain English."
+        ),
+    },
+    RecommendationKind.RELAX_TARGET_CPA: {
+        "pl": (
+            "Kampania '{campaign_name}' używa strategii TARGET_CPA z celem"
+            " {target_cpa_micros} mikro — to tylko {ratio:.0%} średniego CPA konta"
+            " ({account_avg_cpa_micros} mikro). Tak agresywny cel ogranicza udział"
+            " w aukcjach i powoduje niski wolumen ({conversions} konwersji)."
+            " Sugerowany cel: {suggested_target_cpa_micros} mikro (75% średniej konta)."
+            " Wytłumacz dlaczego zbyt niski target CPA blokuje wzrost, po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign_name}' uses TARGET_CPA with a target of"
+            " {target_cpa_micros} micros — only {ratio:.0%} of the account average"
+            " ({account_avg_cpa_micros} micros). This aggressive target restricts auction"
+            " participation and results in low volume ({conversions} conversions)."
+            " Suggested target: {suggested_target_cpa_micros} micros (75% of account avg)."
+            " Explain why an overly tight Target CPA limits growth in plain English."
+        ),
+    },
+    RecommendationKind.DIVERSIFY_CHANNELS: {
+        "pl": (
+            "Kampania '{campaign_name}' zwiększyła wydatki o {cost_growth_pct}% w ciągu"
+            " tygodnia, ale liczba konwersji wzrosła tylko o {conv_growth_pct}%."
+            " To znak malejących zwrotów — wyszukiwania w tej kampanii są już w dużej"
+            " mierze wyczerpane. Rozważ przeniesienie przyrostowego budżetu na inne"
+            " kanały (Display, YouTube, Performance Max)."
+            " Wytłumacz koncepcję malejących zwrotów i dywersyfikacji kanałów, po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign_name}' increased spend by {cost_growth_pct}% week-over-week"
+            " but conversions grew by only {conv_growth_pct}%."
+            " This is a sign of diminishing returns — available search demand is largely"
+            " saturated. Consider allocating incremental budget to other channels"
+            " (Display, YouTube, Performance Max)."
+            " Explain diminishing returns and channel diversification in plain English."
+        ),
+    },
     RecommendationKind.ADD_AUDIENCE_SIGNALS: {
         "pl": (
             "Kampania '{campaign_name}' ma {impressions} wyświetleń, ale nie ma"
