@@ -57,6 +57,15 @@ from adcopilot.application.detection.rules.rule_34_is_lost_to_budget import IsLo
 from adcopilot.application.detection.rules.rule_35_is_lost_to_rank import IsLostToRankRule
 from adcopilot.application.detection.rules.rule_36_relax_target_cpa import RelaxTargetCpaRule
 from adcopilot.application.detection.rules.rule_37_diversify_channels import DiversifyChannelsRule
+from adcopilot.application.detection.rules.rule_38_upgrade_conversion_action import (
+    UpgradeConversionActionRule,
+)
+from adcopilot.application.detection.rules.rule_39_deduplicate_conversions import (
+    DeduplicateConversionsRule,
+)
+from adcopilot.application.detection.rules.rule_40_set_conversion_value import (
+    SetConversionValueRule,
+)
 from adcopilot.domain.entities import AccountId, GoogleAdsAccount, UserId
 from adcopilot.domain.recommendation import RecommendationKind, RecommendationSeverity
 from adcopilot.domain.snapshot import (
@@ -64,6 +73,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
     DevicePerformanceSnapshot,
     GeoPerformanceSnapshot,
@@ -148,6 +158,7 @@ def _campaign(**kwargs) -> CampaignSnapshot:
         search_budget_lost_impression_share=None,
         search_rank_lost_impression_share=None,
         target_cpa_micros=None,
+        all_conversions=0.0,
     )
     defaults.update(kwargs)
     return CampaignSnapshot(**defaults)
@@ -2004,4 +2015,171 @@ class TestDiversifyChannelsRule:
         prev = _campaign(campaign_id=1, cost_micros=20_000_000, conversions=10.0)
         curr = _campaign(campaign_id=1, status="PAUSED", cost_micros=26_000_000, conversions=10.0)
         ctx = _ctx(campaigns=[curr], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Module 6 helpers
+# ===========================================================================
+
+
+def _conv_action(**kwargs) -> ConversionActionSnapshot:
+    defaults = dict(
+        id=_sid(),
+        account_id=_ACCOUNT_ID,
+        snapshot_date=_SNAP_DATE,
+        conversion_action_id=1,
+        name="Purchase",
+        category="PURCHASE",
+        counting_type="ONE_PER_CLICK",
+        status="ENABLED",
+        include_in_conversions_metric=True,
+    )
+    defaults.update(kwargs)
+    return ConversionActionSnapshot(**defaults)
+
+
+# ===========================================================================
+# Rule 38 - UpgradeConversionActionRule
+# ===========================================================================
+
+
+class TestUpgradeConversionActionRule:
+    rule = UpgradeConversionActionRule()
+
+    def test_all_micro_page_view_triggers(self):
+        ca = _conv_action(name="Page view", category="PAGE_VIEW")
+        ctx = _ctx(conversion_actions=[ca])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.UPGRADE_CONVERSION_ACTION
+        assert recs[0].severity == RecommendationSeverity.HIGH
+
+    def test_all_micro_default_category_triggers(self):
+        ca = _conv_action(name="Button click", category="DEFAULT")
+        ctx = _ctx(conversion_actions=[ca])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+
+    def test_micro_name_signal_triggers(self):
+        ca = _conv_action(name="Scroll depth 50%", category="UNKNOWN")
+        ctx = _ctx(conversion_actions=[ca])
+        assert len(self.rule.detect(ctx)) == 1
+
+    def test_macro_purchase_present_no_trigger(self):
+        micro = _conv_action(name="Page view", category="PAGE_VIEW")
+        macro = _conv_action(conversion_action_id=2, name="Purchase", category="PURCHASE")
+        ctx = _ctx(conversion_actions=[micro, macro])
+        assert self.rule.detect(ctx) == []
+
+    def test_lead_category_no_trigger(self):
+        ca = _conv_action(name="Contact form", category="LEAD")
+        ctx = _ctx(conversion_actions=[ca])
+        assert self.rule.detect(ctx) == []
+
+    def test_excluded_from_conversions_metric_ignored(self):
+        # Action not included in Conversions column → don't count as tracked
+        ca = _conv_action(
+            name="Page view", category="PAGE_VIEW", include_in_conversions_metric=False
+        )
+        ctx = _ctx(conversion_actions=[ca])
+        # No active included actions → no trigger (empty active list)
+        assert self.rule.detect(ctx) == []
+
+    def test_removed_action_ignored(self):
+        ca = _conv_action(name="Page view", category="PAGE_VIEW", status="REMOVED")
+        ctx = _ctx(conversion_actions=[ca])
+        assert self.rule.detect(ctx) == []
+
+    def test_empty_no_trigger(self):
+        ctx = _ctx(conversion_actions=[])
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Rule 39 - DeduplicateConversionsRule
+# ===========================================================================
+
+
+class TestDeduplicateConversionsRule:
+    rule = DeduplicateConversionsRule()
+
+    def test_high_ratio_triggers(self):
+        # all_conversions = 60, conversions = 10 → ratio = 6.0 > 5.0
+        c = _campaign(campaign_id=1, status="ENABLED", conversions=10.0, all_conversions=60.0)
+        ctx = _ctx(campaigns=[c])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.DEDUPLICATE_CONVERSIONS
+        assert recs[0].severity == RecommendationSeverity.HIGH
+        assert recs[0].evidence["ratio"] == pytest.approx(6.0)
+
+    def test_acceptable_ratio_no_trigger(self):
+        # all_conversions = 30, conversions = 10 → ratio = 3.0 < 5.0
+        c = _campaign(campaign_id=1, status="ENABLED", conversions=10.0, all_conversions=30.0)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+    def test_zero_conversions_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", conversions=0.0, all_conversions=0.0)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_campaigns_excluded(self):
+        c = _campaign(campaign_id=1, status="PAUSED", conversions=10.0, all_conversions=60.0)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+    def test_aggregates_across_campaigns(self):
+        c1 = _campaign(campaign_id=1, status="ENABLED", conversions=5.0, all_conversions=30.0)
+        c2 = _campaign(campaign_id=2, status="ENABLED", conversions=5.0, all_conversions=30.0)
+        ctx = _ctx(campaigns=[c1, c2])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].evidence["ratio"] == pytest.approx(6.0)
+
+
+# ===========================================================================
+# Rule 40 - SetConversionValueRule
+# ===========================================================================
+
+
+class TestSetConversionValueRule:
+    rule = SetConversionValueRule()
+
+    def test_conversions_no_value_triggers(self):
+        c = _campaign(campaign_id=1, status="ENABLED", conversions=15.0, conv_value=0.0)
+        ctx = _ctx(campaigns=[c])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.SET_CONVERSION_VALUE
+        assert recs[0].severity == RecommendationSeverity.MEDIUM
+
+    def test_has_conv_value_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", conversions=15.0, conv_value=500.0)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+    def test_insufficient_conversions_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", conversions=5.0, conv_value=0.0)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_campaigns_excluded(self):
+        c = _campaign(campaign_id=1, status="PAUSED", conversions=15.0, conv_value=0.0)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+    def test_aggregates_across_campaigns(self):
+        c1 = _campaign(campaign_id=1, status="ENABLED", conversions=6.0, conv_value=0.0)
+        c2 = _campaign(campaign_id=2, status="ENABLED", conversions=6.0, conv_value=0.0)
+        ctx = _ctx(campaigns=[c1, c2])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+
+    def test_one_campaign_has_value_no_trigger(self):
+        c1 = _campaign(campaign_id=1, status="ENABLED", conversions=10.0, conv_value=200.0)
+        c2 = _campaign(campaign_id=2, status="ENABLED", conversions=5.0, conv_value=0.0)
+        ctx = _ctx(campaigns=[c1, c2])
+        # total conv_value = 200 > 0 → no trigger
         assert self.rule.detect(ctx) == []

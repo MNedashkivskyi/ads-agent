@@ -15,6 +15,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
     DevicePerformanceSnapshot,
     GeoPerformanceSnapshot,
@@ -86,7 +87,8 @@ async def query_campaigns(
             metrics.search_impression_share,
             metrics.search_budget_lost_impression_share,
             metrics.search_rank_lost_impression_share,
-            campaign.target_cpa.target_cpa_micros
+            campaign.target_cpa.target_cpa_micros,
+            metrics.all_conversions
         FROM campaign
         WHERE segments.date = '{date_str}'
     """
@@ -129,6 +131,59 @@ async def query_campaigns(
                             m.search_rank_lost_impression_share
                         ),
                         target_cpa_micros=c.target_cpa.target_cpa_micros or None,
+                        all_conversions=m.all_conversions,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
+async def query_conversion_actions(
+    refresh_token: str,
+    customer_id: str,
+    snapshot_date: date,
+    settings: Settings,
+) -> list[ConversionActionSnapshot]:
+    """Fetch all non-removed conversion action configurations for an account.
+
+    Conversion actions are account-level configuration (not daily metrics).
+    We store them with the snapshot_date so history is preserved.
+    """
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    query = """
+        SELECT
+            conversion_action.id,
+            conversion_action.name,
+            conversion_action.category,
+            conversion_action.counting_type,
+            conversion_action.status,
+            conversion_action.include_in_conversions_metric
+        FROM conversion_action
+        WHERE conversion_action.status != 'REMOVED'
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[ConversionActionSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                ca = row.conversion_action
+                results.append(
+                    ConversionActionSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=snapshot_date,
+                        conversion_action_id=ca.id,
+                        name=ca.name,
+                        category=ca.category.name,
+                        counting_type=ca.counting_type.name,
+                        status=ca.status.name,
+                        include_in_conversions_metric=ca.include_in_conversions_metric,
                     )
                 )
         return results

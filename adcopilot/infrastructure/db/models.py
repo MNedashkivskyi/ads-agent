@@ -137,6 +137,7 @@ class CampaignSnapshotModel(Base):
     search_budget_lost_impression_share: Mapped[float | None] = mapped_column(Float, nullable=True)
     search_rank_lost_impression_share: Mapped[float | None] = mapped_column(Float, nullable=True)
     target_cpa_micros: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    all_conversions: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -405,6 +406,36 @@ class NegativeKeywordSnapshotModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+
+class ConversionActionSnapshotModel(Base):
+    __tablename__ = "conversion_action_snapshots"
+    __table_args__ = (
+        Index(
+            "uq_conversion_action_snapshots",
+            "account_id",
+            "snapshot_date",
+            "conversion_action_id",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    conversion_action_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    category: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    counting_type: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    include_in_conversions_metric: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 class SnapshotRunModel(Base):
     __tablename__ = "snapshot_runs"

@@ -14,6 +14,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
     DevicePerformanceSnapshot,
     GeoPerformanceSnapshot,
@@ -28,6 +29,7 @@ from adcopilot.infrastructure.db.models import (
     AdSnapshotModel,
     AudiencePerformanceSnapshotModel,
     CampaignSnapshotModel,
+    ConversionActionSnapshotModel,
     DayOfWeekPerformanceSnapshotModel,
     DevicePerformanceSnapshotModel,
     GeoPerformanceSnapshotModel,
@@ -71,6 +73,7 @@ class SqlSnapshotRepository:
                 "search_budget_lost_impression_share": s.search_budget_lost_impression_share,
                 "search_rank_lost_impression_share": s.search_rank_lost_impression_share,
                 "target_cpa_micros": s.target_cpa_micros,
+                "all_conversions": s.all_conversions,
             }
             for s in snapshots
         ]
@@ -92,6 +95,7 @@ class SqlSnapshotRepository:
                 "search_budget_lost_impression_share": stmt.excluded.search_budget_lost_impression_share,
                 "search_rank_lost_impression_share": stmt.excluded.search_rank_lost_impression_share,
                 "target_cpa_micros": stmt.excluded.target_cpa_micros,
+                "all_conversions": stmt.excluded.all_conversions,
                 "updated_at": text("now()"),
             },
         )
@@ -306,6 +310,7 @@ class SqlSnapshotRepository:
                 search_budget_lost_impression_share=m.search_budget_lost_impression_share,
                 search_rank_lost_impression_share=m.search_rank_lost_impression_share,
                 target_cpa_micros=m.target_cpa_micros,
+                all_conversions=m.all_conversions,
             )
             for m in res.scalars().all()
         ]
@@ -763,6 +768,68 @@ class SqlSnapshotRepository:
                 clicks=m.clicks,
                 cost_micros=m.cost_micros,
                 conversions=m.conversions,
+            )
+            for m in res.scalars().all()
+        ]
+
+    # ------------------------------------------------------------------
+    # Conversion actions
+    # ------------------------------------------------------------------
+
+    async def upsert_conversion_actions(
+        self, account_id: AccountId, snapshots: list[ConversionActionSnapshot]
+    ) -> None:
+        if not snapshots:
+            return
+        rows = [
+            {
+                "id": uuid.uuid4(),
+                "account_id": uuid.UUID(account_id),
+                "snapshot_date": s.snapshot_date,
+                "conversion_action_id": s.conversion_action_id,
+                "name": s.name,
+                "category": s.category,
+                "counting_type": s.counting_type,
+                "status": s.status,
+                "include_in_conversions_metric": s.include_in_conversions_metric,
+            }
+            for s in snapshots
+        ]
+        stmt = insert(ConversionActionSnapshotModel).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_conversion_action_snapshots",
+            set_={
+                "name": stmt.excluded.name,
+                "category": stmt.excluded.category,
+                "counting_type": stmt.excluded.counting_type,
+                "status": stmt.excluded.status,
+                "include_in_conversions_metric": stmt.excluded.include_in_conversions_metric,
+                "updated_at": text("now()"),
+            },
+        )
+        await self._session.execute(stmt)
+
+    async def get_conversion_actions(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[ConversionActionSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(ConversionActionSnapshotModel).where(
+                ConversionActionSnapshotModel.account_id == acct_uuid,
+                ConversionActionSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        return [
+            ConversionActionSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                conversion_action_id=m.conversion_action_id,
+                name=m.name,
+                category=m.category,
+                counting_type=m.counting_type,
+                status=m.status,
+                include_in_conversions_metric=m.include_in_conversions_metric,
             )
             for m in res.scalars().all()
         ]

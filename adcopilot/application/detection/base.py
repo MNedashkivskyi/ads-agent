@@ -13,6 +13,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
     DevicePerformanceSnapshot,
     GeoPerformanceSnapshot,
@@ -58,6 +59,9 @@ class DetectionContext:
     hour_performance: list[HourPerformanceSnapshot] = field(default_factory=list)
     day_of_week_performance: list[DayOfWeekPerformanceSnapshot] = field(default_factory=list)
     audience_performance: list[AudiencePerformanceSnapshot] = field(default_factory=list)
+    # Conversion action configuration for Module 6 rules.
+    # Empty when not yet loaded or the account has no tracked conversions.
+    conversion_actions: list[ConversionActionSnapshot] = field(default_factory=list)
 
 
 class DetectionRule(Protocol):

@@ -17,6 +17,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
     DevicePerformanceSnapshot,
     GeoPerformanceSnapshot,
@@ -176,6 +177,13 @@ class FakeGoogleAdsClient:
             raise GoogleAdsAuthError("invalid credentials")
         return []
 
+    async def query_conversion_actions(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[ConversionActionSnapshot]:
+        if self._raise_auth_error:
+            raise GoogleAdsAuthError("invalid credentials")
+        return []
+
 
 class FakeSnapshotRepository:
     def __init__(self) -> None:
@@ -249,6 +257,11 @@ class FakeSnapshotRepository:
 
     async def upsert_audience_performance(
         self, account_id: AccountId, snapshots: list[AudiencePerformanceSnapshot]
+    ) -> None:
+        pass
+
+    async def upsert_conversion_actions(
+        self, account_id: AccountId, snapshots: list[ConversionActionSnapshot]
     ) -> None:
         pass
 

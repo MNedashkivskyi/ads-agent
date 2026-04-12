@@ -9,6 +9,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
     DevicePerformanceSnapshot,
     GeoPerformanceSnapshot,
@@ -108,5 +109,12 @@ class GoogleAdsQueriesAdapter:
         self, refresh_token: str, customer_id: str, snapshot_date: date
     ) -> list[AudiencePerformanceSnapshot]:
         return await queries.query_audience_performance(
+            refresh_token, customer_id, snapshot_date, self._settings
+        )
+
+    async def query_conversion_actions(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[ConversionActionSnapshot]:
+        return await queries.query_conversion_actions(
             refresh_token, customer_id, snapshot_date, self._settings
         )

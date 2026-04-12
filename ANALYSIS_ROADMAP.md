@@ -145,15 +145,19 @@ Basic checks every PPC specialist runs manually. These remain but are not suffic
 
 **Goal:** Ensure the measurement foundation is solid. Bad tracking = every other decision is wrong.
 
-**Data infrastructure needed:**
-- New GAQL query: `conversion_action` resource
-- `metrics.all_conversions`, `metrics.cross_device_conversions`, `metrics.view_through_conversions`
+**Data infrastructure delivered:**
+- `ConversionActionSnapshot` domain entity + `conversion_action_snapshots` DB table (migration 0018)
+- `query_conversion_actions` GAQL query fetching action name, category, counting type, status, include_in_conversions_metric
+- `all_conversions: float` added to `CampaignSnapshot` + `campaign_snapshots` column (migration 0017)
+- `SnapshotAccountUseCase` now fetches 12 entity types in parallel
+- `conversion_actions` field added to `DetectionContext`
+- EN + PL explanation templates for all 3 kinds
 
 | # | Rule | Kind | Severity | Triggers when | Status |
 |---|------|------|----------|--------------|--------|
-| 38 | Micro-conversion only | `UPGRADE_CONVERSION_ACTION` | HIGH | All tracked conversions are page views or button clicks (LLM-classified by name) | ⬜ |
-| 39 | Duplicate conversion counting | `DEDUPLICATE_CONVERSIONS` | HIGH | Conversions far exceed expected based on spend and industry CPA (>5× account avg) | ⬜ |
-| 40 | Conversion value missing | `SET_CONVERSION_VALUE` | MEDIUM | Conversions tracked but `conv_value` = 0 across all campaigns with ≥10 conversions | ⬜ |
+| 38 | Micro-conversion only | `UPGRADE_CONVERSION_ACTION` | HIGH | All ENABLED included conversions are PAGE_VIEW/DEFAULT or have micro-signal names (no LLM needed) | ✅ |
+| 39 | Duplicate conversion counting | `DEDUPLICATE_CONVERSIONS` | HIGH | `all_conversions` > 5× `conversions` across enabled campaigns | ✅ |
+| 40 | Conversion value missing | `SET_CONVERSION_VALUE` | MEDIUM | ≥10 conversions tracked but `conv_value` = 0 across all enabled campaigns | ✅ |
 
 ---
 

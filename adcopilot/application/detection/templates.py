@@ -536,6 +536,57 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " Explain diminishing returns and channel diversification in plain English."
         ),
     },
+    # ── Module 6 — Conversion Tracking & Measurement ──────────────────────────
+    RecommendationKind.UPGRADE_CONVERSION_ACTION: {
+        "pl": (
+            "Konto śledzi tylko mikro-konwersje ({micro_conversion_count} akcji:"
+            " {micro_conversion_names}). Takie zdarzenia jak odsłony stron czy kliknięcia"
+            " nie odzwierciedlają rzeczywistych wyników biznesowych. Smart Bidding"
+            " optymalizuje pod kątem tych sygnałów, co prowadzi do gromadzenia ruchu bez"
+            " realnych zakupów ani leadów. Wytłumacz jak skonfigurować konwersje oparte"
+            " na zakupach lub leadach, po polsku."
+        ),
+        "en": (
+            "This account only tracks micro-conversions ({micro_conversion_count} actions:"
+            " {micro_conversion_names}). Events like page views and clicks don't reflect"
+            " real business outcomes. Smart Bidding optimises for these signals, collecting"
+            " traffic without real purchases or leads."
+            " Explain how to set up purchase or lead-based conversions in plain English."
+        ),
+    },
+    RecommendationKind.DEDUPLICATE_CONVERSIONS: {
+        "pl": (
+            "Wskaźnik 'Wszystkie konwersje' ({total_all_conversions:.0f}) jest"
+            " {ratio:.1f}× wyższy niż 'Konwersje' ({total_conversions:.0f}). Tak duża"
+            " różnica wskazuje na podwójne liczenie — prawdopodobnie tag Google i"
+            " importowany cel z GA4 rejestrują tę samą akcję. Zawyżone dane konwersji"
+            " zniekształcają optymalizację bidowania i raportowanie ROI."
+            " Wytłumacz jak zidentyfikować i naprawić podwójne liczenie, po polsku."
+        ),
+        "en": (
+            "'All conversions' ({total_all_conversions:.0f}) is {ratio:.1f}× higher than"
+            " 'Conversions' ({total_conversions:.0f}). Such a large gap typically means"
+            " double-counting — a Google tag and an imported GA4 goal are tracking the"
+            " same event. Inflated conversion data distorts Smart Bidding and ROI reporting."
+            " Explain how to identify and fix conversion deduplication in plain English."
+        ),
+    },
+    RecommendationKind.SET_CONVERSION_VALUE: {
+        "pl": (
+            "Konto ma {total_conversions:.0f} konwersji, ale wartość konwersji wynosi 0."
+            " Bez wartości konwersji Google nie może optymalizować pod kątem ROAS, a"
+            " właściciel konta nie może obliczyć rzeczywistego zwrotu z inwestycji."
+            " Dodaj wartości do akcji konwersji lub użyj dynamicznych wartości konwersji."
+            " Wytłumacz jak ustawić wartości konwersji, po polsku."
+        ),
+        "en": (
+            "This account has {total_conversions:.0f} conversions but a conversion value"
+            " of zero. Without conversion values Google cannot optimise for ROAS, and you"
+            " cannot calculate your true return on ad spend."
+            " Add static values to your conversion actions or implement dynamic conversion"
+            " values. Explain how to set conversion values in plain English."
+        ),
+    },
     RecommendationKind.ADD_AUDIENCE_SIGNALS: {
         "pl": (
             "Kampania '{campaign_name}' ma {impressions} wyświetleń, ale nie ma"
