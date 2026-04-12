@@ -10,6 +10,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
     DevicePerformanceSnapshot,
     GeoPerformanceSnapshot,
@@ -124,3 +125,11 @@ class SnapshotRepository(Protocol):
     async def get_audience_performance(
         self, account_id: AccountId, snapshot_date: date
     ) -> list[AudiencePerformanceSnapshot]: ...
+
+    async def upsert_conversion_actions(
+        self, account_id: AccountId, snapshots: list[ConversionActionSnapshot]
+    ) -> None: ...
+
+    async def get_conversion_actions(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[ConversionActionSnapshot]: ...

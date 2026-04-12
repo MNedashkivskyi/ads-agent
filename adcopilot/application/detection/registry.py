@@ -81,6 +81,15 @@ from adcopilot.application.detection.rules.rule_34_is_lost_to_budget import IsLo
 from adcopilot.application.detection.rules.rule_35_is_lost_to_rank import IsLostToRankRule
 from adcopilot.application.detection.rules.rule_36_relax_target_cpa import RelaxTargetCpaRule
 from adcopilot.application.detection.rules.rule_37_diversify_channels import DiversifyChannelsRule
+from adcopilot.application.detection.rules.rule_38_upgrade_conversion_action import (
+    UpgradeConversionActionRule,
+)
+from adcopilot.application.detection.rules.rule_39_deduplicate_conversions import (
+    DeduplicateConversionsRule,
+)
+from adcopilot.application.detection.rules.rule_40_set_conversion_value import (
+    SetConversionValueRule,
+)
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -134,5 +143,9 @@ def build_rule_engine(
         IsLostToRankRule(),
         RelaxTargetCpaRule(),
         DiversifyChannelsRule(),
+        # Module 6 — Conversion tracking & measurement
+        UpgradeConversionActionRule(),
+        DeduplicateConversionsRule(),
+        SetConversionValueRule(),
     ]
     return RuleEngine(rules=rules, rec_repo=rec_repo, snooze_repo=snooze_repo)

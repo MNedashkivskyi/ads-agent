@@ -30,6 +30,8 @@ class CampaignSnapshot:
     search_rank_lost_impression_share: float | None = None
     # Bidding target — only populated for TARGET_CPA campaigns; None otherwise.
     target_cpa_micros: int | None = None
+    # All conversions (including view-through and cross-device); used by rule 39.
+    all_conversions: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -189,3 +191,26 @@ class NegativeKeywordSnapshot:
     ad_group_id: int
     text: str
     match_type: str  # EXACT, PHRASE, or BROAD
+
+
+@dataclass(frozen=True)
+class ConversionActionSnapshot:
+    """Account-level conversion action configuration.
+
+    Fetched from the `conversion_action` GAQL resource (not a daily metric —
+    it is account configuration), stored with snapshot_date for history.
+    """
+
+    id: SnapshotId
+    account_id: AccountId
+    snapshot_date: date
+    conversion_action_id: int
+    name: str
+    # Category enum: PAGE_VIEW, PURCHASE, SIGNUP, LEAD, DOWNLOAD, DEFAULT, etc.
+    category: str
+    # ONE_PER_CLICK or MANY_PER_CLICK
+    counting_type: str
+    # ENABLED, REMOVED, or HIDDEN
+    status: str
+    # True = counts toward the "Conversions" column; False = "All conversions" only
+    include_in_conversions_metric: bool

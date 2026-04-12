@@ -67,6 +67,14 @@ class RunDetectionUseCase:
             audience_performance,
         ) = await _load_targeting_performance(self._snapshot_repo, account_id, snapshot_date)
 
+        # 3c. Load conversion action configuration for Module 6 rules (best-effort).
+        try:
+            conversion_actions = await self._snapshot_repo.get_conversion_actions(
+                account_id, snapshot_date
+            )
+        except Exception:
+            conversion_actions = []
+
         # 4. Compute HistoricalStats from the snapshot itself (30-day proxy)
         total_cost = sum(c.cost_micros for c in snapshot.campaigns)
         total_conversions = sum(c.conversions for c in snapshot.campaigns)
@@ -98,6 +106,7 @@ class RunDetectionUseCase:
             hour_performance=hour_performance,
             day_of_week_performance=day_of_week_performance,
             audience_performance=audience_performance,
+            conversion_actions=conversion_actions,
         )
 
         # 6. Run rule engine
