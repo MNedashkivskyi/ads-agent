@@ -80,6 +80,23 @@ def create_app() -> FastAPI:
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     application.add_middleware(SlowAPIMiddleware)
     application.add_middleware(RequestIdMiddleware)
+
+    # CORS — allow the frontend origin(s).  APP_URL is the canonical frontend
+    # base URL (e.g. https://tryadept.com).  In development any localhost
+    # origin is also accepted.
+    from fastapi.middleware.cors import CORSMiddleware
+
+    settings = get_settings()
+    allowed_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    if settings.APP_URL:
+        allowed_origins.append(settings.APP_URL.rstrip("/"))
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     application.include_router(auth_router)
     application.include_router(oauth_router)
     application.include_router(telegram_router)

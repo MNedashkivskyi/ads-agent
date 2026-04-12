@@ -85,6 +85,58 @@ class RecommendationStatus(Enum):
     FAILED = "FAILED"
 
 
+# Kinds that have no Google Ads mutation executor — shown as advisory cards
+# in Telegram with no Approve button to prevent runtime errors.
+NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
+    {
+        # Module 0 — requires human action outside the system
+        RecommendationKind.FIX_DISAPPROVED_AD,
+        RecommendationKind.ADD_AD_VARIATION,
+        RecommendationKind.ENABLE_CONVERSION_TRACKING,
+        # Module 1 — trend alerts (informational)
+        RecommendationKind.CTR_DECLINE,
+        RecommendationKind.CPA_SPIKE,
+        RecommendationKind.CONVERSION_RATE_DROP,
+        RecommendationKind.IMPRESSION_SHARE_EROSION,
+        RecommendationKind.SPEND_ACCELERATION,
+        RecommendationKind.QUALITY_SCORE_DETERIORATION,
+        # Module 2 — ad copy insights (informational)
+        RecommendationKind.AD_KEYWORD_MISMATCH,
+        RecommendationKind.MISSING_CTA,
+        RecommendationKind.WEAK_RSA_STRENGTH,
+        RecommendationKind.AD_FATIGUE,
+        RecommendationKind.REDUNDANT_HEADLINES,
+        RecommendationKind.GENERIC_DESCRIPTION,
+        # Module 3 — structural issues (informational)
+        RecommendationKind.OVERSTUFFED_AD_GROUP,
+        RecommendationKind.KEYWORD_CANNIBALIZATION,
+        RecommendationKind.NEGATIVE_KEYWORD_CONFLICT,
+        RecommendationKind.ORPHANED_CAMPAIGN,
+        RecommendationKind.MATCH_TYPE_REDUNDANCY,
+        # Module 4 — targeting insights (informational)
+        RecommendationKind.DEVICE_BID_ADJUSTMENT,
+        RecommendationKind.GEO_EXCLUSION,
+        RecommendationKind.AD_SCHEDULE_ADJUSTMENT,
+        RecommendationKind.DAY_OF_WEEK_BID_ADJUSTMENT,
+        RecommendationKind.ADD_AUDIENCE_SIGNALS,
+        # Module 5 — budget/bidding insights (informational)
+        RecommendationKind.REALLOCATE_BUDGET,
+        RecommendationKind.IMPROVE_QUALITY_SCORE,
+        RecommendationKind.RELAX_TARGET_CPA,
+        RecommendationKind.DIVERSIFY_CHANNELS,
+        # Module 6 — conversion tracking issues (informational)
+        RecommendationKind.UPGRADE_CONVERSION_ACTION,
+        RecommendationKind.DEDUPLICATE_CONVERSIONS,
+        RecommendationKind.SET_CONVERSION_VALUE,
+        # Module 7 — extension issues (informational)
+        RecommendationKind.ADD_SITELINKS,
+        RecommendationKind.ADD_CALLOUTS,
+        RecommendationKind.ADD_STRUCTURED_SNIPPETS,
+        RecommendationKind.REFRESH_SITELINK,
+    }
+)
+
+
 def compute_target_hash(target: dict[str, Any]) -> str:
     """Stable SHA-256 hex digest of the target dict for deduplication."""
     serialised = json.dumps(target, sort_keys=True, separators=(",", ":"), default=str)
