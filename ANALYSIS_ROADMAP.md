@@ -165,16 +165,20 @@ Basic checks every PPC specialist runs manually. These remain but are not suffic
 
 **Goal:** Ensure all available ad real estate is being used. Extensions improve CTR and ad rank at no extra cost.
 
-**Data infrastructure needed:**
-- New GAQL query: `campaign_extension_setting`, `ad_group_extension_setting`
-- Extension performance metrics per asset
+**Data infrastructure delivered:**
+- `CampaignExtensionSnapshot` domain entity + `campaign_extension_snapshots` DB table (migration 0019)
+- `SitelinkPerformanceSnapshot` domain entity + `sitelink_performance_snapshots` DB table (migration 0019)
+- GAQL queries: `query_campaign_extensions` (from `campaign_extension_setting`) + `query_sitelink_performance` (from `campaign_asset`)
+- `campaign_extensions` and `sitelink_performance` fields added to `DetectionContext`
+- `SnapshotAccountUseCase` now fetches 14 entity types in parallel
+- EN + PL explanation templates added for all 4 kinds
 
 | # | Rule | Kind | Severity | Triggers when | Status |
 |---|------|------|----------|--------------|--------|
-| 41 | Missing sitelinks | `ADD_SITELINKS` | MEDIUM | Campaign ≥1000 impressions with no sitelink extension | ⬜ |
-| 42 | Missing callouts | `ADD_CALLOUTS` | LOW | Campaign ≥1000 impressions with no callout extension | ⬜ |
-| 43 | Missing structured snippets | `ADD_STRUCTURED_SNIPPETS` | LOW | Campaign ≥1000 impressions with no structured snippet | ⬜ |
-| 44 | Low-performing sitelink | `REFRESH_SITELINK` | LOW | Sitelink CTR < 0.5% over 30 days with ≥500 impressions | ⬜ |
+| 41 | Missing sitelinks | `ADD_SITELINKS` | MEDIUM | Campaign ≥1000 impressions with no sitelink extension | ✅ |
+| 42 | Missing callouts | `ADD_CALLOUTS` | LOW | Campaign ≥1000 impressions with no callout extension | ✅ |
+| 43 | Missing structured snippets | `ADD_STRUCTURED_SNIPPETS` | LOW | Campaign ≥1000 impressions with no structured snippet | ✅ |
+| 44 | Low-performing sitelink | `REFRESH_SITELINK` | LOW | Sitelink CTR < 0.5% over 30 days with ≥500 impressions | ✅ |
 
 ---
 

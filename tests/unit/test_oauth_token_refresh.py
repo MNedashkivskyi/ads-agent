@@ -336,6 +336,8 @@ async def test_snapshot_use_case_sets_needs_reauth_on_auth_error() -> None:
     ads_client.query_day_of_week_performance = AsyncMock(return_value=[])
     ads_client.query_audience_performance = AsyncMock(return_value=[])
     ads_client.query_conversion_actions = AsyncMock(return_value=[])
+    ads_client.query_campaign_extensions = AsyncMock(return_value=[])
+    ads_client.query_sitelink_performance = AsyncMock(return_value=[])
 
     use_case = SnapshotAccountUseCase(
         ads_client=ads_client,

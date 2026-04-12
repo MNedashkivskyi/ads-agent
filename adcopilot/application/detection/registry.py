@@ -90,6 +90,12 @@ from adcopilot.application.detection.rules.rule_39_deduplicate_conversions impor
 from adcopilot.application.detection.rules.rule_40_set_conversion_value import (
     SetConversionValueRule,
 )
+from adcopilot.application.detection.rules.rule_41_add_sitelinks import AddSitelinksRule
+from adcopilot.application.detection.rules.rule_42_add_callouts import AddCalloutsRule
+from adcopilot.application.detection.rules.rule_43_add_structured_snippets import (
+    AddStructuredSnippetsRule,
+)
+from adcopilot.application.detection.rules.rule_44_refresh_sitelink import RefreshSitelinkRule
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -147,5 +153,10 @@ def build_rule_engine(
         UpgradeConversionActionRule(),
         DeduplicateConversionsRule(),
         SetConversionValueRule(),
+        # Module 7 — Ad extensions & assets
+        AddSitelinksRule(),
+        AddCalloutsRule(),
+        AddStructuredSnippetsRule(),
+        RefreshSitelinkRule(),
     ]
     return RuleEngine(rules=rules, rec_repo=rec_repo, snooze_repo=snooze_repo)

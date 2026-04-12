@@ -603,6 +603,70 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " Explain how to add observation audiences in plain English."
         ),
     },
+    RecommendationKind.ADD_SITELINKS: {
+        "pl": (
+            "Kampania '{campaign_name}' ma {impressions} wyświetleń, ale nie ma"
+            " żadnych rozszerzeń sitelink."
+            " Sitelinki zwiększają powierzchnię reklamy, poprawiają CTR i jakość reklamy"
+            " bez dodatkowych kosztów."
+            " Wytłumacz jak dodać rozszerzenia sitelink do kampanii, po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign_name}' has {impressions} impressions but no sitelink"
+            " extensions attached."
+            " Sitelinks expand your ad's real estate, improve CTR, and boost Ad Rank at"
+            " no extra cost."
+            " Explain how to add sitelink extensions in plain English."
+        ),
+    },
+    RecommendationKind.ADD_CALLOUTS: {
+        "pl": (
+            "Kampania '{campaign_name}' ma {impressions} wyświetleń, ale nie ma"
+            " rozszerzeń callout."
+            " Callout extensions wyświetlają krótkie frazy o zaletach oferty pod treścią"
+            " reklamy, zwiększając CTR i jakość reklamy."
+            " Wytłumacz jak dodać rozszerzenia callout, po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign_name}' has {impressions} impressions but no callout"
+            " extensions attached."
+            " Callout extensions display short benefit phrases below the ad text,"
+            " improving CTR and Ad Rank at zero extra cost."
+            " Explain how to add callout extensions in plain English."
+        ),
+    },
+    RecommendationKind.ADD_STRUCTURED_SNIPPETS: {
+        "pl": (
+            "Kampania '{campaign_name}' ma {impressions} wyświetleń, ale nie ma"
+            " rozszerzeń structured snippet."
+            " Rozszerzenia te prezentują listę cech produktów lub usług, zwiększając"
+            " trafność reklamy i współczynnik klikalności."
+            " Wytłumacz jak dodać structured snippets do kampanii, po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign_name}' has {impressions} impressions but no structured"
+            " snippet extensions attached."
+            " Structured snippets highlight specific product or service features,"
+            " boosting ad relevance and CTR."
+            " Explain how to add structured snippet extensions in plain English."
+        ),
+    },
+    RecommendationKind.REFRESH_SITELINK: {
+        "pl": (
+            "Sitelink (asset_id={asset_id}) w kampanii (campaign_id={campaign_id})"
+            " miał {impressions} wyświetleń przez ostatnie 30 dni, ale CTR wynosi"
+            " tylko {ctr_pct:.2f}% — poniżej progu 0.5%."
+            " Treść lub strona docelowa tego sitelinku nie angażuje użytkowników."
+            " Wytłumacz jak odświeżyć lub zastąpić ten sitelink, po polsku."
+        ),
+        "en": (
+            "Sitelink (asset_id={asset_id}) in campaign (campaign_id={campaign_id})"
+            " received {impressions} impressions over the past 30 days but has a CTR"
+            " of only {ctr_pct:.2f}% — below the 0.5% threshold."
+            " The sitelink copy or landing page is not resonating with users."
+            " Explain how to refresh or replace this sitelink in plain English."
+        ),
+    },
 }
 
 

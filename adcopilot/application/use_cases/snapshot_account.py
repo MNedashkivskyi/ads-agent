@@ -90,7 +90,7 @@ class SnapshotAccountUseCase:
         refresh_token = creds.refresh_token
         customer_id = account.customer_id
 
-        # 3. Pull all 12 entity types in parallel
+        # 3. Pull all 14 entity types in parallel
         try:
             (
                 campaigns,
@@ -105,6 +105,8 @@ class SnapshotAccountUseCase:
                 day_of_week_performance,
                 audience_performance,
                 conversion_actions,
+                campaign_extensions,
+                sitelink_performance,
             ) = await asyncio.gather(
                 self._ads_client.query_campaigns(refresh_token, customer_id, snapshot_date),
                 self._ads_client.query_ad_groups(refresh_token, customer_id, snapshot_date),
@@ -128,6 +130,12 @@ class SnapshotAccountUseCase:
                     refresh_token, customer_id, snapshot_date
                 ),
                 self._ads_client.query_conversion_actions(
+                    refresh_token, customer_id, snapshot_date
+                ),
+                self._ads_client.query_campaign_extensions(
+                    refresh_token, customer_id, snapshot_date
+                ),
+                self._ads_client.query_sitelink_performance(
                     refresh_token, customer_id, snapshot_date
                 ),
             )
@@ -170,6 +178,8 @@ class SnapshotAccountUseCase:
         )
         await self._snapshot_repo.upsert_audience_performance(account_id, audience_performance)
         await self._snapshot_repo.upsert_conversion_actions(account_id, conversion_actions)
+        await self._snapshot_repo.upsert_campaign_extensions(account_id, campaign_extensions)
+        await self._snapshot_repo.upsert_sitelink_performance(account_id, sitelink_performance)
 
         duration = time.monotonic() - start
         logger.info(
@@ -188,6 +198,8 @@ class SnapshotAccountUseCase:
             day_of_week_performance=len(day_of_week_performance),
             audience_performance=len(audience_performance),
             conversion_actions=len(conversion_actions),
+            campaign_extensions=len(campaign_extensions),
+            sitelink_performance=len(sitelink_performance),
             duration_seconds=round(duration, 2),
         )
 

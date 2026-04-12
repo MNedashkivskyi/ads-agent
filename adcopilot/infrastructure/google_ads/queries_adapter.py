@@ -8,6 +8,7 @@ from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
     AudiencePerformanceSnapshot,
+    CampaignExtensionSnapshot,
     CampaignSnapshot,
     ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
@@ -17,6 +18,7 @@ from adcopilot.domain.snapshot import (
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
+    SitelinkPerformanceSnapshot,
 )
 from adcopilot.infrastructure.google_ads import queries
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter
@@ -116,5 +118,19 @@ class GoogleAdsQueriesAdapter:
         self, refresh_token: str, customer_id: str, snapshot_date: date
     ) -> list[ConversionActionSnapshot]:
         return await queries.query_conversion_actions(
+            refresh_token, customer_id, snapshot_date, self._settings
+        )
+
+    async def query_campaign_extensions(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[CampaignExtensionSnapshot]:
+        return await queries.query_campaign_extensions(
+            refresh_token, customer_id, snapshot_date, self._settings
+        )
+
+    async def query_sitelink_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[SitelinkPerformanceSnapshot]:
+        return await queries.query_sitelink_performance(
             refresh_token, customer_id, snapshot_date, self._settings
         )

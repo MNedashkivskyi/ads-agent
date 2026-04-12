@@ -214,3 +214,38 @@ class ConversionActionSnapshot:
     status: str
     # True = counts toward the "Conversions" column; False = "All conversions" only
     include_in_conversions_metric: bool
+
+
+@dataclass(frozen=True)
+class CampaignExtensionSnapshot:
+    """Records which extension types are attached to a campaign.
+
+    One row per (account, snapshot_date, campaign, extension_type).  Used by
+    rules 41–43 to detect campaigns that are missing sitelinks, callouts, or
+    structured snippets.
+    """
+
+    id: SnapshotId
+    account_id: AccountId
+    snapshot_date: date
+    campaign_id: int
+    # Extension type string: SITELINK, CALLOUT, STRUCTURED_SNIPPET, etc.
+    extension_type: str
+
+
+@dataclass(frozen=True)
+class SitelinkPerformanceSnapshot:
+    """Daily click + impression metrics for a single sitelink asset.
+
+    One row per (account, snapshot_date, campaign_id, asset_id).  The rule
+    engine loads a 30-day window, aggregates impressions/clicks per asset_id,
+    and flags sitelinks with CTR < 0.5% and ≥500 impressions.
+    """
+
+    id: SnapshotId
+    account_id: AccountId
+    snapshot_date: date
+    campaign_id: int
+    asset_id: int
+    impressions: int
+    clicks: int

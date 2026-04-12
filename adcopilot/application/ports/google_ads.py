@@ -6,6 +6,7 @@ from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
     AudiencePerformanceSnapshot,
+    CampaignExtensionSnapshot,
     CampaignSnapshot,
     ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
@@ -15,6 +16,7 @@ from adcopilot.domain.snapshot import (
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
+    SitelinkPerformanceSnapshot,
 )
 
 
@@ -80,3 +82,11 @@ class GoogleAdsClientPort(Protocol):
     async def query_conversion_actions(
         self, refresh_token: str, customer_id: str, snapshot_date: date
     ) -> list[ConversionActionSnapshot]: ...
+
+    async def query_campaign_extensions(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[CampaignExtensionSnapshot]: ...
+
+    async def query_sitelink_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[SitelinkPerformanceSnapshot]: ...

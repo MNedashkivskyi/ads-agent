@@ -9,6 +9,7 @@ from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
     AudiencePerformanceSnapshot,
+    CampaignExtensionSnapshot,
     CampaignSnapshot,
     ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
@@ -18,6 +19,7 @@ from adcopilot.domain.snapshot import (
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
+    SitelinkPerformanceSnapshot,
 )
 
 
@@ -133,3 +135,19 @@ class SnapshotRepository(Protocol):
     async def get_conversion_actions(
         self, account_id: AccountId, snapshot_date: date
     ) -> list[ConversionActionSnapshot]: ...
+
+    async def upsert_campaign_extensions(
+        self, account_id: AccountId, snapshots: list[CampaignExtensionSnapshot]
+    ) -> None: ...
+
+    async def get_campaign_extensions(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[CampaignExtensionSnapshot]: ...
+
+    async def upsert_sitelink_performance(
+        self, account_id: AccountId, snapshots: list[SitelinkPerformanceSnapshot]
+    ) -> None: ...
+
+    async def get_sitelink_performance(
+        self, account_id: AccountId, start_date: date, end_date: date
+    ) -> list[SitelinkPerformanceSnapshot]: ...

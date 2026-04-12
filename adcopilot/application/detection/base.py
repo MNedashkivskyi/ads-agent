@@ -12,6 +12,7 @@ from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
     AudiencePerformanceSnapshot,
+    CampaignExtensionSnapshot,
     CampaignSnapshot,
     ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
@@ -21,6 +22,7 @@ from adcopilot.domain.snapshot import (
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
+    SitelinkPerformanceSnapshot,
 )
 
 
@@ -62,6 +64,12 @@ class DetectionContext:
     # Conversion action configuration for Module 6 rules.
     # Empty when not yet loaded or the account has no tracked conversions.
     conversion_actions: list[ConversionActionSnapshot] = field(default_factory=list)
+    # Campaign extension types for Module 7 rules 41–43.
+    # Empty when no extension data has been snapshotted yet.
+    campaign_extensions: list[CampaignExtensionSnapshot] = field(default_factory=list)
+    # Per-sitelink daily performance over a 30-day window for Module 7 rule 44.
+    # Empty when no sitelink asset data exists.
+    sitelink_performance: list[SitelinkPerformanceSnapshot] = field(default_factory=list)
 
 
 class DetectionRule(Protocol):

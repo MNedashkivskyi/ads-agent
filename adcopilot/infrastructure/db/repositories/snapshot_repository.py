@@ -13,6 +13,7 @@ from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
     AudiencePerformanceSnapshot,
+    CampaignExtensionSnapshot,
     CampaignSnapshot,
     ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
@@ -22,12 +23,14 @@ from adcopilot.domain.snapshot import (
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
+    SitelinkPerformanceSnapshot,
     SnapshotId,
 )
 from adcopilot.infrastructure.db.models import (
     AdGroupSnapshotModel,
     AdSnapshotModel,
     AudiencePerformanceSnapshotModel,
+    CampaignExtensionSnapshotModel,
     CampaignSnapshotModel,
     ConversionActionSnapshotModel,
     DayOfWeekPerformanceSnapshotModel,
@@ -37,6 +40,7 @@ from adcopilot.infrastructure.db.models import (
     KeywordSnapshotModel,
     NegativeKeywordSnapshotModel,
     SearchTermSnapshotModel,
+    SitelinkPerformanceSnapshotModel,
 )
 
 
@@ -1004,3 +1008,109 @@ class SqlSnapshotRepository:
             ads=ads,
             negative_keywords=negative_keywords,
         )
+
+    # ------------------------------------------------------------------
+    # Campaign extensions (Module 7, rules 41–43)
+    # ------------------------------------------------------------------
+
+    async def upsert_campaign_extensions(
+        self, account_id: AccountId, snapshots: list[CampaignExtensionSnapshot]
+    ) -> None:
+        if not snapshots:
+            return
+        rows = [
+            {
+                "id": uuid.uuid4(),
+                "account_id": uuid.UUID(account_id),
+                "snapshot_date": s.snapshot_date,
+                "campaign_id": s.campaign_id,
+                "extension_type": s.extension_type,
+            }
+            for s in snapshots
+        ]
+        stmt = insert(CampaignExtensionSnapshotModel).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_campaign_extension_snapshots",
+            set_={
+                "extension_type": stmt.excluded.extension_type,
+                "updated_at": text("now()"),
+            },
+        )
+        await self._session.execute(stmt)
+
+    async def get_campaign_extensions(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[CampaignExtensionSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(CampaignExtensionSnapshotModel).where(
+                CampaignExtensionSnapshotModel.account_id == acct_uuid,
+                CampaignExtensionSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        return [
+            CampaignExtensionSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                campaign_id=m.campaign_id,
+                extension_type=m.extension_type,
+            )
+            for m in res.scalars().all()
+        ]
+
+    # ------------------------------------------------------------------
+    # Sitelink performance (Module 7, rule 44)
+    # ------------------------------------------------------------------
+
+    async def upsert_sitelink_performance(
+        self, account_id: AccountId, snapshots: list[SitelinkPerformanceSnapshot]
+    ) -> None:
+        if not snapshots:
+            return
+        rows = [
+            {
+                "id": uuid.uuid4(),
+                "account_id": uuid.UUID(account_id),
+                "snapshot_date": s.snapshot_date,
+                "campaign_id": s.campaign_id,
+                "asset_id": s.asset_id,
+                "impressions": s.impressions,
+                "clicks": s.clicks,
+            }
+            for s in snapshots
+        ]
+        stmt = insert(SitelinkPerformanceSnapshotModel).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_sitelink_performance_snapshots",
+            set_={
+                "impressions": stmt.excluded.impressions,
+                "clicks": stmt.excluded.clicks,
+                "updated_at": text("now()"),
+            },
+        )
+        await self._session.execute(stmt)
+
+    async def get_sitelink_performance(
+        self, account_id: AccountId, start_date: date, end_date: date
+    ) -> list[SitelinkPerformanceSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(SitelinkPerformanceSnapshotModel).where(
+                SitelinkPerformanceSnapshotModel.account_id == acct_uuid,
+                SitelinkPerformanceSnapshotModel.snapshot_date >= start_date,
+                SitelinkPerformanceSnapshotModel.snapshot_date <= end_date,
+            )
+        )
+        return [
+            SitelinkPerformanceSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                campaign_id=m.campaign_id,
+                asset_id=m.asset_id,
+                impressions=m.impressions,
+                clicks=m.clicks,
+            )
+            for m in res.scalars().all()
+        ]

@@ -66,12 +66,19 @@ from adcopilot.application.detection.rules.rule_39_deduplicate_conversions impor
 from adcopilot.application.detection.rules.rule_40_set_conversion_value import (
     SetConversionValueRule,
 )
+from adcopilot.application.detection.rules.rule_41_add_sitelinks import AddSitelinksRule
+from adcopilot.application.detection.rules.rule_42_add_callouts import AddCalloutsRule
+from adcopilot.application.detection.rules.rule_43_add_structured_snippets import (
+    AddStructuredSnippetsRule,
+)
+from adcopilot.application.detection.rules.rule_44_refresh_sitelink import RefreshSitelinkRule
 from adcopilot.domain.entities import AccountId, GoogleAdsAccount, UserId
 from adcopilot.domain.recommendation import RecommendationKind, RecommendationSeverity
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
     AudiencePerformanceSnapshot,
+    CampaignExtensionSnapshot,
     CampaignSnapshot,
     ConversionActionSnapshot,
     DayOfWeekPerformanceSnapshot,
@@ -81,6 +88,7 @@ from adcopilot.domain.snapshot import (
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
+    SitelinkPerformanceSnapshot,
     SnapshotId,
 )
 
@@ -2182,4 +2190,200 @@ class TestSetConversionValueRule:
         c2 = _campaign(campaign_id=2, status="ENABLED", conversions=5.0, conv_value=0.0)
         ctx = _ctx(campaigns=[c1, c2])
         # total conv_value = 200 > 0 → no trigger
+        assert self.rule.detect(ctx) == []
+
+
+# ---------------------------------------------------------------------------
+# Helpers for Module 7
+# ---------------------------------------------------------------------------
+
+
+def _ext(campaign_id: int = 1, extension_type: str = "SITELINK") -> CampaignExtensionSnapshot:
+    return CampaignExtensionSnapshot(
+        id=_sid(),
+        account_id=_ACCOUNT_ID,
+        snapshot_date=_SNAP_DATE,
+        campaign_id=campaign_id,
+        extension_type=extension_type,
+    )
+
+
+def _sitelink_perf(
+    campaign_id: int = 1,
+    asset_id: int = 100,
+    impressions: int = 600,
+    clicks: int = 1,
+) -> SitelinkPerformanceSnapshot:
+    return SitelinkPerformanceSnapshot(
+        id=_sid(),
+        account_id=_ACCOUNT_ID,
+        snapshot_date=_SNAP_DATE,
+        campaign_id=campaign_id,
+        asset_id=asset_id,
+        impressions=impressions,
+        clicks=clicks,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Rule 41 — Add Sitelinks
+# ---------------------------------------------------------------------------
+
+
+class TestAddSitelinksRule:
+    rule = AddSitelinksRule()
+
+    def test_no_sitelink_triggers(self):
+        c = _campaign(campaign_id=1, status="ENABLED", impressions=2_000)
+        ctx = _ctx(campaigns=[c], campaign_extensions=[])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.ADD_SITELINKS
+        assert recs[0].target["campaign_id"] == 1
+
+    def test_has_sitelink_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", impressions=2_000)
+        ext = _ext(campaign_id=1, extension_type="SITELINK")
+        ctx = _ctx(campaigns=[c], campaign_extensions=[ext])
+        assert self.rule.detect(ctx) == []
+
+    def test_other_extension_type_still_triggers(self):
+        c = _campaign(campaign_id=1, status="ENABLED", impressions=2_000)
+        # Has CALLOUT but not SITELINK
+        ext = _ext(campaign_id=1, extension_type="CALLOUT")
+        ctx = _ctx(campaigns=[c], campaign_extensions=[ext])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+
+    def test_below_min_impressions_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", impressions=500)
+        ctx = _ctx(campaigns=[c], campaign_extensions=[])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_campaign_no_trigger(self):
+        c = _campaign(campaign_id=1, status="PAUSED", impressions=2_000)
+        ctx = _ctx(campaigns=[c], campaign_extensions=[])
+        assert self.rule.detect(ctx) == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 42 — Add Callouts
+# ---------------------------------------------------------------------------
+
+
+class TestAddCalloutsRule:
+    rule = AddCalloutsRule()
+
+    def test_no_callout_triggers(self):
+        c = _campaign(campaign_id=1, status="ENABLED", impressions=2_000)
+        ctx = _ctx(campaigns=[c], campaign_extensions=[])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.ADD_CALLOUTS
+
+    def test_has_callout_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", impressions=2_000)
+        ext = _ext(campaign_id=1, extension_type="CALLOUT")
+        ctx = _ctx(campaigns=[c], campaign_extensions=[ext])
+        assert self.rule.detect(ctx) == []
+
+    def test_below_impressions_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", impressions=999)
+        ctx = _ctx(campaigns=[c], campaign_extensions=[])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_campaign_no_trigger(self):
+        c = _campaign(campaign_id=1, status="PAUSED", impressions=5_000)
+        ctx = _ctx(campaigns=[c], campaign_extensions=[])
+        assert self.rule.detect(ctx) == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 43 — Add Structured Snippets
+# ---------------------------------------------------------------------------
+
+
+class TestAddStructuredSnippetsRule:
+    rule = AddStructuredSnippetsRule()
+
+    def test_no_snippets_triggers(self):
+        c = _campaign(campaign_id=1, status="ENABLED", impressions=2_000)
+        ctx = _ctx(campaigns=[c], campaign_extensions=[])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.ADD_STRUCTURED_SNIPPETS
+
+    def test_has_snippet_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", impressions=2_000)
+        ext = _ext(campaign_id=1, extension_type="STRUCTURED_SNIPPET")
+        ctx = _ctx(campaigns=[c], campaign_extensions=[ext])
+        assert self.rule.detect(ctx) == []
+
+    def test_sitelink_does_not_satisfy(self):
+        c = _campaign(campaign_id=1, status="ENABLED", impressions=2_000)
+        ext = _ext(campaign_id=1, extension_type="SITELINK")
+        ctx = _ctx(campaigns=[c], campaign_extensions=[ext])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+
+    def test_below_impressions_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", impressions=100)
+        ctx = _ctx(campaigns=[c], campaign_extensions=[])
+        assert self.rule.detect(ctx) == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 44 — Refresh Sitelink
+# ---------------------------------------------------------------------------
+
+
+class TestRefreshSitelinkRule:
+    rule = RefreshSitelinkRule()
+
+    def test_low_ctr_triggers(self):
+        # 600 impressions, 1 click → CTR = 0.167% < 0.5%
+        sl = _sitelink_perf(campaign_id=1, asset_id=100, impressions=600, clicks=1)
+        ctx = _ctx(sitelink_performance=[sl])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.REFRESH_SITELINK
+        assert recs[0].target["asset_id"] == 100
+
+    def test_good_ctr_no_trigger(self):
+        # 600 impressions, 10 clicks → CTR = 1.67% ≥ 0.5%
+        sl = _sitelink_perf(campaign_id=1, asset_id=100, impressions=600, clicks=10)
+        ctx = _ctx(sitelink_performance=[sl])
+        assert self.rule.detect(ctx) == []
+
+    def test_below_min_impressions_no_trigger(self):
+        # 400 impressions < 500 minimum
+        sl = _sitelink_perf(campaign_id=1, asset_id=100, impressions=400, clicks=0)
+        ctx = _ctx(sitelink_performance=[sl])
+        assert self.rule.detect(ctx) == []
+
+    def test_aggregates_multiple_days(self):
+        # Two days: 300 + 300 = 600 impressions, 0 + 0 = 0 clicks
+        sl1 = _sitelink_perf(campaign_id=1, asset_id=200, impressions=300, clicks=0)
+        sl2 = SitelinkPerformanceSnapshot(
+            id=_sid(),
+            account_id=_ACCOUNT_ID,
+            snapshot_date=date(2026, 4, 8),
+            campaign_id=1,
+            asset_id=200,
+            impressions=300,
+            clicks=0,
+        )
+        ctx = _ctx(sitelink_performance=[sl1, sl2])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].evidence["impressions"] == 600
+
+    def test_empty_sitelink_data_no_trigger(self):
+        ctx = _ctx(sitelink_performance=[])
+        assert self.rule.detect(ctx) == []
+
+    def test_exactly_threshold_ctr_no_trigger(self):
+        # CTR = 0.5% exactly → no trigger (must be strictly below)
+        sl = _sitelink_perf(campaign_id=1, asset_id=100, impressions=1000, clicks=5)
+        ctx = _ctx(sitelink_performance=[sl])
         assert self.rule.detect(ctx) == []
