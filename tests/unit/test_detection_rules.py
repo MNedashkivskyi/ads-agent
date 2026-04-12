@@ -26,6 +26,30 @@ from adcopilot.application.detection.rules.rule_09_dead_keyword import DeadKeywo
 from adcopilot.application.detection.rules.rule_10_wrong_bidding_strategy import (
     WrongBiddingStrategyRule,
 )
+from adcopilot.application.detection.rules.rule_11_ctr_decline import CtrDeclineRule
+from adcopilot.application.detection.rules.rule_12_cpa_spike import CpaSpikeRule
+from adcopilot.application.detection.rules.rule_13_conversion_rate_drop import (
+    ConversionRateDropRule,
+)
+from adcopilot.application.detection.rules.rule_14_impression_share_erosion import (
+    ImpressionShareErosionRule,
+)
+from adcopilot.application.detection.rules.rule_15_spend_acceleration import SpendAccelerationRule
+from adcopilot.application.detection.rules.rule_16_quality_score_deterioration import (
+    QualityScoreDeteriorationRule,
+)
+from adcopilot.application.detection.rules.rule_17_ad_keyword_mismatch import (
+    AdKeywordMismatchRule,
+)
+from adcopilot.application.detection.rules.rule_18_missing_cta import MissingCtaRule
+from adcopilot.application.detection.rules.rule_19_weak_rsa_strength import WeakRsaStrengthRule
+from adcopilot.application.detection.rules.rule_20_ad_fatigue import AdFatigueRule
+from adcopilot.application.detection.rules.rule_21_redundant_headlines import (
+    RedundantHeadlinesRule,
+)
+from adcopilot.application.detection.rules.rule_22_generic_description import (
+    GenericDescriptionRule,
+)
 from adcopilot.application.detection.rules.rule_23_overstuffed_ad_group import (
     OverstuffedAdGroupRule,
 )
@@ -2386,4 +2410,591 @@ class TestRefreshSitelinkRule:
         # CTR = 0.5% exactly → no trigger (must be strictly below)
         sl = _sitelink_perf(campaign_id=1, asset_id=100, impressions=1000, clicks=5)
         ctx = _ctx(sitelink_performance=[sl])
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Module 1 — Performance Degradation & Trends (Rules 11–16)
+# ===========================================================================
+
+
+class TestCtrDeclineRule:
+    """Rule 11: ad group CTR dropped >30% WoW with stable impressions."""
+
+    rule = CtrDeclineRule()
+
+    def test_triggers_on_significant_ctr_drop(self):
+        # prev CTR = 5%, curr CTR = 3% → 40% drop with stable impressions
+        ag = _ad_group(ad_group_id=10, impressions=500, clicks=15)   # CTR = 3%
+        prev = _ad_group(ad_group_id=10, impressions=500, clicks=25)  # CTR = 5%
+        ctx = _ctx(ad_groups=[ag], prev_ad_groups=[prev])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.CTR_DECLINE
+        assert recs[0].evidence["ctr_drop_pct"] == pytest.approx(40.0, abs=1.0)
+
+    def test_no_trigger_when_drop_below_threshold(self):
+        # prev CTR = 5%, curr CTR = 4% → 20% drop (below 30% threshold)
+        ag = _ad_group(ad_group_id=10, impressions=500, clicks=20)
+        prev = _ad_group(ad_group_id=10, impressions=500, clicks=25)
+        ctx = _ctx(ad_groups=[ag], prev_ad_groups=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_impressions_unstable(self):
+        # Impressions changed >20%: 500 → 300 (40% drop)
+        ag = _ad_group(ad_group_id=10, impressions=300, clicks=9)
+        prev = _ad_group(ad_group_id=10, impressions=500, clicks=25)
+        ctx = _ctx(ad_groups=[ag], prev_ad_groups=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_impressions_below_minimum(self):
+        # 150 impressions < 200 minimum
+        ag = _ad_group(ad_group_id=10, impressions=150, clicks=4)
+        prev = _ad_group(ad_group_id=10, impressions=150, clicks=10)
+        ctx = _ctx(ad_groups=[ag], prev_ad_groups=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_without_historical_data(self):
+        ag = _ad_group(ad_group_id=10, impressions=500, clicks=10)
+        ctx = _ctx(ad_groups=[ag], prev_ad_groups=[])
+        assert self.rule.detect(ctx) == []
+
+
+class TestCpaSpikeRule:
+    """Rule 12: campaign CPA increased >50% WoW with ≥5 conversions in both periods."""
+
+    rule = CpaSpikeRule()
+
+    def test_triggers_on_cpa_spike(self):
+        # prev: 10M cost / 10 conv = 1M CPA; curr: 20M cost / 10 conv = 2M CPA → 100% spike
+        camp = _campaign(campaign_id=1, cost_micros=20_000_000, conversions=10.0)
+        prev = _campaign(campaign_id=1, cost_micros=10_000_000, conversions=10.0)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.CPA_SPIKE
+        assert recs[0].evidence["cpa_spike_pct"] == pytest.approx(100.0, abs=1.0)
+
+    def test_no_trigger_when_spike_below_threshold(self):
+        # prev: 10M / 10 = 1M CPA; curr: 13M / 10 = 1.3M CPA → 30% spike (below 50%)
+        camp = _campaign(campaign_id=1, cost_micros=13_000_000, conversions=10.0)
+        prev = _campaign(campaign_id=1, cost_micros=10_000_000, conversions=10.0)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_too_few_conversions(self):
+        # Only 3 conversions in current period (below 5 minimum)
+        camp = _campaign(campaign_id=1, cost_micros=20_000_000, conversions=3.0)
+        prev = _campaign(campaign_id=1, cost_micros=10_000_000, conversions=10.0)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_without_historical_data(self):
+        camp = _campaign(campaign_id=1, cost_micros=20_000_000, conversions=10.0)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[])
+        assert self.rule.detect(ctx) == []
+
+
+class TestConversionRateDropRule:
+    """Rule 13: campaign click-to-conversion rate dropped >25% WoW with ≥50 clicks."""
+
+    rule = ConversionRateDropRule()
+
+    def test_triggers_on_cvr_drop(self):
+        # prev: 5 conv / 100 clicks = 5% CVR; curr: 3 conv / 100 clicks = 3% CVR → 40% drop
+        camp = _campaign(campaign_id=1, clicks=100, conversions=3.0, cost_micros=5_000_000)
+        prev = _campaign(campaign_id=1, clicks=100, conversions=5.0, cost_micros=5_000_000)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.CONVERSION_RATE_DROP
+        assert recs[0].evidence["cvr_drop_pct"] == pytest.approx(40.0, abs=1.0)
+
+    def test_no_trigger_when_drop_below_threshold(self):
+        # 5% CVR → 4.5% CVR → 10% drop (below 25%)
+        camp = _campaign(campaign_id=1, clicks=100, conversions=4.5, cost_micros=5_000_000)
+        prev = _campaign(campaign_id=1, clicks=100, conversions=5.0, cost_micros=5_000_000)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_too_few_clicks(self):
+        # Only 30 clicks in current period (below 50 minimum)
+        camp = _campaign(campaign_id=1, clicks=30, conversions=1.0, cost_micros=2_000_000)
+        prev = _campaign(campaign_id=1, clicks=100, conversions=5.0, cost_micros=5_000_000)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_without_historical_data(self):
+        camp = _campaign(campaign_id=1, clicks=100, conversions=3.0, cost_micros=5_000_000)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[])
+        assert self.rule.detect(ctx) == []
+
+
+class TestImpressionShareErosionRule:
+    """Rule 14: search IS dropped >15 pp WoW, current IS < 85%."""
+
+    rule = ImpressionShareErosionRule()
+
+    def test_triggers_on_large_is_drop(self):
+        # IS dropped from 70% to 45% — 25 pp drop, current IS below 85%
+        camp = _campaign(campaign_id=1, search_impression_share=0.45)
+        prev = _campaign(campaign_id=1, search_impression_share=0.70)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.IMPRESSION_SHARE_EROSION
+        assert recs[0].evidence["drop_pp"] == pytest.approx(0.25, abs=0.001)
+
+    def test_no_trigger_when_drop_below_threshold(self):
+        # IS dropped from 70% to 60% — 10 pp drop (below 15 pp threshold)
+        camp = _campaign(campaign_id=1, search_impression_share=0.60)
+        prev = _campaign(campaign_id=1, search_impression_share=0.70)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_current_is_above_ceiling(self):
+        # IS dropped from 95% to 86% — 9 pp drop and current IS > 85%
+        camp = _campaign(campaign_id=1, search_impression_share=0.86)
+        prev = _campaign(campaign_id=1, search_impression_share=0.95)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_is_data_missing(self):
+        camp = _campaign(campaign_id=1, search_impression_share=None)
+        prev = _campaign(campaign_id=1, search_impression_share=0.70)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_without_historical_data(self):
+        camp = _campaign(campaign_id=1, search_impression_share=0.45)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[])
+        assert self.rule.detect(ctx) == []
+
+
+class TestSpendAccelerationRule:
+    """Rule 15: spend grew >30% WoW but conversions stayed flat/declined."""
+
+    rule = SpendAccelerationRule()
+
+    def test_triggers_on_spend_acceleration_without_results(self):
+        # Spend: 5M → 8M (+60%), conversions: 5 → 5 (0% change)
+        camp = _campaign(campaign_id=1, cost_micros=8_000_000, conversions=5.0)
+        prev = _campaign(campaign_id=1, cost_micros=5_000_000, conversions=5.0)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.SPEND_ACCELERATION
+        assert recs[0].estimated_monthly_savings_micros == (8_000_000 - 5_000_000) * 4
+
+    def test_no_trigger_when_conversions_grew_proportionally(self):
+        # Spend +50%, conversions +50% — conversion growth > 10% threshold
+        camp = _campaign(campaign_id=1, cost_micros=7_500_000, conversions=7.5)
+        prev = _campaign(campaign_id=1, cost_micros=5_000_000, conversions=5.0)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_spend_growth_below_threshold(self):
+        # Spend: 5M → 6M (+20%, below 30% threshold)
+        camp = _campaign(campaign_id=1, cost_micros=6_000_000, conversions=5.0)
+        prev = _campaign(campaign_id=1, cost_micros=5_000_000, conversions=5.0)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_spend_below_minimum(self):
+        # Spend 4M micros (below 5M threshold)
+        camp = _campaign(campaign_id=1, cost_micros=4_000_000, conversions=1.0)
+        prev = _campaign(campaign_id=1, cost_micros=4_000_000, conversions=1.0)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_without_historical_data(self):
+        camp = _campaign(campaign_id=1, cost_micros=8_000_000, conversions=5.0)
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[])
+        assert self.rule.detect(ctx) == []
+
+
+class TestQualityScoreDeteriorationRule:
+    """Rule 16: keyword QS dropped ≥2 points vs. 7-day-ago snapshot."""
+
+    rule = QualityScoreDeteriorationRule()
+
+    def test_triggers_on_qs_drop(self):
+        # QS dropped from 8 to 5 — a 3-point drop with sufficient spend
+        kw = _keyword(criterion_id=100, ad_group_id=10, quality_score=5, cost_micros=3_000_000)
+        prev = _keyword(criterion_id=100, ad_group_id=10, quality_score=8, cost_micros=3_000_000)
+        ctx = _ctx(keywords=[kw], prev_keywords=[prev])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.QUALITY_SCORE_DETERIORATION
+        assert recs[0].evidence["qs_drop"] == 3
+
+    def test_no_trigger_when_drop_below_minimum(self):
+        # QS dropped from 8 to 7 — only 1 point (below 2-point threshold)
+        kw = _keyword(criterion_id=100, ad_group_id=10, quality_score=7, cost_micros=3_000_000)
+        prev = _keyword(criterion_id=100, ad_group_id=10, quality_score=8, cost_micros=3_000_000)
+        ctx = _ctx(keywords=[kw], prev_keywords=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_spend_too_low(self):
+        # QS dropped 3 points but cost is only 1M (below 2M threshold)
+        kw = _keyword(criterion_id=100, ad_group_id=10, quality_score=5, cost_micros=1_000_000)
+        prev = _keyword(criterion_id=100, ad_group_id=10, quality_score=8, cost_micros=1_000_000)
+        ctx = _ctx(keywords=[kw], prev_keywords=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_no_quality_score(self):
+        kw = _keyword(criterion_id=100, ad_group_id=10, quality_score=None, cost_micros=3_000_000)
+        prev = _keyword(criterion_id=100, ad_group_id=10, quality_score=8, cost_micros=3_000_000)
+        ctx = _ctx(keywords=[kw], prev_keywords=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_without_historical_data(self):
+        kw = _keyword(criterion_id=100, ad_group_id=10, quality_score=5, cost_micros=3_000_000)
+        ctx = _ctx(keywords=[kw], prev_keywords=[])
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Module 2 — Ad Copy & Creative Intelligence (Rules 17–22)
+# ===========================================================================
+
+
+def _rsa_ad(**kwargs) -> AdSnapshot:
+    """Helper: return an enabled RSA ad with sensible defaults."""
+    defaults = dict(
+        type="RESPONSIVE_SEARCH_AD",
+        status="ENABLED",
+        impressions=300,
+        headlines_json='["Buy Now", "Fast Delivery", "Best Price"]',
+        descriptions_json='["We guarantee satisfaction.", "Call us today."]',
+        ad_strength=None,
+    )
+    defaults.update(kwargs)
+    return _ad(**defaults)
+
+
+class TestAdKeywordMismatchRule:
+    """Rule 17: keyword tokens cover <35% of ad headlines."""
+
+    rule = AdKeywordMismatchRule()
+
+    def test_triggers_when_keyword_tokens_absent_from_headlines(self):
+        # Keywords about "shoes running sport" but headlines say completely different things
+        ag = _ad_group(ad_group_id=10, impressions=300)
+        kw = _keyword(ad_group_id=10, text="running shoes sport", impressions=300, status="ENABLED")
+        ad = _rsa_ad(
+            ad_group_id=10,
+            impressions=300,
+            headlines_json='["Great Deals", "Premium Service", "Free Shipping"]',
+        )
+        ctx = _ctx(ad_groups=[ag], keywords=[kw], ads=[ad])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.AD_KEYWORD_MISMATCH
+
+    def test_no_trigger_when_keywords_covered(self):
+        # Keyword "running shoes" appears in headlines
+        ag = _ad_group(ad_group_id=10, impressions=300)
+        kw = _keyword(ad_group_id=10, text="running shoes", impressions=300, status="ENABLED")
+        ad = _rsa_ad(
+            ad_group_id=10,
+            impressions=300,
+            headlines_json='["Buy Running Shoes", "Top Running Shoes", "Running Shoes Sale"]',
+        )
+        ctx = _ctx(ad_groups=[ag], keywords=[kw], ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_impressions_below_minimum(self):
+        ag = _ad_group(ad_group_id=10, impressions=150)
+        kw = _keyword(ad_group_id=10, text="shoes", impressions=150, status="ENABLED")
+        ad = _rsa_ad(ad_group_id=10, impressions=150, headlines_json='["Deals"]')
+        ctx = _ctx(ad_groups=[ag], keywords=[kw], ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_no_rsa_ads(self):
+        ag = _ad_group(ad_group_id=10, impressions=300)
+        kw = _keyword(ad_group_id=10, text="shoes", impressions=300, status="ENABLED")
+        non_rsa = _ad(ad_group_id=10, type="EXPANDED_TEXT_AD", status="ENABLED", impressions=300)
+        ctx = _ctx(ad_groups=[ag], keywords=[kw], ads=[non_rsa])
+        assert self.rule.detect(ctx) == []
+
+
+class TestMissingCtaRule:
+    """Rule 18: RSA ad has no call-to-action verb in its copy."""
+
+    rule = MissingCtaRule()
+
+    def test_triggers_when_no_cta_present(self):
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=200,
+            headlines_json='["High Quality", "Premium Service", "Best Value"]',
+            descriptions_json='["We are the best.", "Top-notch quality for you."]',
+        )
+        ctx = _ctx(ads=[ad])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.MISSING_CTA
+
+    def test_no_trigger_when_cta_present_in_headline(self):
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=200,
+            headlines_json='["Buy Now", "Premium Service", "Best Value"]',
+            descriptions_json='["We are the best.", "Top-notch quality."]',
+        )
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_cta_present_in_description(self):
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=200,
+            headlines_json='["Premium Service"]',
+            descriptions_json='["Get a free quote today."]',
+        )
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_impressions_below_minimum(self):
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=50,
+            headlines_json='["High Quality"]',
+            descriptions_json='["We are the best."]',
+        )
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_for_non_rsa_ad(self):
+        ad = _ad(
+            ad_id=200,
+            type="EXPANDED_TEXT_AD",
+            status="ENABLED",
+            impressions=200,
+            headlines_json='["High Quality"]',
+            descriptions_json='["We are the best."]',
+        )
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+
+class TestWeakRsaStrengthRule:
+    """Rule 19: RSA ad_strength is POOR/AVERAGE or has fewer than 8 unique headlines."""
+
+    rule = WeakRsaStrengthRule()
+
+    def test_triggers_on_poor_ad_strength(self):
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=200,
+            ad_strength="POOR",
+            headlines_json='["A", "B", "C", "D", "E", "F", "G", "H", "I"]',
+        )
+        ctx = _ctx(ads=[ad])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.WEAK_RSA_STRENGTH
+        assert "ad_strength=POOR" in recs[0].evidence["reason"]
+
+    def test_triggers_on_average_ad_strength(self):
+        ad = _rsa_ad(ad_id=200, impressions=200, ad_strength="AVERAGE",
+                     headlines_json='["A", "B", "C", "D", "E", "F", "G", "H"]')
+        ctx = _ctx(ads=[ad])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert "ad_strength=AVERAGE" in recs[0].evidence["reason"]
+
+    def test_triggers_when_too_few_unique_headlines(self):
+        # Only 5 unique headlines — below the 8-minimum threshold
+        headlines = ["Buy Now", "Great Deals", "Fast Delivery", "Free Shipping", "Best Price"]
+        ad = _rsa_ad(ad_id=200, impressions=200, ad_strength="GOOD",
+                     headlines_json=str(headlines).replace("'", '"'))
+        ctx = _ctx(ads=[ad])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert "unique headlines" in recs[0].evidence["reason"]
+
+    def test_no_trigger_when_good_strength_and_enough_headlines(self):
+        headlines = [f"Headline {i}" for i in range(9)]
+        import json
+        ad = _rsa_ad(ad_id=200, impressions=200, ad_strength="GOOD",
+                     headlines_json=json.dumps(headlines))
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_impressions_below_minimum(self):
+        ad = _rsa_ad(ad_id=200, impressions=50, ad_strength="POOR",
+                     headlines_json='["A", "B"]')
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+
+class TestAdFatigueRule:
+    """Rule 20: ad CTR dropped >25% WoW with stable impression volume."""
+
+    rule = AdFatigueRule()
+
+    def test_triggers_on_ctr_drop(self):
+        # prev CTR = 4%, curr CTR = 2.5% → 37.5% drop with stable impressions
+        ad = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=15,
+                 cost_micros=1_000_000, conversions=0.1)
+        prev = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=24,
+                   cost_micros=1_000_000, conversions=0.1)
+        ctx = _ctx(ads=[ad], prev_ads=[prev])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.AD_FATIGUE
+        assert recs[0].evidence["ctr_drop_pct"] == pytest.approx(37.5, abs=1.0)
+
+    def test_no_trigger_when_drop_below_threshold(self):
+        # prev CTR = 4%, curr CTR = 3.5% → 12.5% drop (below 25%)
+        ad = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=21,
+                 cost_micros=1_000_000, conversions=0.1)
+        prev = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=24,
+                   cost_micros=1_000_000, conversions=0.1)
+        ctx = _ctx(ads=[ad], prev_ads=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_impressions_unstable(self):
+        # Impressions: 600 → 300 (50% drop — unstable)
+        ad = _ad(ad_id=200, status="ENABLED", impressions=300, clicks=6,
+                 cost_micros=1_000_000, conversions=0.1)
+        prev = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=24,
+                   cost_micros=1_000_000, conversions=0.1)
+        ctx = _ctx(ads=[ad], prev_ads=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_impressions_below_minimum(self):
+        # 400 impressions < 500 minimum
+        ad = _ad(ad_id=200, status="ENABLED", impressions=400, clicks=8,
+                 cost_micros=1_000_000, conversions=0.1)
+        prev = _ad(ad_id=200, status="ENABLED", impressions=400, clicks=16,
+                   cost_micros=1_000_000, conversions=0.1)
+        ctx = _ctx(ads=[ad], prev_ads=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_without_historical_data(self):
+        ad = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=15,
+                 cost_micros=1_000_000, conversions=0.1)
+        ctx = _ctx(ads=[ad], prev_ads=[])
+        assert self.rule.detect(ctx) == []
+
+
+class TestRedundantHeadlinesRule:
+    """Rule 21: ≥3 RSA headlines share >60% Jaccard token overlap."""
+
+    rule = RedundantHeadlinesRule()
+
+    def test_triggers_on_very_similar_headlines(self):
+        import json
+        # Three nearly identical headlines — all share the same core tokens
+        headlines = [
+            "Best Running Shoes Online",
+            "Top Running Shoes Online",
+            "Great Running Shoes Online",
+        ]
+        ad = _rsa_ad(ad_id=200, impressions=200, headlines_json=json.dumps(headlines))
+        ctx = _ctx(ads=[ad])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.REDUNDANT_HEADLINES
+
+    def test_no_trigger_when_headlines_are_diverse(self):
+        import json
+        headlines = [
+            "Buy Running Shoes",
+            "Free Next Day Delivery",
+            "Money Back Guarantee",
+        ]
+        ad = _rsa_ad(ad_id=200, impressions=200, headlines_json=json.dumps(headlines))
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_impressions_below_minimum(self):
+        import json
+        headlines = ["Best Shoes Online", "Top Shoes Online", "Great Shoes Online"]
+        ad = _rsa_ad(ad_id=200, impressions=50, headlines_json=json.dumps(headlines))
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_fewer_than_3_headlines(self):
+        import json
+        ad = _rsa_ad(ad_id=200, impressions=200,
+                     headlines_json=json.dumps(["Best Shoes", "Top Shoes"]))
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+
+class TestGenericDescriptionRule:
+    """Rule 22: all RSA descriptions lack numbers, currency, percentages, or anchor words."""
+
+    rule = GenericDescriptionRule()
+
+    def test_triggers_when_all_descriptions_generic(self):
+        import json
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=300,
+            descriptions_json=json.dumps([
+                "We are the best service provider.",
+                "High quality solutions for your business.",
+            ]),
+        )
+        ctx = _ctx(ads=[ad])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.GENERIC_DESCRIPTION
+
+    def test_no_trigger_when_description_contains_number(self):
+        import json
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=300,
+            descriptions_json=json.dumps(["We have over 1000 satisfied customers."]),
+        )
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_description_contains_percentage(self):
+        import json
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=300,
+            descriptions_json=json.dumps(["Save 30% on your first order."]),
+        )
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_description_contains_anchor_word(self):
+        import json
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=300,
+            descriptions_json=json.dumps(["Full money-back guarantee."]),
+        )
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_when_impressions_below_minimum(self):
+        import json
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=100,
+            descriptions_json=json.dumps(["Generic description text."]),
+        )
+        ctx = _ctx(ads=[ad])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_trigger_for_non_rsa_ad(self):
+        import json
+        ad = _ad(
+            ad_id=200,
+            type="EXPANDED_TEXT_AD",
+            status="ENABLED",
+            impressions=300,
+            headlines_json="[]",
+            descriptions_json=json.dumps(["Generic description."]),
+        )
+        ctx = _ctx(ads=[ad])
         assert self.rule.detect(ctx) == []

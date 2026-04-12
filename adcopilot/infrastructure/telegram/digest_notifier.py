@@ -6,7 +6,7 @@ import structlog
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
 from adcopilot.application.detection.templates import format_micros_as_currency
-from adcopilot.domain.recommendation import Recommendation, RecommendationSeverity
+from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS, Recommendation, RecommendationSeverity
 
 logger = structlog.get_logger(__name__)
 
@@ -27,7 +27,19 @@ def _format_card(rec: Recommendation) -> str:
     return f"{header}\n{body}"
 
 
-def _action_keyboard(rec_id: str) -> InlineKeyboardMarkup:
+def _action_keyboard(rec: Recommendation) -> InlineKeyboardMarkup:
+    rec_id = rec.id
+    if rec.kind in NON_EXECUTABLE_KINDS:
+        # Advisory card — no Approve button to avoid runtime errors from missing executors
+        return InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("❌ Odrzuć", callback_data=f"decline:{rec_id}"),
+                    InlineKeyboardButton("💬 Szczegóły", callback_data=f"more:{rec_id}"),
+                    InlineKeyboardButton("⏰ Odłóż", callback_data=f"snooze:{rec_id}"),
+                ]
+            ]
+        )
     return InlineKeyboardMarkup(
         [
             [
@@ -70,7 +82,7 @@ class TelegramDigestNotifier:
         )
         for rec in recommendations:
             text = _format_card(rec)
-            keyboard = _action_keyboard(rec.id)
+            keyboard = _action_keyboard(rec)
             await self._bot.send_message(
                 chat_id=chat_id,
                 text=text,
