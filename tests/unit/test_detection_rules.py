@@ -3,6 +3,8 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime
 
+import pytest
+
 from adcopilot.application.detection.base import DetectionContext, HistoricalStats
 from adcopilot.application.detection.rules.rule_01_wasted_search_term import WastedSearchTermRule
 from adcopilot.application.detection.rules.rule_02_zero_conversion_keyword import (
@@ -50,6 +52,11 @@ from adcopilot.application.detection.rules.rule_31_day_of_week_bid_adjustment im
 from adcopilot.application.detection.rules.rule_32_add_audience_signals import (
     AddAudienceSignalsRule,
 )
+from adcopilot.application.detection.rules.rule_33_reallocate_budget import ReallocateBudgetRule
+from adcopilot.application.detection.rules.rule_34_is_lost_to_budget import IsLostToBudgetRule
+from adcopilot.application.detection.rules.rule_35_is_lost_to_rank import IsLostToRankRule
+from adcopilot.application.detection.rules.rule_36_relax_target_cpa import RelaxTargetCpaRule
+from adcopilot.application.detection.rules.rule_37_diversify_channels import DiversifyChannelsRule
 from adcopilot.domain.entities import AccountId, GoogleAdsAccount, UserId
 from adcopilot.domain.recommendation import RecommendationKind, RecommendationSeverity
 from adcopilot.domain.snapshot import (
@@ -137,6 +144,10 @@ def _campaign(**kwargs) -> CampaignSnapshot:
         cost_micros=5_000_000,
         conversions=1.0,
         conv_value=15.0,
+        search_impression_share=None,
+        search_budget_lost_impression_share=None,
+        search_rank_lost_impression_share=None,
+        target_cpa_micros=None,
     )
     defaults.update(kwargs)
     return CampaignSnapshot(**defaults)
@@ -1711,3 +1722,286 @@ class TestAddAudienceSignalsRule:
         c2 = _campaign(campaign_id=2, channel_type="SEARCH", status="ENABLED", impressions=1500)
         ctx = _ctx(campaigns=[c1, c2], audience_performance=[])
         assert len(self.rule.detect(ctx)) == 2
+
+
+# ===========================================================================
+# Rule 33 - ReallocateBudgetRule
+# ===========================================================================
+
+
+class TestReallocateBudgetRule:
+    rule = ReallocateBudgetRule()
+
+    def _high_roas_constrained(self, campaign_id: int = 1) -> CampaignSnapshot:
+        """ROAS=4.0, budget utilisation=98% (constrained)."""
+        return _campaign(
+            campaign_id=campaign_id,
+            cost_micros=19_600_000,   # ~98% of budget
+            budget_micros=20_000_000,
+            conv_value=78.4,          # ROAS = 78.4 / 19.6 = 4.0
+            status="ENABLED",
+        )
+
+    def _low_roas_underspending(self, campaign_id: int = 2) -> CampaignSnapshot:
+        """ROAS=0.5, budget utilisation=30% (underspending)."""
+        return _campaign(
+            campaign_id=campaign_id,
+            cost_micros=6_000_000,    # 30% of budget
+            budget_micros=20_000_000,
+            conv_value=3.0,           # ROAS = 3.0 / 6.0 = 0.5
+            status="ENABLED",
+        )
+
+    def test_high_low_pair_triggers(self):
+        high = self._high_roas_constrained()
+        low = self._low_roas_underspending()
+        ctx = _ctx(campaigns=[high, low])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.REALLOCATE_BUDGET
+        assert recs[0].severity == RecommendationSeverity.CRITICAL
+        assert recs[0].target["to_campaign_id"] == high.campaign_id
+        assert recs[0].target["from_campaign_id"] == low.campaign_id
+
+    def test_no_low_performer_no_trigger(self):
+        high = self._high_roas_constrained()
+        also_high = _campaign(
+            campaign_id=2,
+            cost_micros=18_000_000,
+            budget_micros=20_000_000,
+            conv_value=72.0,
+            status="ENABLED",
+        )
+        ctx = _ctx(campaigns=[high, also_high])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_high_performer_no_trigger(self):
+        low1 = self._low_roas_underspending(campaign_id=1)
+        low2 = self._low_roas_underspending(campaign_id=2)
+        ctx = _ctx(campaigns=[low1, low2])
+        assert self.rule.detect(ctx) == []
+
+    def test_single_campaign_no_trigger(self):
+        ctx = _ctx(campaigns=[self._high_roas_constrained()])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_campaign_ignored(self):
+        high = self._high_roas_constrained()
+        low = _campaign(
+            campaign_id=2,
+            cost_micros=6_000_000,
+            budget_micros=20_000_000,
+            conv_value=3.0,
+            status="PAUSED",
+        )
+        ctx = _ctx(campaigns=[high, low])
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Rule 34 - IsLostToBudgetRule
+# ===========================================================================
+
+
+class TestIsLostToBudgetRule:
+    rule = IsLostToBudgetRule()
+
+    def test_budget_is_above_threshold_triggers(self):
+        c = _campaign(
+            campaign_id=1,
+            status="ENABLED",
+            search_budget_lost_impression_share=0.35,
+        )
+        ctx = _ctx(campaigns=[c])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.INCREASE_BUDGET
+        assert recs[0].severity == RecommendationSeverity.HIGH
+        # target includes signal key to distinguish from rule 07
+        assert recs[0].target.get("signal") == "budget_is"
+
+    def test_budget_is_below_threshold_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", search_budget_lost_impression_share=0.25)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+    def test_none_is_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", search_budget_lost_impression_share=None)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_campaign_no_trigger(self):
+        c = _campaign(campaign_id=1, status="PAUSED", search_budget_lost_impression_share=0.50)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Rule 35 - IsLostToRankRule
+# ===========================================================================
+
+
+class TestIsLostToRankRule:
+    rule = IsLostToRankRule()
+
+    def test_rank_is_above_threshold_triggers(self):
+        c = _campaign(campaign_id=1, status="ENABLED", search_rank_lost_impression_share=0.40)
+        ctx = _ctx(campaigns=[c])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.IMPROVE_QUALITY_SCORE
+        assert recs[0].severity == RecommendationSeverity.HIGH
+
+    def test_rank_is_below_threshold_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", search_rank_lost_impression_share=0.20)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+    def test_none_is_no_trigger(self):
+        c = _campaign(campaign_id=1, status="ENABLED", search_rank_lost_impression_share=None)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_campaign_no_trigger(self):
+        c = _campaign(campaign_id=1, status="PAUSED", search_rank_lost_impression_share=0.50)
+        ctx = _ctx(campaigns=[c])
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Rule 36 - RelaxTargetCpaRule
+# ===========================================================================
+
+
+class TestRelaxTargetCpaRule:
+    rule = RelaxTargetCpaRule()
+
+    def test_too_tight_target_cpa_triggers(self):
+        # Account avg CPA = 1_000_000; target = 300_000 (30% of avg → below 50% threshold)
+        c = _campaign(
+            campaign_id=1,
+            status="ENABLED",
+            bidding_strategy="TARGET_CPA",
+            target_cpa_micros=300_000,
+            cost_micros=10_000_000,
+            conversions=2.0,
+        )
+        ctx = _ctx(campaigns=[c], history=_history(avg_cpa_micros=1_000_000, total_conv=50.0))
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.RELAX_TARGET_CPA
+        assert recs[0].severity == RecommendationSeverity.MEDIUM
+        assert recs[0].evidence["target_cpa_micros"] == 300_000
+
+    def test_reasonable_target_cpa_no_trigger(self):
+        # target = 700_000 (70% of avg → above 50% threshold)
+        c = _campaign(
+            campaign_id=1,
+            status="ENABLED",
+            bidding_strategy="TARGET_CPA",
+            target_cpa_micros=700_000,
+            cost_micros=10_000_000,
+            conversions=2.0,
+        )
+        ctx = _ctx(campaigns=[c], history=_history(avg_cpa_micros=1_000_000, total_conv=50.0))
+        assert self.rule.detect(ctx) == []
+
+    def test_non_target_cpa_strategy_no_trigger(self):
+        c = _campaign(
+            campaign_id=1,
+            status="ENABLED",
+            bidding_strategy="MANUAL_CPC",
+            target_cpa_micros=300_000,
+            cost_micros=10_000_000,
+            conversions=2.0,
+        )
+        ctx = _ctx(campaigns=[c], history=_history(avg_cpa_micros=1_000_000, total_conv=50.0))
+        assert self.rule.detect(ctx) == []
+
+    def test_no_target_cpa_micros_no_trigger(self):
+        c = _campaign(
+            campaign_id=1,
+            status="ENABLED",
+            bidding_strategy="TARGET_CPA",
+            cost_micros=10_000_000,
+            conversions=2.0,
+        )
+        ctx = _ctx(campaigns=[c], history=_history(avg_cpa_micros=1_000_000, total_conv=50.0))
+        assert self.rule.detect(ctx) == []
+
+    def test_high_conversions_no_trigger(self):
+        # Already achieving good results despite tight target — skip
+        c = _campaign(
+            campaign_id=1,
+            status="ENABLED",
+            bidding_strategy="TARGET_CPA",
+            target_cpa_micros=300_000,
+            cost_micros=10_000_000,
+            conversions=10.0,  # > _MAX_CONVERSIONS threshold of 5
+        )
+        ctx = _ctx(campaigns=[c], history=_history(avg_cpa_micros=1_000_000, total_conv=50.0))
+        assert self.rule.detect(ctx) == []
+
+    def test_no_account_avg_cpa_no_trigger(self):
+        c = _campaign(
+            campaign_id=1,
+            status="ENABLED",
+            bidding_strategy="TARGET_CPA",
+            target_cpa_micros=300_000,
+            cost_micros=10_000_000,
+            conversions=2.0,
+        )
+        ctx = _ctx(campaigns=[c], history=_history(avg_cpa_micros=0, total_conv=0.0))
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Rule 37 - DiversifyChannelsRule
+# ===========================================================================
+
+
+class TestDiversifyChannelsRule:
+    rule = DiversifyChannelsRule()
+
+    def test_high_spend_growth_low_conv_growth_triggers(self):
+        # Cost grew 30%, conversions flat
+        prev = _campaign(campaign_id=1, cost_micros=20_000_000, conversions=10.0)
+        curr = _campaign(campaign_id=1, cost_micros=26_000_000, conversions=10.5)
+        ctx = _ctx(campaigns=[curr], prev_campaigns=[prev])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.DIVERSIFY_CHANNELS
+        assert recs[0].severity == RecommendationSeverity.MEDIUM
+        assert recs[0].evidence["cost_growth_pct"] == pytest.approx(30.0, abs=0.1)
+
+    def test_low_spend_growth_no_trigger(self):
+        # Cost grew only 10% — below 20% threshold
+        prev = _campaign(campaign_id=1, cost_micros=20_000_000, conversions=10.0)
+        curr = _campaign(campaign_id=1, cost_micros=22_000_000, conversions=9.0)
+        ctx = _ctx(campaigns=[curr], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_strong_conv_growth_no_trigger(self):
+        # Cost grew 30% AND conversions also grew 25% — healthy scaling
+        prev = _campaign(campaign_id=1, cost_micros=20_000_000, conversions=10.0)
+        curr = _campaign(campaign_id=1, cost_micros=26_000_000, conversions=12.5)
+        ctx = _ctx(campaigns=[curr], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_prev_campaigns_no_trigger(self):
+        curr = _campaign(campaign_id=1, cost_micros=26_000_000, conversions=10.0)
+        ctx = _ctx(campaigns=[curr], prev_campaigns=[])
+        assert self.rule.detect(ctx) == []
+
+    def test_low_absolute_spend_no_trigger(self):
+        # Cost < _MIN_COST_MICROS threshold
+        prev = _campaign(campaign_id=1, cost_micros=5_000_000, conversions=2.0)
+        curr = _campaign(campaign_id=1, cost_micros=7_000_000, conversions=2.0)
+        ctx = _ctx(campaigns=[curr], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_campaign_no_trigger(self):
+        prev = _campaign(campaign_id=1, cost_micros=20_000_000, conversions=10.0)
+        curr = _campaign(campaign_id=1, status="PAUSED", cost_micros=26_000_000, conversions=10.0)
+        ctx = _ctx(campaigns=[curr], prev_campaigns=[prev])
+        assert self.rule.detect(ctx) == []

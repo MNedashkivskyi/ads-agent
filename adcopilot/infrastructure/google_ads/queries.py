@@ -85,7 +85,8 @@ async def query_campaigns(
             metrics.conversions_value,
             metrics.search_impression_share,
             metrics.search_budget_lost_impression_share,
-            metrics.search_rank_lost_impression_share
+            metrics.search_rank_lost_impression_share,
+            campaign.target_cpa.target_cpa_micros
         FROM campaign
         WHERE segments.date = '{date_str}'
     """
@@ -126,6 +127,11 @@ async def query_campaigns(
                         ),
                         search_rank_lost_impression_share=_is_metric(
                             m.search_rank_lost_impression_share
+                        ),
+                        target_cpa_micros=(
+                            c.target_cpa.target_cpa_micros
+                            if c.target_cpa.target_cpa_micros > 0
+                            else None
                         ),
                     )
                 )

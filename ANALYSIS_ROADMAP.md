@@ -124,17 +124,20 @@ Basic checks every PPC specialist runs manually. These remain but are not suffic
 
 **Goal:** Find budget misallocation across campaigns and bidding strategy mismatches.
 
-**Data infrastructure needed:**
-- `metrics.search_impression_share`, `metrics.search_budget_lost_impression_share`, `metrics.search_rank_lost_impression_share` on campaign (added in Module 1)
-- Multi-week campaign history for diminishing returns detection
+**Data infrastructure delivered:**
+- `target_cpa_micros: int | None` added to `CampaignSnapshot`, `CampaignSnapshotModel`, and GAQL query
+- Migration 0016 adding nullable `target_cpa_micros` column to `campaign_snapshots`
+- All impression share metrics (`search_budget_lost_impression_share`, `search_rank_lost_impression_share`) already available from Module 1
+- Week-over-week comparison via `prev_campaigns` already loaded from Module 1
+- EN + PL explanation templates for all 4 new kinds
 
 | # | Rule | Kind | Severity | Triggers when | Status |
 |---|------|------|----------|--------------|--------|
-| 33 | Budget misallocation | `REALLOCATE_BUDGET` | CRITICAL | Campaign A ROAS ≥ 3.0 and budget-capped while Campaign B ROAS < 1.0 and underspending | ⬜ |
-| 34 | IS lost to budget | `INCREASE_BUDGET` (variant) | HIGH | search_budget_lost_impression_share > 30% | ⬜ |
-| 35 | IS lost to rank | `IMPROVE_QUALITY_SCORE` | HIGH | search_rank_lost_impression_share > 30% | ⬜ |
-| 36 | Target CPA too aggressive | `RELAX_TARGET_CPA` | MEDIUM | Target CPA < 50% of account avg CPA, campaign volume declining | ⬜ |
-| 37 | Diminishing returns | `DIVERSIFY_CHANNELS` | MEDIUM | Budget increased ≥3 weeks in a row with <10% conversion increase per week | ⬜ |
+| 33 | Budget misallocation | `REALLOCATE_BUDGET` | CRITICAL | Campaign A ROAS ≥ 3.0 and budget-capped (≥95% util) while Campaign B ROAS < 1.0 and underspending (<50% util) | ✅ |
+| 34 | IS lost to budget | `INCREASE_BUDGET` (variant) | HIGH | search_budget_lost_impression_share > 30% | ✅ |
+| 35 | IS lost to rank | `IMPROVE_QUALITY_SCORE` | HIGH | search_rank_lost_impression_share > 30% | ✅ |
+| 36 | Target CPA too aggressive | `RELAX_TARGET_CPA` | MEDIUM | TARGET_CPA campaign with target < 50% of account avg CPA and < 5 conversions | ✅ |
+| 37 | Diminishing returns | `DIVERSIFY_CHANNELS` | MEDIUM | Spend grew ≥20% week-over-week but conversions grew <10% | ✅ |
 
 ---
 

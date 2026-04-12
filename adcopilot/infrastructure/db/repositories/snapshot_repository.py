@@ -70,6 +70,7 @@ class SqlSnapshotRepository:
                 "search_impression_share": s.search_impression_share,
                 "search_budget_lost_impression_share": s.search_budget_lost_impression_share,
                 "search_rank_lost_impression_share": s.search_rank_lost_impression_share,
+                "target_cpa_micros": s.target_cpa_micros,
             }
             for s in snapshots
         ]
@@ -90,6 +91,7 @@ class SqlSnapshotRepository:
                 "search_impression_share": stmt.excluded.search_impression_share,
                 "search_budget_lost_impression_share": stmt.excluded.search_budget_lost_impression_share,
                 "search_rank_lost_impression_share": stmt.excluded.search_rank_lost_impression_share,
+                "target_cpa_micros": stmt.excluded.target_cpa_micros,
                 "updated_at": text("now()"),
             },
         )
@@ -303,6 +305,7 @@ class SqlSnapshotRepository:
                 search_impression_share=m.search_impression_share,
                 search_budget_lost_impression_share=m.search_budget_lost_impression_share,
                 search_rank_lost_impression_share=m.search_rank_lost_impression_share,
+                target_cpa_micros=m.target_cpa_micros,
             )
             for m in res.scalars().all()
         ]
