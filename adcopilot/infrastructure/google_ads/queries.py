@@ -128,11 +128,7 @@ async def query_campaigns(
                         search_rank_lost_impression_share=_is_metric(
                             m.search_rank_lost_impression_share
                         ),
-                        target_cpa_micros=(
-                            c.target_cpa.target_cpa_micros
-                            if c.target_cpa.target_cpa_micros > 0
-                            else None
-                        ),
+                        target_cpa_micros=c.target_cpa.target_cpa_micros or None,
                     )
                 )
         return results
