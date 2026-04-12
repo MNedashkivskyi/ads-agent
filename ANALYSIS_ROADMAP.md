@@ -103,18 +103,20 @@ Basic checks every PPC specialist runs manually. These remain but are not suffic
 
 **Goal:** Find money being wasted on the wrong devices, locations, hours, and demographics.
 
-**Data infrastructure needed:**
-- New GAQL queries: `segments.device`, `geographic_view`, `segments.hour_of_day`, `segments.day_of_week`, `age_range_view`, `gender_view`
-- New snapshot tables or per-dimension metrics storage
-- New DB models + migrations
+**Data infrastructure delivered:**
+- 5 new GAQL queries: `segments.device`, `geographic_view`, `segments.hour_of_day`, `segments.day_of_week`, `ad_group_audience_view`
+- 5 new snapshot domain entities + DB models: `DevicePerformanceSnapshot`, `GeoPerformanceSnapshot`, `HourPerformanceSnapshot`, `DayOfWeekPerformanceSnapshot`, `AudiencePerformanceSnapshot`
+- Migration 0015 creating all 5 targeting performance tables
+- 30-day windowed data loading in `_load_targeting_performance` for geo/hour/day-of-week; 7-day window for device
+- EN + PL explanation templates for all 5 kinds
 
 | # | Rule | Kind | Severity | Triggers when | Status |
 |---|------|------|----------|--------------|--------|
-| 28 | Device performance imbalance | `DEVICE_BID_ADJUSTMENT` | HIGH | Mobile CPA > 2× desktop CPA with ≥30 conv on desktop | ⬜ |
-| 29 | Geographic waste | `GEO_EXCLUSION` | HIGH | Location with >€50 spend and 0 conversions, ≥20 clicks | ⬜ |
-| 30 | Time-of-day waste | `AD_SCHEDULE_ADJUSTMENT` | MEDIUM | Hours with >€20 spend and 0 conversions across 30 days | ⬜ |
-| 31 | Day-of-week CPA gap | `DAY_OF_WEEK_BID_ADJUSTMENT` | MEDIUM | Day-of-week avg CPA > 50% above account avg with ≥10 conversions | ⬜ |
-| 32 | Missing audience signals | `ADD_AUDIENCE_SIGNALS` | LOW | Search campaign with 0 observation audiences and ≥1000 impressions | ⬜ |
+| 28 | Device performance imbalance | `DEVICE_BID_ADJUSTMENT` | HIGH | Mobile CPA > 2× desktop CPA with ≥30 conv on desktop | ✅ |
+| 29 | Geographic waste | `GEO_EXCLUSION` | HIGH | Location with >€50 spend and 0 conversions, ≥20 clicks | ✅ |
+| 30 | Time-of-day waste | `AD_SCHEDULE_ADJUSTMENT` | MEDIUM | Hours with >€20 spend and 0 conversions across 30 days | ✅ |
+| 31 | Day-of-week CPA gap | `DAY_OF_WEEK_BID_ADJUSTMENT` | MEDIUM | Day-of-week avg CPA > 50% above account avg with ≥10 conversions | ✅ |
+| 32 | Missing audience signals | `ADD_AUDIENCE_SIGNALS` | LOW | Search campaign with 0 observation audiences and ≥1000 impressions | ✅ |
 
 ---
 

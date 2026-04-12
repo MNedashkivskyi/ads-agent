@@ -37,12 +37,30 @@ from adcopilot.application.detection.rules.rule_26_orphaned_campaign import Orph
 from adcopilot.application.detection.rules.rule_27_match_type_redundancy import (
     MatchTypeRedundancyRule,
 )
+from adcopilot.application.detection.rules.rule_28_device_bid_adjustment import (
+    DeviceBidAdjustmentRule,
+)
+from adcopilot.application.detection.rules.rule_29_geo_exclusion import GeoExclusionRule
+from adcopilot.application.detection.rules.rule_30_ad_schedule_adjustment import (
+    AdScheduleAdjustmentRule,
+)
+from adcopilot.application.detection.rules.rule_31_day_of_week_bid_adjustment import (
+    DayOfWeekBidAdjustmentRule,
+)
+from adcopilot.application.detection.rules.rule_32_add_audience_signals import (
+    AddAudienceSignalsRule,
+)
 from adcopilot.domain.entities import AccountId, GoogleAdsAccount, UserId
 from adcopilot.domain.recommendation import RecommendationKind, RecommendationSeverity
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
+    AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    DayOfWeekPerformanceSnapshot,
+    DevicePerformanceSnapshot,
+    GeoPerformanceSnapshot,
+    HourPerformanceSnapshot,
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
@@ -1381,3 +1399,315 @@ class TestMatchTypeRedundancyRule:
         kw_exact = _keyword(criterion_id=2, ad_group_id=10, text="running shoes", match_type="EXACT", status="ENABLED")
         ctx = _ctx(ad_groups=[ag], keywords=[kw_broad, kw_exact])
         assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Module 4 helpers
+# ===========================================================================
+
+
+def _device_perf(**kwargs) -> DevicePerformanceSnapshot:
+    defaults = dict(
+        id=_sid(),
+        account_id=_ACCOUNT_ID,
+        snapshot_date=_SNAP_DATE,
+        campaign_id=1,
+        device="DESKTOP",
+        impressions=500,
+        clicks=30,
+        cost_micros=10_000_000,
+        conversions=10.0,
+    )
+    defaults.update(kwargs)
+    return DevicePerformanceSnapshot(**defaults)
+
+
+def _geo_perf(**kwargs) -> GeoPerformanceSnapshot:
+    defaults = dict(
+        id=_sid(),
+        account_id=_ACCOUNT_ID,
+        snapshot_date=_SNAP_DATE,
+        campaign_id=1,
+        location_id=1012695,  # example geo criterion ID
+        impressions=200,
+        clicks=25,
+        cost_micros=60_000_000,
+        conversions=0.0,
+    )
+    defaults.update(kwargs)
+    return GeoPerformanceSnapshot(**defaults)
+
+
+def _hour_perf(**kwargs) -> HourPerformanceSnapshot:
+    defaults = dict(
+        id=_sid(),
+        account_id=_ACCOUNT_ID,
+        snapshot_date=_SNAP_DATE,
+        campaign_id=1,
+        hour_of_day=3,
+        impressions=50,
+        clicks=10,
+        cost_micros=25_000_000,
+        conversions=0.0,
+    )
+    defaults.update(kwargs)
+    return HourPerformanceSnapshot(**defaults)
+
+
+def _dow_perf(**kwargs) -> DayOfWeekPerformanceSnapshot:
+    defaults = dict(
+        id=_sid(),
+        account_id=_ACCOUNT_ID,
+        snapshot_date=_SNAP_DATE,
+        campaign_id=1,
+        day_of_week="SUNDAY",
+        impressions=300,
+        clicks=20,
+        cost_micros=30_000_000,
+        conversions=1.0,
+    )
+    defaults.update(kwargs)
+    return DayOfWeekPerformanceSnapshot(**defaults)
+
+
+def _audience_perf(**kwargs) -> AudiencePerformanceSnapshot:
+    defaults = dict(
+        id=_sid(),
+        account_id=_ACCOUNT_ID,
+        snapshot_date=_SNAP_DATE,
+        campaign_id=1,
+        ad_group_id=10,
+        criterion_id=555,
+        impressions=100,
+        clicks=5,
+        cost_micros=2_000_000,
+        conversions=0.5,
+    )
+    defaults.update(kwargs)
+    return AudiencePerformanceSnapshot(**defaults)
+
+
+# ===========================================================================
+# Rule 28 - DeviceBidAdjustmentRule
+# ===========================================================================
+
+
+class TestDeviceBidAdjustmentRule:
+    rule = DeviceBidAdjustmentRule()
+
+    def test_mobile_cpa_2x_desktop_triggers(self):
+        # Desktop: 10M cost, 50 conversions → CPA = 200k
+        # Mobile: 20M cost, 5 conversions → CPA = 4M (20× desktop)
+        desktop = _device_perf(device="DESKTOP", cost_micros=10_000_000, conversions=50.0)
+        mobile = _device_perf(device="MOBILE", cost_micros=20_000_000, conversions=5.0)
+        ctx = _ctx(device_performance=[desktop, mobile])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.DEVICE_BID_ADJUSTMENT
+        assert recs[0].severity == RecommendationSeverity.HIGH
+        assert recs[0].evidence["ratio"] > 2.0
+
+    def test_equal_cpa_no_trigger(self):
+        desktop = _device_perf(device="DESKTOP", cost_micros=10_000_000, conversions=50.0)
+        mobile = _device_perf(device="MOBILE", cost_micros=10_000_000, conversions=50.0)
+        ctx = _ctx(device_performance=[desktop, mobile])
+        assert self.rule.detect(ctx) == []
+
+    def test_insufficient_desktop_conversions_no_trigger(self):
+        # Desktop only 10 conversions — below threshold of 30
+        desktop = _device_perf(device="DESKTOP", cost_micros=5_000_000, conversions=10.0)
+        mobile = _device_perf(device="MOBILE", cost_micros=20_000_000, conversions=2.0)
+        ctx = _ctx(device_performance=[desktop, mobile])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_mobile_data_no_trigger(self):
+        desktop = _device_perf(device="DESKTOP", cost_micros=10_000_000, conversions=50.0)
+        ctx = _ctx(device_performance=[desktop])
+        assert self.rule.detect(ctx) == []
+
+    def test_empty_data_no_trigger(self):
+        ctx = _ctx(device_performance=[])
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Rule 29 - GeoExclusionRule
+# ===========================================================================
+
+
+class TestGeoExclusionRule:
+    rule = GeoExclusionRule()
+
+    def test_high_spend_zero_conv_triggers(self):
+        geo = _geo_perf(cost_micros=60_000_000, clicks=25, conversions=0.0)
+        ctx = _ctx(geo_performance=[geo])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.GEO_EXCLUSION
+        assert recs[0].severity == RecommendationSeverity.HIGH
+
+    def test_location_with_conversions_not_triggered(self):
+        geo = _geo_perf(cost_micros=60_000_000, clicks=25, conversions=1.0)
+        ctx = _ctx(geo_performance=[geo])
+        assert self.rule.detect(ctx) == []
+
+    def test_low_spend_not_triggered(self):
+        geo = _geo_perf(cost_micros=10_000_000, clicks=25, conversions=0.0)
+        ctx = _ctx(geo_performance=[geo])
+        assert self.rule.detect(ctx) == []
+
+    def test_low_clicks_not_triggered(self):
+        geo = _geo_perf(cost_micros=60_000_000, clicks=5, conversions=0.0)
+        ctx = _ctx(geo_performance=[geo])
+        assert self.rule.detect(ctx) == []
+
+    def test_empty_data_no_trigger(self):
+        ctx = _ctx(geo_performance=[])
+        assert self.rule.detect(ctx) == []
+
+    def test_multiple_bad_geos_multiple_recs(self):
+        geo1 = _geo_perf(location_id=111, cost_micros=60_000_000, clicks=30, conversions=0.0)
+        geo2 = _geo_perf(location_id=222, cost_micros=80_000_000, clicks=40, conversions=0.0)
+        ctx = _ctx(geo_performance=[geo1, geo2])
+        assert len(self.rule.detect(ctx)) == 2
+
+
+# ===========================================================================
+# Rule 30 - AdScheduleAdjustmentRule
+# ===========================================================================
+
+
+class TestAdScheduleAdjustmentRule:
+    rule = AdScheduleAdjustmentRule()
+
+    def test_high_spend_zero_conv_hour_triggers(self):
+        h = _hour_perf(hour_of_day=2, cost_micros=25_000_000, conversions=0.0)
+        ctx = _ctx(hour_performance=[h])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.AD_SCHEDULE_ADJUSTMENT
+        assert recs[0].severity == RecommendationSeverity.MEDIUM
+        assert recs[0].evidence["hour_of_day"] == 2
+
+    def test_hour_with_conversions_not_triggered(self):
+        h = _hour_perf(hour_of_day=2, cost_micros=25_000_000, conversions=1.0)
+        ctx = _ctx(hour_performance=[h])
+        assert self.rule.detect(ctx) == []
+
+    def test_low_spend_not_triggered(self):
+        h = _hour_perf(hour_of_day=2, cost_micros=5_000_000, conversions=0.0)
+        ctx = _ctx(hour_performance=[h])
+        assert self.rule.detect(ctx) == []
+
+    def test_empty_data_no_trigger(self):
+        ctx = _ctx(hour_performance=[])
+        assert self.rule.detect(ctx) == []
+
+    def test_aggregation_across_days(self):
+        # Two rows for same campaign+hour on different days — should aggregate
+        h1 = _hour_perf(snapshot_date=date(2026, 4, 1), hour_of_day=3, cost_micros=12_000_000, conversions=0.0)
+        h2 = _hour_perf(snapshot_date=date(2026, 4, 2), hour_of_day=3, cost_micros=12_000_000, conversions=0.0)
+        ctx = _ctx(hour_performance=[h1, h2])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].evidence["cost_micros"] == 24_000_000
+
+
+# ===========================================================================
+# Rule 31 - DayOfWeekBidAdjustmentRule
+# ===========================================================================
+
+
+class TestDayOfWeekBidAdjustmentRule:
+    rule = DayOfWeekBidAdjustmentRule()
+
+    def test_sunday_cpa_above_threshold_triggers(self):
+        # Account avg CPA = 1_000_000 micros; Sunday CPA = 2_000_000 (2× > 1.5×)
+        # Sunday: 30M cost, 15 conversions → CPA = 2M
+        dow = _dow_perf(day_of_week="SUNDAY", cost_micros=30_000_000, conversions=15.0)
+        ctx = _ctx(
+            day_of_week_performance=[dow],
+            history=_history(avg_cpa_micros=1_000_000, total_conv=100.0),
+        )
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.DAY_OF_WEEK_BID_ADJUSTMENT
+        assert recs[0].severity == RecommendationSeverity.MEDIUM
+        assert recs[0].evidence["day_of_week"] == "SUNDAY"
+
+    def test_day_below_threshold_not_triggered(self):
+        # Account avg CPA = 1M; Monday CPA = 1.2M (< 1.5× threshold)
+        dow = _dow_perf(day_of_week="MONDAY", cost_micros=12_000_000, conversions=10.0)
+        ctx = _ctx(
+            day_of_week_performance=[dow],
+            history=_history(avg_cpa_micros=1_000_000, total_conv=100.0),
+        )
+        assert self.rule.detect(ctx) == []
+
+    def test_insufficient_conversions_not_triggered(self):
+        # CPA is bad but only 5 conversions (< 10 threshold)
+        dow = _dow_perf(day_of_week="SUNDAY", cost_micros=15_000_000, conversions=5.0)
+        ctx = _ctx(
+            day_of_week_performance=[dow],
+            history=_history(avg_cpa_micros=1_000_000, total_conv=100.0),
+        )
+        assert self.rule.detect(ctx) == []
+
+    def test_no_account_conversions_no_trigger(self):
+        dow = _dow_perf(day_of_week="SUNDAY", cost_micros=30_000_000, conversions=15.0)
+        ctx = _ctx(
+            day_of_week_performance=[dow],
+            history=_history(avg_cpa_micros=0, total_conv=0.0),
+        )
+        assert self.rule.detect(ctx) == []
+
+    def test_empty_data_no_trigger(self):
+        ctx = _ctx(
+            day_of_week_performance=[],
+            history=_history(avg_cpa_micros=1_000_000, total_conv=100.0),
+        )
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Rule 32 - AddAudienceSignalsRule
+# ===========================================================================
+
+
+class TestAddAudienceSignalsRule:
+    rule = AddAudienceSignalsRule()
+
+    def test_search_campaign_no_audiences_high_impressions_triggers(self):
+        c = _campaign(campaign_id=1, channel_type="SEARCH", status="ENABLED", impressions=2000)
+        ctx = _ctx(campaigns=[c], audience_performance=[])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.ADD_AUDIENCE_SIGNALS
+        assert recs[0].severity == RecommendationSeverity.LOW
+
+    def test_campaign_with_audience_not_triggered(self):
+        c = _campaign(campaign_id=1, channel_type="SEARCH", status="ENABLED", impressions=2000)
+        aud = _audience_perf(campaign_id=1)
+        ctx = _ctx(campaigns=[c], audience_performance=[aud])
+        assert self.rule.detect(ctx) == []
+
+    def test_non_search_campaign_not_triggered(self):
+        c = _campaign(campaign_id=1, channel_type="DISPLAY", status="ENABLED", impressions=2000)
+        ctx = _ctx(campaigns=[c], audience_performance=[])
+        assert self.rule.detect(ctx) == []
+
+    def test_low_impressions_not_triggered(self):
+        c = _campaign(campaign_id=1, channel_type="SEARCH", status="ENABLED", impressions=500)
+        ctx = _ctx(campaigns=[c], audience_performance=[])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_campaign_not_triggered(self):
+        c = _campaign(campaign_id=1, channel_type="SEARCH", status="PAUSED", impressions=2000)
+        ctx = _ctx(campaigns=[c], audience_performance=[])
+        assert self.rule.detect(ctx) == []
+
+    def test_multiple_eligible_campaigns(self):
+        c1 = _campaign(campaign_id=1, channel_type="SEARCH", status="ENABLED", impressions=2000)
+        c2 = _campaign(campaign_id=2, channel_type="SEARCH", status="ENABLED", impressions=1500)
+        ctx = _ctx(campaigns=[c1, c2], audience_performance=[])
+        assert len(self.rule.detect(ctx)) == 2

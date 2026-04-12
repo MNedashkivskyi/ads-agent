@@ -11,7 +11,12 @@ from adcopilot.domain.recommendation import Recommendation, RecommendationKind
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
+    AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    DayOfWeekPerformanceSnapshot,
+    DevicePerformanceSnapshot,
+    GeoPerformanceSnapshot,
+    HourPerformanceSnapshot,
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
@@ -46,6 +51,13 @@ class DetectionContext:
     prev_ads: list[AdSnapshot] = field(default_factory=list)
     # Negative keywords (campaign-level and ad-group-level) for Module 3 conflict detection.
     negative_keywords: list[NegativeKeywordSnapshot] = field(default_factory=list)
+    # 30-day targeting dimension performance data for Module 4 rules.
+    # Empty lists when insufficient history exists (new accounts, first snapshot).
+    device_performance: list[DevicePerformanceSnapshot] = field(default_factory=list)
+    geo_performance: list[GeoPerformanceSnapshot] = field(default_factory=list)
+    hour_performance: list[HourPerformanceSnapshot] = field(default_factory=list)
+    day_of_week_performance: list[DayOfWeekPerformanceSnapshot] = field(default_factory=list)
+    audience_performance: list[AudiencePerformanceSnapshot] = field(default_factory=list)
 
 
 class DetectionRule(Protocol):

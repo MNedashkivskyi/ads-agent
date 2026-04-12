@@ -15,7 +15,12 @@ from adcopilot.domain.exceptions import GoogleAdsAuthError
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
+    AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    DayOfWeekPerformanceSnapshot,
+    DevicePerformanceSnapshot,
+    GeoPerformanceSnapshot,
+    HourPerformanceSnapshot,
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
@@ -136,6 +141,41 @@ class FakeGoogleAdsClient:
             raise GoogleAdsAuthError("invalid credentials")
         return []
 
+    async def query_device_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[DevicePerformanceSnapshot]:
+        if self._raise_auth_error:
+            raise GoogleAdsAuthError("invalid credentials")
+        return []
+
+    async def query_geo_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[GeoPerformanceSnapshot]:
+        if self._raise_auth_error:
+            raise GoogleAdsAuthError("invalid credentials")
+        return []
+
+    async def query_hour_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[HourPerformanceSnapshot]:
+        if self._raise_auth_error:
+            raise GoogleAdsAuthError("invalid credentials")
+        return []
+
+    async def query_day_of_week_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[DayOfWeekPerformanceSnapshot]:
+        if self._raise_auth_error:
+            raise GoogleAdsAuthError("invalid credentials")
+        return []
+
+    async def query_audience_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[AudiencePerformanceSnapshot]:
+        if self._raise_auth_error:
+            raise GoogleAdsAuthError("invalid credentials")
+        return []
+
 
 class FakeSnapshotRepository:
     def __init__(self) -> None:
@@ -186,6 +226,31 @@ class FakeSnapshotRepository:
         self, account_id: AccountId, snapshots: list[NegativeKeywordSnapshot]
     ) -> None:
         self.negative_keywords.extend(snapshots)
+
+    async def upsert_device_performance(
+        self, account_id: AccountId, snapshots: list[DevicePerformanceSnapshot]
+    ) -> None:
+        pass
+
+    async def upsert_geo_performance(
+        self, account_id: AccountId, snapshots: list[GeoPerformanceSnapshot]
+    ) -> None:
+        pass
+
+    async def upsert_hour_performance(
+        self, account_id: AccountId, snapshots: list[HourPerformanceSnapshot]
+    ) -> None:
+        pass
+
+    async def upsert_day_of_week_performance(
+        self, account_id: AccountId, snapshots: list[DayOfWeekPerformanceSnapshot]
+    ) -> None:
+        pass
+
+    async def upsert_audience_performance(
+        self, account_id: AccountId, snapshots: list[AudiencePerformanceSnapshot]
+    ) -> None:
+        pass
 
     async def get_latest_snapshot_date(self, account_id: AccountId) -> date | None:
         dates = [s.snapshot_date for s in self.campaigns if s.account_id == account_id]

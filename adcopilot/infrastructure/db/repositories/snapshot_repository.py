@@ -12,7 +12,12 @@ from adcopilot.domain.entities import AccountId
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
+    AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    DayOfWeekPerformanceSnapshot,
+    DevicePerformanceSnapshot,
+    GeoPerformanceSnapshot,
+    HourPerformanceSnapshot,
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
@@ -21,7 +26,12 @@ from adcopilot.domain.snapshot import (
 from adcopilot.infrastructure.db.models import (
     AdGroupSnapshotModel,
     AdSnapshotModel,
+    AudiencePerformanceSnapshotModel,
     CampaignSnapshotModel,
+    DayOfWeekPerformanceSnapshotModel,
+    DevicePerformanceSnapshotModel,
+    GeoPerformanceSnapshotModel,
+    HourPerformanceSnapshotModel,
     KeywordSnapshotModel,
     NegativeKeywordSnapshotModel,
     SearchTermSnapshotModel,
@@ -439,6 +449,317 @@ class SqlSnapshotRepository:
                 ad_group_id=m.ad_group_id,
                 text=m.text,
                 match_type=m.match_type,
+            )
+            for m in res.scalars().all()
+        ]
+
+    # ------------------------------------------------------------------
+    # Device performance
+    # ------------------------------------------------------------------
+
+    async def upsert_device_performance(
+        self, account_id: AccountId, snapshots: list[DevicePerformanceSnapshot]
+    ) -> None:
+        if not snapshots:
+            return
+        rows = [
+            {
+                "id": uuid.uuid4(),
+                "account_id": uuid.UUID(account_id),
+                "snapshot_date": s.snapshot_date,
+                "campaign_id": s.campaign_id,
+                "device": s.device,
+                "impressions": s.impressions,
+                "clicks": s.clicks,
+                "cost_micros": s.cost_micros,
+                "conversions": s.conversions,
+            }
+            for s in snapshots
+        ]
+        stmt = insert(DevicePerformanceSnapshotModel).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_device_performance_snapshots",
+            set_={
+                "impressions": stmt.excluded.impressions,
+                "clicks": stmt.excluded.clicks,
+                "cost_micros": stmt.excluded.cost_micros,
+                "conversions": stmt.excluded.conversions,
+                "updated_at": text("now()"),
+            },
+        )
+        await self._session.execute(stmt)
+
+    async def get_device_performance(
+        self, account_id: AccountId, start_date: date, end_date: date
+    ) -> list[DevicePerformanceSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(DevicePerformanceSnapshotModel).where(
+                DevicePerformanceSnapshotModel.account_id == acct_uuid,
+                DevicePerformanceSnapshotModel.snapshot_date >= start_date,
+                DevicePerformanceSnapshotModel.snapshot_date <= end_date,
+            )
+        )
+        return [
+            DevicePerformanceSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                campaign_id=m.campaign_id,
+                device=m.device,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+            )
+            for m in res.scalars().all()
+        ]
+
+    # ------------------------------------------------------------------
+    # Geo performance
+    # ------------------------------------------------------------------
+
+    async def upsert_geo_performance(
+        self, account_id: AccountId, snapshots: list[GeoPerformanceSnapshot]
+    ) -> None:
+        if not snapshots:
+            return
+        rows = [
+            {
+                "id": uuid.uuid4(),
+                "account_id": uuid.UUID(account_id),
+                "snapshot_date": s.snapshot_date,
+                "campaign_id": s.campaign_id,
+                "location_id": s.location_id,
+                "impressions": s.impressions,
+                "clicks": s.clicks,
+                "cost_micros": s.cost_micros,
+                "conversions": s.conversions,
+            }
+            for s in snapshots
+        ]
+        stmt = insert(GeoPerformanceSnapshotModel).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_geo_performance_snapshots",
+            set_={
+                "impressions": stmt.excluded.impressions,
+                "clicks": stmt.excluded.clicks,
+                "cost_micros": stmt.excluded.cost_micros,
+                "conversions": stmt.excluded.conversions,
+                "updated_at": text("now()"),
+            },
+        )
+        await self._session.execute(stmt)
+
+    async def get_geo_performance(
+        self, account_id: AccountId, start_date: date, end_date: date
+    ) -> list[GeoPerformanceSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(GeoPerformanceSnapshotModel).where(
+                GeoPerformanceSnapshotModel.account_id == acct_uuid,
+                GeoPerformanceSnapshotModel.snapshot_date >= start_date,
+                GeoPerformanceSnapshotModel.snapshot_date <= end_date,
+            )
+        )
+        return [
+            GeoPerformanceSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                campaign_id=m.campaign_id,
+                location_id=m.location_id,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+            )
+            for m in res.scalars().all()
+        ]
+
+    # ------------------------------------------------------------------
+    # Hour performance
+    # ------------------------------------------------------------------
+
+    async def upsert_hour_performance(
+        self, account_id: AccountId, snapshots: list[HourPerformanceSnapshot]
+    ) -> None:
+        if not snapshots:
+            return
+        rows = [
+            {
+                "id": uuid.uuid4(),
+                "account_id": uuid.UUID(account_id),
+                "snapshot_date": s.snapshot_date,
+                "campaign_id": s.campaign_id,
+                "hour_of_day": s.hour_of_day,
+                "impressions": s.impressions,
+                "clicks": s.clicks,
+                "cost_micros": s.cost_micros,
+                "conversions": s.conversions,
+            }
+            for s in snapshots
+        ]
+        stmt = insert(HourPerformanceSnapshotModel).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_hour_performance_snapshots",
+            set_={
+                "impressions": stmt.excluded.impressions,
+                "clicks": stmt.excluded.clicks,
+                "cost_micros": stmt.excluded.cost_micros,
+                "conversions": stmt.excluded.conversions,
+                "updated_at": text("now()"),
+            },
+        )
+        await self._session.execute(stmt)
+
+    async def get_hour_performance(
+        self, account_id: AccountId, start_date: date, end_date: date
+    ) -> list[HourPerformanceSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(HourPerformanceSnapshotModel).where(
+                HourPerformanceSnapshotModel.account_id == acct_uuid,
+                HourPerformanceSnapshotModel.snapshot_date >= start_date,
+                HourPerformanceSnapshotModel.snapshot_date <= end_date,
+            )
+        )
+        return [
+            HourPerformanceSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                campaign_id=m.campaign_id,
+                hour_of_day=m.hour_of_day,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+            )
+            for m in res.scalars().all()
+        ]
+
+    # ------------------------------------------------------------------
+    # Day-of-week performance
+    # ------------------------------------------------------------------
+
+    async def upsert_day_of_week_performance(
+        self, account_id: AccountId, snapshots: list[DayOfWeekPerformanceSnapshot]
+    ) -> None:
+        if not snapshots:
+            return
+        rows = [
+            {
+                "id": uuid.uuid4(),
+                "account_id": uuid.UUID(account_id),
+                "snapshot_date": s.snapshot_date,
+                "campaign_id": s.campaign_id,
+                "day_of_week": s.day_of_week,
+                "impressions": s.impressions,
+                "clicks": s.clicks,
+                "cost_micros": s.cost_micros,
+                "conversions": s.conversions,
+            }
+            for s in snapshots
+        ]
+        stmt = insert(DayOfWeekPerformanceSnapshotModel).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_day_of_week_performance_snapshots",
+            set_={
+                "impressions": stmt.excluded.impressions,
+                "clicks": stmt.excluded.clicks,
+                "cost_micros": stmt.excluded.cost_micros,
+                "conversions": stmt.excluded.conversions,
+                "updated_at": text("now()"),
+            },
+        )
+        await self._session.execute(stmt)
+
+    async def get_day_of_week_performance(
+        self, account_id: AccountId, start_date: date, end_date: date
+    ) -> list[DayOfWeekPerformanceSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(DayOfWeekPerformanceSnapshotModel).where(
+                DayOfWeekPerformanceSnapshotModel.account_id == acct_uuid,
+                DayOfWeekPerformanceSnapshotModel.snapshot_date >= start_date,
+                DayOfWeekPerformanceSnapshotModel.snapshot_date <= end_date,
+            )
+        )
+        return [
+            DayOfWeekPerformanceSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                campaign_id=m.campaign_id,
+                day_of_week=m.day_of_week,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+            )
+            for m in res.scalars().all()
+        ]
+
+    # ------------------------------------------------------------------
+    # Audience performance
+    # ------------------------------------------------------------------
+
+    async def upsert_audience_performance(
+        self, account_id: AccountId, snapshots: list[AudiencePerformanceSnapshot]
+    ) -> None:
+        if not snapshots:
+            return
+        rows = [
+            {
+                "id": uuid.uuid4(),
+                "account_id": uuid.UUID(account_id),
+                "snapshot_date": s.snapshot_date,
+                "campaign_id": s.campaign_id,
+                "ad_group_id": s.ad_group_id,
+                "criterion_id": s.criterion_id,
+                "impressions": s.impressions,
+                "clicks": s.clicks,
+                "cost_micros": s.cost_micros,
+                "conversions": s.conversions,
+            }
+            for s in snapshots
+        ]
+        stmt = insert(AudiencePerformanceSnapshotModel).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_audience_performance_snapshots",
+            set_={
+                "impressions": stmt.excluded.impressions,
+                "clicks": stmt.excluded.clicks,
+                "cost_micros": stmt.excluded.cost_micros,
+                "conversions": stmt.excluded.conversions,
+                "updated_at": text("now()"),
+            },
+        )
+        await self._session.execute(stmt)
+
+    async def get_audience_performance(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[AudiencePerformanceSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(AudiencePerformanceSnapshotModel).where(
+                AudiencePerformanceSnapshotModel.account_id == acct_uuid,
+                AudiencePerformanceSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        return [
+            AudiencePerformanceSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                campaign_id=m.campaign_id,
+                ad_group_id=m.ad_group_id,
+                criterion_id=m.criterion_id,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
             )
             for m in res.scalars().all()
         ]

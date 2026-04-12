@@ -13,7 +13,12 @@ from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
+    AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    DayOfWeekPerformanceSnapshot,
+    DevicePerformanceSnapshot,
+    GeoPerformanceSnapshot,
+    HourPerformanceSnapshot,
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
@@ -463,6 +468,265 @@ async def query_negative_keywords(
                 "failed to fetch ad-group-level negative keywords", error=str(exc)
             )
 
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
+async def query_device_performance(
+    refresh_token: str,
+    customer_id: str,
+    snapshot_date: date,
+    settings: Settings,
+) -> list[DevicePerformanceSnapshot]:
+    """Fetch daily performance metrics segmented by device type."""
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    date_str = snapshot_date.isoformat()
+    query = f"""
+        SELECT
+            campaign.id,
+            segments.device,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions
+        FROM campaign
+        WHERE segments.date = '{date_str}'
+          AND segments.device != 'UNSPECIFIED'
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[DevicePerformanceSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                m = row.metrics
+                device = row.segments.device.name
+                if device in ("UNSPECIFIED", "UNKNOWN"):
+                    continue
+                results.append(
+                    DevicePerformanceSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=snapshot_date,
+                        campaign_id=row.campaign.id,
+                        device=device,
+                        impressions=m.impressions,
+                        clicks=m.clicks,
+                        cost_micros=m.cost_micros,
+                        conversions=m.conversions,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
+async def query_geo_performance(
+    refresh_token: str,
+    customer_id: str,
+    snapshot_date: date,
+    settings: Settings,
+) -> list[GeoPerformanceSnapshot]:
+    """Fetch daily performance metrics segmented by geographic location."""
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    date_str = snapshot_date.isoformat()
+    query = f"""
+        SELECT
+            campaign.id,
+            geographic_view.country_criterion_id,
+            geographic_view.location_type,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions
+        FROM geographic_view
+        WHERE segments.date = '{date_str}'
+          AND geographic_view.location_type = 'LOCATION_OF_PRESENCE'
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[GeoPerformanceSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                m = row.metrics
+                location_id = row.geographic_view.country_criterion_id
+                if not location_id:
+                    continue
+                results.append(
+                    GeoPerformanceSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=snapshot_date,
+                        campaign_id=row.campaign.id,
+                        location_id=int(location_id),
+                        impressions=m.impressions,
+                        clicks=m.clicks,
+                        cost_micros=m.cost_micros,
+                        conversions=m.conversions,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
+async def query_hour_performance(
+    refresh_token: str,
+    customer_id: str,
+    snapshot_date: date,
+    settings: Settings,
+) -> list[HourPerformanceSnapshot]:
+    """Fetch daily performance metrics segmented by hour of day (0-23)."""
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    date_str = snapshot_date.isoformat()
+    query = f"""
+        SELECT
+            campaign.id,
+            segments.hour_of_day,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions
+        FROM campaign
+        WHERE segments.date = '{date_str}'
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[HourPerformanceSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                m = row.metrics
+                results.append(
+                    HourPerformanceSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=snapshot_date,
+                        campaign_id=row.campaign.id,
+                        hour_of_day=int(row.segments.hour_of_day),
+                        impressions=m.impressions,
+                        clicks=m.clicks,
+                        cost_micros=m.cost_micros,
+                        conversions=m.conversions,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
+async def query_day_of_week_performance(
+    refresh_token: str,
+    customer_id: str,
+    snapshot_date: date,
+    settings: Settings,
+) -> list[DayOfWeekPerformanceSnapshot]:
+    """Fetch daily performance metrics segmented by day of week."""
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    date_str = snapshot_date.isoformat()
+    query = f"""
+        SELECT
+            campaign.id,
+            segments.day_of_week,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions
+        FROM campaign
+        WHERE segments.date = '{date_str}'
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[DayOfWeekPerformanceSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                m = row.metrics
+                day = row.segments.day_of_week.name
+                if day in ("UNSPECIFIED", "UNKNOWN"):
+                    continue
+                results.append(
+                    DayOfWeekPerformanceSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=snapshot_date,
+                        campaign_id=row.campaign.id,
+                        day_of_week=day,
+                        impressions=m.impressions,
+                        clicks=m.clicks,
+                        cost_micros=m.cost_micros,
+                        conversions=m.conversions,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
+async def query_audience_performance(
+    refresh_token: str,
+    customer_id: str,
+    snapshot_date: date,
+    settings: Settings,
+) -> list[AudiencePerformanceSnapshot]:
+    """Fetch daily performance for observation audiences in ad groups."""
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    date_str = snapshot_date.isoformat()
+    query = f"""
+        SELECT
+            campaign.id,
+            ad_group.id,
+            ad_group_criterion.criterion_id,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions
+        FROM ad_group_audience_view
+        WHERE segments.date = '{date_str}'
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[AudiencePerformanceSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                m = row.metrics
+                results.append(
+                    AudiencePerformanceSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=snapshot_date,
+                        campaign_id=row.campaign.id,
+                        ad_group_id=row.ad_group.id,
+                        criterion_id=row.ad_group_criterion.criterion_id,
+                        impressions=m.impressions,
+                        clicks=m.clicks,
+                        cost_micros=m.cost_micros,
+                        conversions=m.conversions,
+                    )
+                )
         return results
     except (GoogleAdsAuthError, GoogleAdsUnavailable):
         raise

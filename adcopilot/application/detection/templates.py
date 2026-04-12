@@ -396,6 +396,88 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " Explain how to make the descriptions more concrete in plain English."
         ),
     },
+    # ── Module 4 — Audience & Targeting Intelligence ──────────────────────────
+    RecommendationKind.DEVICE_BID_ADJUSTMENT: {
+        "pl": (
+            "W kampanii '{campaign_name}' koszt konwersji na urządzeniach mobilnych"
+            " ({mobile_cpa_micros} mikro) jest {ratio}× wyższy niż na komputerach"
+            " ({desktop_cpa_micros} mikro) przy {desktop_conversions} konwersjach."
+            " Obniżenie stawki dla mobile zredukuje wydatki bez utraty wartościowych"
+            " konwersji. Wytłumacz jak dodać korektę stawek dla urządzeń, po polsku."
+        ),
+        "en": (
+            "In campaign '{campaign_name}', mobile CPA ({mobile_cpa_micros} micros) is"
+            " {ratio}× higher than desktop ({desktop_cpa_micros} micros) across"
+            " {desktop_conversions} desktop conversions."
+            " Adding a negative mobile bid adjustment will cut wasted spend without"
+            " losing high-value conversions."
+            " Explain how to set a device bid adjustment in plain English."
+        ),
+    },
+    RecommendationKind.GEO_EXCLUSION: {
+        "pl": (
+            "Lokalizacja o ID '{location_id}' w kampanii '{campaign_name}' kosztowała"
+            " {cost_micros} mikro przy {clicks} kliknięciach i 0 konwersjach przez"
+            " ostatnie 30 dni. Wykluczenie tej lokalizacji zatrzyma marnowanie budżetu."
+            " Szacowane oszczędności: {savings_micros} mikro."
+            " Wytłumacz jak wykluczyć lokalizację w kampanii, po polsku."
+        ),
+        "en": (
+            "Location '{location_id}' in campaign '{campaign_name}' spent"
+            " {cost_micros} micros across {clicks} clicks with 0 conversions over 30 days."
+            " Excluding this location will stop budget waste immediately."
+            " Estimated savings: {savings_micros} micros."
+            " Explain how to exclude a location in plain English."
+        ),
+    },
+    RecommendationKind.AD_SCHEDULE_ADJUSTMENT: {
+        "pl": (
+            "Kampania '{campaign_name}' wydała {cost_micros} mikro w godzinie"
+            " {hour_of_day}:00–{hour_of_day}:59 przy 0 konwersjach przez ostatnie"
+            " 30 dni. Ustawienie korekty stawki −100% dla tej godziny zatrzyma"
+            " wyświetlanie reklam w czasie, który nie przynosi wyników."
+            " Wytłumacz jak ustawić harmonogram reklam, po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign_name}' spent {cost_micros} micros during hour"
+            " {hour_of_day}:00–{hour_of_day}:59 with 0 conversions over 30 days."
+            " Setting a −100% bid adjustment for that hour will stop showing ads"
+            " at a time that never converts."
+            " Explain how to set an ad schedule in plain English."
+        ),
+    },
+    RecommendationKind.DAY_OF_WEEK_BID_ADJUSTMENT: {
+        "pl": (
+            "W kampanii '{campaign_name}' dzień '{day_of_week}' ma CPA {day_cpa_micros}"
+            " mikro — {ratio}× powyżej średniej konta ({account_avg_cpa_micros} mikro)"
+            " przy {conversions} konwersjach."
+            " Obniżenie stawek w ten dzień poprawi efektywność budżetu."
+            " Wytłumacz jak ustawić korektę stawek dla dnia tygodnia, po polsku."
+        ),
+        "en": (
+            "In campaign '{campaign_name}', '{day_of_week}' has a CPA of"
+            " {day_cpa_micros} micros — {ratio}× above the account average"
+            " ({account_avg_cpa_micros} micros) across {conversions} conversions."
+            " Reducing bids on this day will improve budget efficiency."
+            " Explain how to set a day-of-week bid adjustment in plain English."
+        ),
+    },
+    RecommendationKind.ADD_AUDIENCE_SIGNALS: {
+        "pl": (
+            "Kampania '{campaign_name}' ma {impressions} wyświetleń, ale nie ma"
+            " żadnych list odbiorców w trybie obserwacji."
+            " Dodanie odbiorców pozwoli algorytmowi Google lepiej dostosować stawki"
+            " do profilu konwertujących użytkowników i poprawić ROI."
+            " Wytłumacz jak dodać listy odbiorców w trybie obserwacji, po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign_name}' has {impressions} impressions but no audience"
+            " lists attached in observation mode."
+            " Adding audiences lets Google's bidding algorithm learn who converts best"
+            " and improve your ROI over time."
+            " Explain how to add observation audiences in plain English."
+        ),
+    },
 }
 
 

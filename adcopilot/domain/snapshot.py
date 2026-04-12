@@ -100,6 +100,82 @@ class AdSnapshot:
 
 
 @dataclass(frozen=True)
+class DevicePerformanceSnapshot:
+    """Daily performance metrics broken down by device (MOBILE, DESKTOP, TABLET, OTHER)."""
+
+    id: SnapshotId
+    account_id: AccountId
+    snapshot_date: date
+    campaign_id: int
+    device: str  # MOBILE, DESKTOP, TABLET, OTHER, CONNECTED_TV
+    impressions: int
+    clicks: int
+    cost_micros: int
+    conversions: float
+
+
+@dataclass(frozen=True)
+class GeoPerformanceSnapshot:
+    """Daily performance metrics broken down by geographic location (criterion ID)."""
+
+    id: SnapshotId
+    account_id: AccountId
+    snapshot_date: date
+    campaign_id: int
+    location_id: int  # Google Ads geo criterion ID
+    impressions: int
+    clicks: int
+    cost_micros: int
+    conversions: float
+
+
+@dataclass(frozen=True)
+class HourPerformanceSnapshot:
+    """Daily performance metrics broken down by hour of day (0-23)."""
+
+    id: SnapshotId
+    account_id: AccountId
+    snapshot_date: date
+    campaign_id: int
+    hour_of_day: int  # 0-23
+    impressions: int
+    clicks: int
+    cost_micros: int
+    conversions: float
+
+
+@dataclass(frozen=True)
+class DayOfWeekPerformanceSnapshot:
+    """Daily performance metrics broken down by day of week."""
+
+    id: SnapshotId
+    account_id: AccountId
+    snapshot_date: date
+    campaign_id: int
+    day_of_week: str  # MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY
+    impressions: int
+    clicks: int
+    cost_micros: int
+    conversions: float
+
+
+@dataclass(frozen=True)
+class AudiencePerformanceSnapshot:
+    """Daily performance metrics for an observation audience in an ad group."""
+
+    id: SnapshotId
+    account_id: AccountId
+    snapshot_date: date
+    campaign_id: int
+    ad_group_id: int
+    criterion_id: int  # audience criterion ID
+    impressions: int
+    clicks: int
+    cost_micros: int
+    conversions: float
+
+
+@dataclass(frozen=True)
 class NegativeKeywordSnapshot:
     id: SnapshotId
     account_id: AccountId

@@ -7,7 +7,12 @@ from adcopilot.config import Settings
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
+    AudiencePerformanceSnapshot,
     CampaignSnapshot,
+    DayOfWeekPerformanceSnapshot,
+    DevicePerformanceSnapshot,
+    GeoPerformanceSnapshot,
+    HourPerformanceSnapshot,
     KeywordSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
@@ -68,5 +73,40 @@ class GoogleAdsQueriesAdapter:
         self, refresh_token: str, customer_id: str, snapshot_date: date
     ) -> list[NegativeKeywordSnapshot]:
         return await queries.query_negative_keywords(
+            refresh_token, customer_id, snapshot_date, self._settings
+        )
+
+    async def query_device_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[DevicePerformanceSnapshot]:
+        return await queries.query_device_performance(
+            refresh_token, customer_id, snapshot_date, self._settings
+        )
+
+    async def query_geo_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[GeoPerformanceSnapshot]:
+        return await queries.query_geo_performance(
+            refresh_token, customer_id, snapshot_date, self._settings
+        )
+
+    async def query_hour_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[HourPerformanceSnapshot]:
+        return await queries.query_hour_performance(
+            refresh_token, customer_id, snapshot_date, self._settings
+        )
+
+    async def query_day_of_week_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[DayOfWeekPerformanceSnapshot]:
+        return await queries.query_day_of_week_performance(
+            refresh_token, customer_id, snapshot_date, self._settings
+        )
+
+    async def query_audience_performance(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[AudiencePerformanceSnapshot]:
+        return await queries.query_audience_performance(
             refresh_token, customer_id, snapshot_date, self._settings
         )

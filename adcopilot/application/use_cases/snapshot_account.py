@@ -90,21 +90,42 @@ class SnapshotAccountUseCase:
         refresh_token = creds.refresh_token
         customer_id = account.customer_id
 
-        # 3. Pull all 6 entity types in parallel
+        # 3. Pull all 11 entity types in parallel
         try:
-            campaigns, ad_groups, keywords, search_terms, ads, negative_keywords = (
-                await asyncio.gather(
-                    self._ads_client.query_campaigns(refresh_token, customer_id, snapshot_date),
-                    self._ads_client.query_ad_groups(refresh_token, customer_id, snapshot_date),
-                    self._ads_client.query_keywords(refresh_token, customer_id, snapshot_date),
-                    self._ads_client.query_search_terms(
-                        refresh_token, customer_id, snapshot_date
-                    ),
-                    self._ads_client.query_ads(refresh_token, customer_id, snapshot_date),
-                    self._ads_client.query_negative_keywords(
-                        refresh_token, customer_id, snapshot_date
-                    ),
-                )
+            (
+                campaigns,
+                ad_groups,
+                keywords,
+                search_terms,
+                ads,
+                negative_keywords,
+                device_performance,
+                geo_performance,
+                hour_performance,
+                day_of_week_performance,
+                audience_performance,
+            ) = await asyncio.gather(
+                self._ads_client.query_campaigns(refresh_token, customer_id, snapshot_date),
+                self._ads_client.query_ad_groups(refresh_token, customer_id, snapshot_date),
+                self._ads_client.query_keywords(refresh_token, customer_id, snapshot_date),
+                self._ads_client.query_search_terms(refresh_token, customer_id, snapshot_date),
+                self._ads_client.query_ads(refresh_token, customer_id, snapshot_date),
+                self._ads_client.query_negative_keywords(refresh_token, customer_id, snapshot_date),
+                self._ads_client.query_device_performance(
+                    refresh_token, customer_id, snapshot_date
+                ),
+                self._ads_client.query_geo_performance(
+                    refresh_token, customer_id, snapshot_date
+                ),
+                self._ads_client.query_hour_performance(
+                    refresh_token, customer_id, snapshot_date
+                ),
+                self._ads_client.query_day_of_week_performance(
+                    refresh_token, customer_id, snapshot_date
+                ),
+                self._ads_client.query_audience_performance(
+                    refresh_token, customer_id, snapshot_date
+                ),
             )
         except GoogleAdsAuthError as exc:
             logger.warning(
@@ -137,6 +158,13 @@ class SnapshotAccountUseCase:
         await self._snapshot_repo.upsert_search_terms(account_id, search_terms)
         await self._snapshot_repo.upsert_ads(account_id, ads)
         await self._snapshot_repo.upsert_negative_keywords(account_id, negative_keywords)
+        await self._snapshot_repo.upsert_device_performance(account_id, device_performance)
+        await self._snapshot_repo.upsert_geo_performance(account_id, geo_performance)
+        await self._snapshot_repo.upsert_hour_performance(account_id, hour_performance)
+        await self._snapshot_repo.upsert_day_of_week_performance(
+            account_id, day_of_week_performance
+        )
+        await self._snapshot_repo.upsert_audience_performance(account_id, audience_performance)
 
         duration = time.monotonic() - start
         logger.info(
@@ -149,6 +177,11 @@ class SnapshotAccountUseCase:
             search_terms=len(search_terms),
             ads=len(ads),
             negative_keywords=len(negative_keywords),
+            device_performance=len(device_performance),
+            geo_performance=len(geo_performance),
+            hour_performance=len(hour_performance),
+            day_of_week_performance=len(day_of_week_performance),
+            audience_performance=len(audience_performance),
             duration_seconds=round(duration, 2),
         )
 

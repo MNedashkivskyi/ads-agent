@@ -17,6 +17,10 @@ from adcopilot.domain.recommendation import RecommendationSeverity
 logger = structlog.get_logger(__name__)
 
 _TREND_LOOKBACK_DAYS = 7
+_DEVICE_LOOKBACK_DAYS = 7
+_GEO_LOOKBACK_DAYS = 30
+_HOUR_LOOKBACK_DAYS = 30
+_DOW_LOOKBACK_DAYS = 30
 
 
 class RunDetectionUseCase:
@@ -54,6 +58,15 @@ class RunDetectionUseCase:
             self._snapshot_repo, account_id, prev_date
         )
 
+        # 3b. Load targeting dimension data for Module 4 rules (best-effort).
+        (
+            device_performance,
+            geo_performance,
+            hour_performance,
+            day_of_week_performance,
+            audience_performance,
+        ) = await _load_targeting_performance(self._snapshot_repo, account_id, snapshot_date)
+
         # 4. Compute HistoricalStats from the snapshot itself (30-day proxy)
         total_cost = sum(c.cost_micros for c in snapshot.campaigns)
         total_conversions = sum(c.conversions for c in snapshot.campaigns)
@@ -80,6 +93,11 @@ class RunDetectionUseCase:
             prev_keywords=prev_keywords,
             prev_ads=prev_ads,
             negative_keywords=snapshot.negative_keywords,
+            device_performance=device_performance,
+            geo_performance=geo_performance,
+            hour_performance=hour_performance,
+            day_of_week_performance=day_of_week_performance,
+            audience_performance=audience_performance,
         )
 
         # 6. Run rule engine
@@ -98,6 +116,33 @@ class RunDetectionUseCase:
             by_severity=counts,
         )
         return counts
+
+
+async def _load_targeting_performance(
+    snapshot_repo: SnapshotRepository,
+    account_id: AccountId,
+    snapshot_date: date,
+) -> tuple[list, list, list, list, list]:
+    """Load targeting dimension data for Module 4 rules (best-effort).
+
+    Uses a 30-day window for geo/hour/day-of-week (statistical stability)
+    and a 7-day window for device performance.  Returns five empty lists on
+    any failure so that a missing dimension never blocks detection.
+    """
+    try:
+        end_date = snapshot_date
+        start_date_30d = snapshot_date - timedelta(days=29)
+        start_date_7d = snapshot_date - timedelta(days=6)
+        device = await snapshot_repo.get_device_performance(account_id, start_date_7d, end_date)
+        geo = await snapshot_repo.get_geo_performance(account_id, start_date_30d, end_date)
+        hour = await snapshot_repo.get_hour_performance(account_id, start_date_30d, end_date)
+        dow = await snapshot_repo.get_day_of_week_performance(
+            account_id, start_date_30d, end_date
+        )
+        audience = await snapshot_repo.get_audience_performance(account_id, snapshot_date)
+        return device, geo, hour, dow, audience
+    except Exception:
+        return [], [], [], [], []
 
 
 async def _load_prev_snapshots(
