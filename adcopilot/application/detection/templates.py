@@ -297,6 +297,89 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " Explain how to diversify them in plain English."
         ),
     },
+    RecommendationKind.OVERSTUFFED_AD_GROUP: {
+        "pl": (
+            "Grupa reklam '{ad_group_name}' zawiera {enabled_keywords} aktywnych słów"
+            " kluczowych, co znacznie przekracza zalecany limit {threshold}."
+            " Zbyt wiele słów kluczowych w jednej grupie obniża trafność reklam i Wynik"
+            " Jakości — Google nie może dobrze dopasować reklamy do każdego zapytania."
+            " Wytłumacz jak reorganizować grupy reklam po tematach, po polsku."
+        ),
+        "en": (
+            "Ad group '{ad_group_name}' has {enabled_keywords} active keywords,"
+            " far exceeding the recommended limit of {threshold}."
+            " Too many keywords in one group reduces ad relevance and Quality Score —"
+            " Google can't match the ad well to every query."
+            " Explain how to reorganise ad groups by tightly themed topics in plain English."
+        ),
+    },
+    RecommendationKind.KEYWORD_CANNIBALIZATION: {
+        "pl": (
+            "Słowo kluczowe '{keyword_text}' jest aktywne w {duplicate_count} różnych"
+            " grupach reklam jednocześnie, w tym w '{ad_group_name}'."
+            " To powoduje, że kampanie konkurują ze sobą w aukcjach, podnosząc koszty i"
+            " rozkładając dane o efektywności. Google nie wie, którą reklamę pokazać."
+            " Wytłumacz czym jest kanibalizacja słów kluczowych i jak to naprawić, po polsku."
+        ),
+        "en": (
+            "Keyword '{keyword_text}' is active in {duplicate_count} different ad groups"
+            " simultaneously, including '{ad_group_name}'."
+            " This makes your own campaigns compete against each other in auctions,"
+            " inflating costs and splitting performance data. Google doesn't know which"
+            " ad to show."
+            " Explain what keyword cannibalization is and how to fix it in plain English."
+        ),
+    },
+    RecommendationKind.NEGATIVE_KEYWORD_CONFLICT: {
+        "pl": (
+            "Słowo wykluczające '{negative_text}' ({negative_match_type}) blokuje aktywne"
+            " słowo kluczowe '{keyword_text}' na poziomie {conflict_scope}."
+            " Oznacza to, że Twoja reklama nigdy się nie wyświetli na to słowo kluczowe,"
+            " choć za nie płacisz. To jeden z najpoważniejszych błędów strukturalnych"
+            " w Google Ads. Wytłumacz jak zidentyfikować i usunąć konflikt, po polsku."
+        ),
+        "en": (
+            "Negative keyword '{negative_text}' ({negative_match_type}) is blocking active"
+            " keyword '{keyword_text}' at the {conflict_scope} level."
+            " This means your ad will never show for this keyword despite it being active."
+            " This is one of the most damaging structural mistakes in Google Ads."
+            " Explain how to identify and resolve the conflict in plain English."
+        ),
+    },
+    RecommendationKind.ORPHANED_CAMPAIGN: {
+        "pl": (
+            "Kampania '{campaign_name}' jest aktywna z budżetem {budget_micros} mikro,"
+            " ale nie ma żadnych aktywnych grup reklam ({ad_group_count} grup, wszystkie"
+            " wstrzymane lub usunięte). Budżet jest codziennie rezerwowany, ale żadna"
+            " reklama się nie wyświetla. Szacowane oszczędności: {savings}/miesiąc."
+            " Wytłumacz co zrobić z tą kampanią, po polsku."
+        ),
+        "en": (
+            "Campaign '{campaign_name}' is active with a budget of {budget_micros} micros"
+            " but has no active ad groups ({ad_group_count} groups, all paused or removed)."
+            " Budget is being reserved daily but no ads are showing."
+            " Estimated savings: {savings}/month."
+            " Explain what to do with this campaign in plain English."
+        ),
+    },
+    RecommendationKind.MATCH_TYPE_REDUNDANCY: {
+        "pl": (
+            "Słowo kluczowe '{keyword_text}' w grupie reklam '{ad_group_name}' istnieje"
+            " jednocześnie w dopasowaniu szerokim i bardziej precyzyjnym"
+            " ({match_types})."
+            " Dopasowanie szerokie jest zbędne, gdy istnieje już dokładne lub do wyrażenia"
+            " — Google i tak obsłuży te zapytania, a szerokie może generować nieistotny"
+            " ruch. Wytłumacz dlaczego to problem i co zrobić, po polsku."
+        ),
+        "en": (
+            "Keyword '{keyword_text}' in ad group '{ad_group_name}' exists simultaneously"
+            " as broad match and a more specific match type ({match_types})."
+            " Broad match is redundant when exact or phrase already exists —"
+            " Google will serve the specific match types anyway, while broad may attract"
+            " irrelevant traffic."
+            " Explain why this is a problem and what to do in plain English."
+        ),
+    },
     RecommendationKind.GENERIC_DESCRIPTION: {
         "pl": (
             "Wszystkie opisy reklamy (ID {ad_id}) są zbyt ogólne — nie zawierają żadnych"

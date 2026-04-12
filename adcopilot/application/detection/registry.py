@@ -50,6 +50,19 @@ from adcopilot.application.detection.rules.rule_21_redundant_headlines import (
 from adcopilot.application.detection.rules.rule_22_generic_description import (
     GenericDescriptionRule,
 )
+from adcopilot.application.detection.rules.rule_23_overstuffed_ad_group import (
+    OverstuffedAdGroupRule,
+)
+from adcopilot.application.detection.rules.rule_24_keyword_cannibalization import (
+    KeywordCannibalizationRule,
+)
+from adcopilot.application.detection.rules.rule_25_negative_keyword_conflict import (
+    NegativeKeywordConflictRule,
+)
+from adcopilot.application.detection.rules.rule_26_orphaned_campaign import OrphanedCampaignRule
+from adcopilot.application.detection.rules.rule_27_match_type_redundancy import (
+    MatchTypeRedundancyRule,
+)
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -85,5 +98,11 @@ def build_rule_engine(
         AdFatigueRule(),
         RedundantHeadlinesRule(),
         GenericDescriptionRule(),
+        # Module 3 — Campaign structure & organisation
+        OverstuffedAdGroupRule(),
+        KeywordCannibalizationRule(),
+        NegativeKeywordConflictRule(),
+        OrphanedCampaignRule(),
+        MatchTypeRedundancyRule(),
     ]
     return RuleEngine(rules=rules, rec_repo=rec_repo, snooze_repo=snooze_repo)

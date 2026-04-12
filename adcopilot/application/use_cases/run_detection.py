@@ -46,7 +46,7 @@ class RunDetectionUseCase:
         # 2. Load current snapshot data
         snapshot = await self._snapshot_repo.load_snapshot(account_id, snapshot_date)
 
-        # 3. Load 7-day-ago snapshots for trend-based rules (Module 1).
+        # 3. Load 7-day-ago snapshots for trend-based rules (Modules 1 & 2).
         #    These are best-effort — if no data exists the lists stay empty and
         #    trend rules simply skip (they check for empty prev_* lists).
         prev_date = snapshot_date - timedelta(days=_TREND_LOOKBACK_DAYS)
@@ -79,6 +79,7 @@ class RunDetectionUseCase:
             prev_ad_groups=prev_ad_groups,
             prev_keywords=prev_keywords,
             prev_ads=prev_ads,
+            negative_keywords=snapshot.negative_keywords,
         )
 
         # 6. Run rule engine
@@ -103,7 +104,7 @@ async def _load_prev_snapshots(
     snapshot_repo: SnapshotRepository,
     account_id: AccountId,
     prev_date: date,
-) -> tuple[list, list, list]:
+) -> tuple[list, list, list, list]:
     """Load campaigns, ad groups, and keywords from prev_date.
 
     Returns three empty lists if no data exists for that date (new accounts,

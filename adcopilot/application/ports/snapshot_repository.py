@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 from typing import Protocol
 
@@ -10,19 +10,21 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     CampaignSnapshot,
     KeywordSnapshot,
+    NegativeKeywordSnapshot,
     SearchTermSnapshot,
 )
 
 
 @dataclass
 class SnapshotData:
-    """All five snapshot collections for one account on one date."""
+    """All snapshot collections for one account on one date."""
 
     campaigns: list[CampaignSnapshot]
     ad_groups: list[AdGroupSnapshot]
     keywords: list[KeywordSnapshot]
     search_terms: list[SearchTermSnapshot]
     ads: list[AdSnapshot]
+    negative_keywords: list[NegativeKeywordSnapshot] = field(default_factory=list)
 
 
 class SnapshotRepository(Protocol):
@@ -69,3 +71,11 @@ class SnapshotRepository(Protocol):
     async def get_ads_by_date(
         self, account_id: AccountId, snapshot_date: date
     ) -> list[AdSnapshot]: ...
+
+    async def upsert_negative_keywords(
+        self, account_id: AccountId, snapshots: list[NegativeKeywordSnapshot]
+    ) -> None: ...
+
+    async def get_negative_keywords_by_date(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[NegativeKeywordSnapshot]: ...

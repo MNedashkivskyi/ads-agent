@@ -14,6 +14,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     CampaignSnapshot,
     KeywordSnapshot,
+    NegativeKeywordSnapshot,
     SearchTermSnapshot,
     SnapshotId,
 )
@@ -22,6 +23,7 @@ from adcopilot.infrastructure.db.models import (
     AdSnapshotModel,
     CampaignSnapshotModel,
     KeywordSnapshotModel,
+    NegativeKeywordSnapshotModel,
     SearchTermSnapshotModel,
 )
 
@@ -384,6 +386,63 @@ class SqlSnapshotRepository:
             for m in res.scalars().all()
         ]
 
+    # ------------------------------------------------------------------
+    # Negative keywords
+    # ------------------------------------------------------------------
+
+    async def upsert_negative_keywords(
+        self, account_id: AccountId, snapshots: list[NegativeKeywordSnapshot]
+    ) -> None:
+        if not snapshots:
+            return
+        rows = [
+            {
+                "id": uuid.uuid4(),
+                "account_id": uuid.UUID(account_id),
+                "snapshot_date": s.snapshot_date,
+                "criterion_id": s.criterion_id,
+                "campaign_id": s.campaign_id,
+                "ad_group_id": s.ad_group_id,
+                "text": s.text,
+                "match_type": s.match_type,
+            }
+            for s in snapshots
+        ]
+        stmt = insert(NegativeKeywordSnapshotModel).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_negative_keyword_snapshots",
+            set_={
+                "text": stmt.excluded.text,
+                "match_type": stmt.excluded.match_type,
+                "updated_at": text("now()"),
+            },
+        )
+        await self._session.execute(stmt)
+
+    async def get_negative_keywords_by_date(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[NegativeKeywordSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(NegativeKeywordSnapshotModel).where(
+                NegativeKeywordSnapshotModel.account_id == acct_uuid,
+                NegativeKeywordSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        return [
+            NegativeKeywordSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                criterion_id=m.criterion_id,
+                campaign_id=m.campaign_id,
+                ad_group_id=m.ad_group_id,
+                text=m.text,
+                match_type=m.match_type,
+            )
+            for m in res.scalars().all()
+        ]
+
     async def get_latest_snapshot_date(self, account_id: AccountId) -> date | None:
         result = await self._session.execute(
             select(CampaignSnapshotModel.snapshot_date)
@@ -526,10 +585,31 @@ class SqlSnapshotRepository:
             for m in ad_res.scalars().all()
         ]
 
+        neg_res = await self._session.execute(
+            select(NegativeKeywordSnapshotModel).where(
+                NegativeKeywordSnapshotModel.account_id == acct_uuid,
+                NegativeKeywordSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        negative_keywords = [
+            NegativeKeywordSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                criterion_id=m.criterion_id,
+                campaign_id=m.campaign_id,
+                ad_group_id=m.ad_group_id,
+                text=m.text,
+                match_type=m.match_type,
+            )
+            for m in neg_res.scalars().all()
+        ]
+
         return SnapshotData(
             campaigns=campaigns,
             ad_groups=ad_groups,
             keywords=keywords,
             search_terms=search_terms,
             ads=ads,
+            negative_keywords=negative_keywords,
         )

@@ -24,6 +24,19 @@ from adcopilot.application.detection.rules.rule_09_dead_keyword import DeadKeywo
 from adcopilot.application.detection.rules.rule_10_wrong_bidding_strategy import (
     WrongBiddingStrategyRule,
 )
+from adcopilot.application.detection.rules.rule_23_overstuffed_ad_group import (
+    OverstuffedAdGroupRule,
+)
+from adcopilot.application.detection.rules.rule_24_keyword_cannibalization import (
+    KeywordCannibalizationRule,
+)
+from adcopilot.application.detection.rules.rule_25_negative_keyword_conflict import (
+    NegativeKeywordConflictRule,
+)
+from adcopilot.application.detection.rules.rule_26_orphaned_campaign import OrphanedCampaignRule
+from adcopilot.application.detection.rules.rule_27_match_type_redundancy import (
+    MatchTypeRedundancyRule,
+)
 from adcopilot.domain.entities import AccountId, GoogleAdsAccount, UserId
 from adcopilot.domain.recommendation import RecommendationKind, RecommendationSeverity
 from adcopilot.domain.snapshot import (
@@ -31,6 +44,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     CampaignSnapshot,
     KeywordSnapshot,
+    NegativeKeywordSnapshot,
     SearchTermSnapshot,
     SnapshotId,
 )
@@ -1108,3 +1122,262 @@ class TestRule10WrongBiddingStrategy:
         recs = self.rule.detect(ctx)
         assert len(recs) == 1
         assert recs[0].target["campaign_id"] == 1
+
+
+# ===========================================================================
+# Rule 23 - OverstuffedAdGroupRule
+# ===========================================================================
+
+
+def _neg_kw(**kwargs) -> NegativeKeywordSnapshot:
+    defaults = dict(
+        id=SnapshotId(str(uuid.uuid4())),
+        account_id=_ACCOUNT_ID,
+        snapshot_date=_SNAP_DATE,
+        criterion_id=999,
+        campaign_id=1,
+        ad_group_id=0,
+        text="free",
+        match_type="BROAD",
+    )
+    defaults.update(kwargs)
+    return NegativeKeywordSnapshot(**defaults)
+
+
+class TestOverstuffedAdGroupRule:
+    rule = OverstuffedAdGroupRule()
+
+    def test_ad_group_with_16_enabled_keywords_triggers(self):
+        ag = _ad_group(ad_group_id=10, campaign_id=1)
+        keywords = [
+            _keyword(criterion_id=i, ad_group_id=10, status="ENABLED")
+            for i in range(16)
+        ]
+        ctx = _ctx(ad_groups=[ag], keywords=keywords)
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.OVERSTUFFED_AD_GROUP
+        assert recs[0].evidence["enabled_keywords"] == 16
+
+    def test_ad_group_with_15_keywords_not_triggered(self):
+        ag = _ad_group(ad_group_id=10)
+        keywords = [
+            _keyword(criterion_id=i, ad_group_id=10, status="ENABLED")
+            for i in range(15)
+        ]
+        ctx = _ctx(ad_groups=[ag], keywords=keywords)
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_keywords_not_counted(self):
+        ag = _ad_group(ad_group_id=10)
+        # 10 enabled + 10 paused = only 10 enabled → should NOT trigger
+        kws = [_keyword(criterion_id=i, ad_group_id=10, status="ENABLED") for i in range(10)]
+        kws += [_keyword(criterion_id=i + 100, ad_group_id=10, status="PAUSED") for i in range(10)]
+        ctx = _ctx(ad_groups=[ag], keywords=kws)
+        assert self.rule.detect(ctx) == []
+
+    def test_multiple_ad_groups_only_overstuffed_flagged(self):
+        ag1 = _ad_group(ad_group_id=10, campaign_id=1)
+        ag2 = _ad_group(ad_group_id=20, campaign_id=1)
+        kws_ag1 = [_keyword(criterion_id=i, ad_group_id=10, status="ENABLED") for i in range(20)]
+        kws_ag2 = [_keyword(criterion_id=i + 100, ad_group_id=20, status="ENABLED") for i in range(5)]
+        ctx = _ctx(ad_groups=[ag1, ag2], keywords=kws_ag1 + kws_ag2)
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].target["ad_group_id"] == 10
+
+
+# ===========================================================================
+# Rule 24 - KeywordCannibalizationRule
+# ===========================================================================
+
+
+class TestKeywordCannibalizationRule:
+    rule = KeywordCannibalizationRule()
+
+    def test_same_keyword_in_two_ad_groups_triggers(self):
+        ag1 = _ad_group(ad_group_id=10, campaign_id=1)
+        ag2 = _ad_group(ad_group_id=20, campaign_id=1)
+        kw1 = _keyword(criterion_id=1, ad_group_id=10, text="buy shoes", status="ENABLED")
+        kw2 = _keyword(criterion_id=2, ad_group_id=20, text="buy shoes", status="ENABLED")
+        ctx = _ctx(ad_groups=[ag1, ag2], keywords=[kw1, kw2])
+        recs = self.rule.detect(ctx)
+        # One rec per ad group for the duplicated keyword
+        assert len(recs) == 2
+        assert all(r.kind == RecommendationKind.KEYWORD_CANNIBALIZATION for r in recs)
+        ad_group_ids = {r.target["ad_group_id"] for r in recs}
+        assert ad_group_ids == {10, 20}
+
+    def test_unique_keywords_not_triggered(self):
+        ag = _ad_group(ad_group_id=10)
+        kw1 = _keyword(criterion_id=1, ad_group_id=10, text="buy shoes", status="ENABLED")
+        kw2 = _keyword(criterion_id=2, ad_group_id=10, text="buy boots", status="ENABLED")
+        ctx = _ctx(ad_groups=[ag], keywords=[kw1, kw2])
+        assert self.rule.detect(ctx) == []
+
+    def test_removed_keywords_ignored(self):
+        ag1 = _ad_group(ad_group_id=10)
+        ag2 = _ad_group(ad_group_id=20)
+        kw1 = _keyword(criterion_id=1, ad_group_id=10, text="buy shoes", status="ENABLED")
+        kw2 = _keyword(criterion_id=2, ad_group_id=20, text="buy shoes", status="REMOVED")
+        ctx = _ctx(ad_groups=[ag1, ag2], keywords=[kw1, kw2])
+        # Only one enabled → no cannibalization
+        assert self.rule.detect(ctx) == []
+
+    def test_normalised_text_case_insensitive(self):
+        ag1 = _ad_group(ad_group_id=10)
+        ag2 = _ad_group(ad_group_id=20)
+        kw1 = _keyword(criterion_id=1, ad_group_id=10, text="Buy Shoes", status="ENABLED")
+        kw2 = _keyword(criterion_id=2, ad_group_id=20, text="buy shoes", status="ENABLED")
+        ctx = _ctx(ad_groups=[ag1, ag2], keywords=[kw1, kw2])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 2
+
+
+# ===========================================================================
+# Rule 25 - NegativeKeywordConflictRule
+# ===========================================================================
+
+
+class TestNegativeKeywordConflictRule:
+    rule = NegativeKeywordConflictRule()
+
+    def test_exact_campaign_level_conflict_triggers(self):
+        ag = _ad_group(ad_group_id=10, campaign_id=1)
+        kw = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", match_type="EXACT")
+        neg = _neg_kw(campaign_id=1, ad_group_id=0, text="running shoes", match_type="EXACT")
+        ctx = _ctx(ad_groups=[ag], keywords=[kw], negative_keywords=[neg])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.NEGATIVE_KEYWORD_CONFLICT
+        assert recs[0].evidence["conflict_scope"] == "CAMPAIGN"
+
+    def test_phrase_match_conflict_triggers(self):
+        ag = _ad_group(ad_group_id=10, campaign_id=1)
+        kw = _keyword(criterion_id=1, ad_group_id=10, text="buy running shoes online")
+        neg = _neg_kw(campaign_id=1, ad_group_id=0, text="running shoes", match_type="PHRASE")
+        ctx = _ctx(ad_groups=[ag], keywords=[kw], negative_keywords=[neg])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+
+    def test_broad_match_conflict_triggers(self):
+        ag = _ad_group(ad_group_id=10, campaign_id=1)
+        kw = _keyword(criterion_id=1, ad_group_id=10, text="cheap running shoes")
+        neg = _neg_kw(campaign_id=1, ad_group_id=0, text="shoes", match_type="BROAD")
+        ctx = _ctx(ad_groups=[ag], keywords=[kw], negative_keywords=[neg])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+
+    def test_no_conflict_when_different_campaign(self):
+        ag = _ad_group(ad_group_id=10, campaign_id=1)
+        kw = _keyword(criterion_id=1, ad_group_id=10, text="running shoes")
+        # Negative is in campaign_id=2, not 1
+        neg = _neg_kw(campaign_id=2, ad_group_id=0, text="running shoes", match_type="EXACT")
+        ctx = _ctx(ad_groups=[ag], keywords=[kw], negative_keywords=[neg])
+        assert self.rule.detect(ctx) == []
+
+    def test_no_negative_keywords_returns_empty(self):
+        kw = _keyword(criterion_id=1, ad_group_id=10, text="running shoes")
+        ctx = _ctx(keywords=[kw], negative_keywords=[])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_keyword_not_checked(self):
+        ag = _ad_group(ad_group_id=10, campaign_id=1)
+        kw = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", status="PAUSED")
+        neg = _neg_kw(campaign_id=1, ad_group_id=0, text="running shoes", match_type="EXACT")
+        ctx = _ctx(ad_groups=[ag], keywords=[kw], negative_keywords=[neg])
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Rule 26 - OrphanedCampaignRule
+# ===========================================================================
+
+
+class TestOrphanedCampaignRule:
+    rule = OrphanedCampaignRule()
+
+    def test_enabled_campaign_with_no_ad_groups_triggers(self):
+        c = _campaign(campaign_id=1, status="ENABLED", budget_micros=10_000_000)
+        ctx = _ctx(campaigns=[c], ad_groups=[])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.ORPHANED_CAMPAIGN
+        assert recs[0].estimated_monthly_savings_micros == 10_000_000 * 30
+
+    def test_campaign_with_all_paused_ad_groups_triggers(self):
+        c = _campaign(campaign_id=1, status="ENABLED", budget_micros=5_000_000)
+        ag1 = _ad_group(ad_group_id=10, campaign_id=1, status="PAUSED")
+        ag2 = _ad_group(ad_group_id=20, campaign_id=1, status="REMOVED")
+        ctx = _ctx(campaigns=[c], ad_groups=[ag1, ag2])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+
+    def test_campaign_with_enabled_ad_group_not_triggered(self):
+        c = _campaign(campaign_id=1, status="ENABLED", budget_micros=5_000_000)
+        ag = _ad_group(ad_group_id=10, campaign_id=1, status="ENABLED")
+        ctx = _ctx(campaigns=[c], ad_groups=[ag])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_campaign_not_checked(self):
+        c = _campaign(campaign_id=1, status="PAUSED", budget_micros=5_000_000)
+        ctx = _ctx(campaigns=[c], ad_groups=[])
+        assert self.rule.detect(ctx) == []
+
+    def test_zero_budget_campaign_not_triggered(self):
+        c = _campaign(campaign_id=1, status="ENABLED", budget_micros=0)
+        ctx = _ctx(campaigns=[c], ad_groups=[])
+        assert self.rule.detect(ctx) == []
+
+
+# ===========================================================================
+# Rule 27 - MatchTypeRedundancyRule
+# ===========================================================================
+
+
+class TestMatchTypeRedundancyRule:
+    rule = MatchTypeRedundancyRule()
+
+    def test_broad_and_exact_same_ad_group_triggers(self):
+        ag = _ad_group(ad_group_id=10, campaign_id=1)
+        kw_broad = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD")
+        kw_exact = _keyword(criterion_id=2, ad_group_id=10, text="running shoes", match_type="EXACT")
+        ctx = _ctx(ad_groups=[ag], keywords=[kw_broad, kw_exact])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.MATCH_TYPE_REDUNDANCY
+        assert recs[0].evidence["redundant_match_type"] == "BROAD"
+
+    def test_broad_and_phrase_same_ad_group_triggers(self):
+        ag = _ad_group(ad_group_id=10, campaign_id=1)
+        kw_broad = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD")
+        kw_phrase = _keyword(criterion_id=2, ad_group_id=10, text="running shoes", match_type="PHRASE")
+        ctx = _ctx(ad_groups=[ag], keywords=[kw_broad, kw_phrase])
+        assert len(self.rule.detect(ctx)) == 1
+
+    def test_exact_only_not_triggered(self):
+        ag = _ad_group(ad_group_id=10)
+        kw = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", match_type="EXACT")
+        ctx = _ctx(ad_groups=[ag], keywords=[kw])
+        assert self.rule.detect(ctx) == []
+
+    def test_broad_only_not_triggered(self):
+        ag = _ad_group(ad_group_id=10)
+        kw = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD")
+        ctx = _ctx(ad_groups=[ag], keywords=[kw])
+        assert self.rule.detect(ctx) == []
+
+    def test_same_text_different_ad_groups_not_triggered(self):
+        ag1 = _ad_group(ad_group_id=10, campaign_id=1)
+        ag2 = _ad_group(ad_group_id=20, campaign_id=1)
+        kw_broad = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD")
+        kw_exact = _keyword(criterion_id=2, ad_group_id=20, text="running shoes", match_type="EXACT")
+        ctx = _ctx(ad_groups=[ag1, ag2], keywords=[kw_broad, kw_exact])
+        assert self.rule.detect(ctx) == []
+
+    def test_paused_keywords_ignored(self):
+        ag = _ad_group(ad_group_id=10, campaign_id=1)
+        kw_broad = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD", status="PAUSED")
+        kw_exact = _keyword(criterion_id=2, ad_group_id=10, text="running shoes", match_type="EXACT", status="ENABLED")
+        ctx = _ctx(ad_groups=[ag], keywords=[kw_broad, kw_exact])
+        assert self.rule.detect(ctx) == []

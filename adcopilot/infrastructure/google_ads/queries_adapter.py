@@ -9,6 +9,7 @@ from adcopilot.domain.snapshot import (
     AdSnapshot,
     CampaignSnapshot,
     KeywordSnapshot,
+    NegativeKeywordSnapshot,
     SearchTermSnapshot,
 )
 from adcopilot.infrastructure.google_ads import queries
@@ -60,5 +61,12 @@ class GoogleAdsQueriesAdapter:
         self, refresh_token: str, customer_id: str, snapshot_date: date
     ) -> list[AdSnapshot]:
         return await queries.query_ads(
+            refresh_token, customer_id, snapshot_date, self._settings
+        )
+
+    async def query_negative_keywords(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list[NegativeKeywordSnapshot]:
+        return await queries.query_negative_keywords(
             refresh_token, customer_id, snapshot_date, self._settings
         )
