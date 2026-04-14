@@ -652,3 +652,31 @@ async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
             )
     finally:
         await engine.dispose()
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    max_retries=3,
+    default_retry_delay=300,
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    name="adcopilot.interfaces.worker.tasks.nightly_db_backup_task",
+)
+def nightly_db_backup_task() -> dict[str, object]:
+    """Create a gzipped pg_dump and upload it to Cloudflare R2.
+
+    Also prunes backup objects older than 30 days to enforce retention.
+    Skipped silently when R2 credentials are not configured (e.g. local dev).
+    """
+    from adcopilot.config import get_settings
+    from adcopilot.infrastructure.backup import delete_old_backups, run_backup
+
+    settings = get_settings()
+    if not settings.R2_ACCOUNT_ID or not settings.R2_ACCESS_KEY_ID:
+        logger.warning("nightly_db_backup.skipped", reason="R2 credentials not configured")
+        return {"skipped": True}
+
+    key = run_backup()
+    deleted = delete_old_backups(retain_days=30)
+
+    logger.info("nightly_db_backup.done", key=key, deleted_old=deleted)
+    return {"key": key, "deleted_old_backups": deleted}

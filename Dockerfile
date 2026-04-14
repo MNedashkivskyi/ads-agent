@@ -11,6 +11,11 @@ FROM python:3.12-slim AS runtime
 
 WORKDIR /app
 
+# postgresql-client provides pg_dump, needed by the Celery backup task.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup --no-create-home appuser
 
 COPY --from=builder /app/.venv /app/.venv
