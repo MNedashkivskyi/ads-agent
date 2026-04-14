@@ -6,6 +6,7 @@ framework-agnostic where possible so they can be unit-tested without spinning
 up a FastAPI TestClient.
 """
 
+from adcopilot.security.cors import build_cors_allowed_origins
 from adcopilot.security.oauth_state import (
     STATE_JWT_EXPIRY_MINUTES,
     StateAlreadyUsedError,
@@ -27,6 +28,7 @@ __all__ = [
     "StateAlreadyUsedError",
     "StateTokenError",
     "StateTokenInvalidError",
+    "build_cors_allowed_origins",
     "build_default_prefix_rate_limits",
     "consume_state_jwt",
     "issue_state_jwt",

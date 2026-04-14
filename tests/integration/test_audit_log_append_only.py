@@ -60,9 +60,9 @@ async def test_adept_app_cannot_mutate_audit_logs(db_session: AsyncSession) -> N
     #    connect as the role.  Clean up any leftover from a previous run.
     await db_session.execute(text(f"DROP ROLE IF EXISTS {_TEST_ROLE}"))
     await db_session.execute(
-        text(
-            f"CREATE ROLE {_TEST_ROLE} LOGIN PASSWORD :pw IN ROLE adept_app"
-        ).bindparams(pw=_TEST_PASSWORD)
+        text(f"CREATE ROLE {_TEST_ROLE} LOGIN PASSWORD :pw IN ROLE adept_app").bindparams(
+            pw=_TEST_PASSWORD
+        )
     )
     await db_session.commit()
 
@@ -82,9 +82,7 @@ async def test_adept_app_cannot_mutate_audit_logs(db_session: AsyncSession) -> N
         async with AsyncSession(app_engine) as app_session:
             # SELECT — allowed.
             result = await app_session.execute(
-                text("SELECT COUNT(*) FROM audit_logs WHERE id = :id").bindparams(
-                    id=row_id
-                )
+                text("SELECT COUNT(*) FROM audit_logs WHERE id = :id").bindparams(id=row_id)
             )
             assert result.scalar_one() == 1
 

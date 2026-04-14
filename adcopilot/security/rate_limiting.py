@@ -114,8 +114,7 @@ class PathPrefixRateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)  # type: ignore[arg-type]
         self._storage_uri = storage_uri
         self._configs: list[tuple[str, RateLimitItem]] = [
-            (c.prefix, parse(c.limit))
-            for c in (configs or build_default_prefix_rate_limits())
+            (c.prefix, parse(c.limit)) for c in (configs or build_default_prefix_rate_limits())
         ]
         # Sort by prefix length descending so the first match is the most
         # specific — e.g. "/telegram/webhook" wins over a hypothetical
@@ -136,9 +135,7 @@ class PathPrefixRateLimitMiddleware(BaseHTTPMiddleware):
                 return prefix, item
         return None
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         match = self._match(request.url.path)
         if match is None:
             return await call_next(request)

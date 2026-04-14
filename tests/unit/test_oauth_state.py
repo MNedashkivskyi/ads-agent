@@ -26,9 +26,7 @@ class FakeRedis:
     def __init__(self) -> None:
         self.store: dict[str, tuple[str, int | None]] = {}
 
-    def set(
-        self, key: str, value: str, nx: bool = False, ex: int | None = None
-    ) -> bool | None:
+    def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> bool | None:
         if nx and key in self.store:
             return None
         self.store[key] = (value, ex)
