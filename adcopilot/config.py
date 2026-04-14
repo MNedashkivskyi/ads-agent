@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     SENTRY_DSN: str | None = None
     SENTRY_TRACES_SAMPLE_RATE: float = 0.1
 
+    # Cloudflare R2 — used for nightly Postgres backups.
+    # R2_ENDPOINT_URL is derived from R2_ACCOUNT_ID when not set explicitly.
+    R2_ACCOUNT_ID: str | None = None
+    R2_ACCESS_KEY_ID: str | None = None
+    R2_SECRET_ACCESS_KEY: str | None = None
+    R2_BUCKET_NAME: str = "adcopilot-backups"
+
     @property
     def is_production(self) -> bool:
         return self.ENV == "production"

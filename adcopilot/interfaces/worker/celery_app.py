@@ -29,6 +29,12 @@ def create_celery_app() -> Celery:
             "timezone": "UTC",
             "enable_utc": True,
             "beat_schedule": {
+                "nightly-db-backup": {
+                    # 2:00 AM UTC — runs before snapshot ingestion so the
+                    # backup always captures the previous day's committed data.
+                    "task": "adcopilot.interfaces.worker.tasks.nightly_db_backup_task",
+                    "schedule": crontab(hour=2, minute=0),
+                },
                 "nightly-snapshots": {
                     "task": "adcopilot.interfaces.worker.tasks.run_nightly_snapshots",
                     "schedule": crontab(hour=3, minute=0),

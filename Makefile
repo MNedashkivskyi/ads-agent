@@ -1,5 +1,6 @@
 .PHONY: install fmt lint type test test-all up down migrate migrate-create \
-        prod-up prod-down prod-migrate prod-logs
+        prod-up prod-down prod-migrate prod-logs \
+        db-backup db-restore
 
 install:
 	uv sync --all-extras
@@ -46,3 +47,21 @@ prod-migrate:
 
 prod-logs:
 	docker compose -f docker-compose.prod.yml logs -f --tail=100
+
+# ── Disaster recovery ────────────────────────────────────────────────────────
+
+# Trigger a manual backup right now (requires R2 credentials in .env).
+db-backup:
+	docker compose exec worker celery -A adcopilot.interfaces.worker.celery_app:celery_app call \
+	    adcopilot.interfaces.worker.tasks.nightly_db_backup_task
+
+# Restore a specific backup from R2 to the local Postgres container.
+#
+#   make db-restore BACKUP=backups/20240101-020000.sql.gz
+#   make db-restore BACKUP=20240101-020000.sql.gz     # prefix added automatically
+#
+# Prerequisites: docker compose up -d postgres, R2 credentials in .env
+BACKUP ?=
+db-restore:
+	@test -n "$(BACKUP)" || (echo "Usage: make db-restore BACKUP=<filename or R2 key>" && exit 1)
+	uv run python scripts/db_restore.py "$(BACKUP)"
