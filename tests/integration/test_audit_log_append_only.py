@@ -33,7 +33,7 @@ _migration_module = importlib.import_module(
 )
 
 _TEST_ROLE = "adept_app_test_user"
-_TEST_PASSWORD = "scratch-password-for-tests"  # noqa: S105 — test-only constant
+_TEST_PASSWORD = "scratch-password-for-tests"  # test-only constant
 
 
 def _role_url(base_url: str) -> str:
