@@ -152,7 +152,9 @@ async def test_oauth_credentials_encrypted_at_rest(db_session: AsyncSession) -> 
     assert fetched is not None
     assert fetched.refresh_token == plaintext_token
 
-    # Verify the raw DB value is NOT the plaintext
+    # Verify the raw DB value is NOT the plaintext and has Fernet format.
+    # Acceptance criterion: "Raw SQL query shows encrypted blobs in
+    # oauth_credentials.refresh_token".
     result = await db_session.execute(
         text("SELECT refresh_token_encrypted FROM oauth_credentials WHERE account_id = :aid"),
         {"aid": str(account_id)},
@@ -161,4 +163,9 @@ async def test_oauth_credentials_encrypted_at_rest(db_session: AsyncSession) -> 
     assert row is not None
     raw_value = row[0]
     assert raw_value != plaintext_token
+    assert plaintext_token not in raw_value
     assert len(raw_value) > len(plaintext_token)
+    # Fernet v0 tokens always begin with the base64 form of \x80 ("gAAAAA").
+    assert raw_value.startswith("gAAAAA"), (
+        f"Expected Fernet-format ciphertext on disk, got prefix {raw_value[:10]!r}"
+    )
