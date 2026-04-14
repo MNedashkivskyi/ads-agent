@@ -8,8 +8,10 @@ from sqlalchemy import (
     Date,
     DateTime,
     Float,
+    ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     func,
@@ -19,6 +21,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Re-export for convenience
 __all__ = [
+    "LaunchAdGroupModel",
+    "LaunchAdModel",
+    "LaunchBriefModel",
+    "LaunchKeywordModel",
+    "LaunchProposalModel",
     "AdGroupSnapshotModel",
     "AdSnapshotModel",
     "AuditLogModel",
@@ -584,6 +591,134 @@ class AuditLogModel(Base):
     kind: Mapped[str] = mapped_column(String(100), nullable=False)
     action: Mapped[str] = mapped_column(String(20), nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+# ---------------------------------------------------------------------------
+# Campaign-launch domain models
+# ---------------------------------------------------------------------------
+
+
+class LaunchBriefModel(Base):
+    """Persists a ``CampaignBrief`` aggregate."""
+
+    __tablename__ = "launch_briefs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    business_description: Mapped[str] = mapped_column(Text, nullable=False)
+    location: Mapped[str] = mapped_column(String(255), nullable=False)
+    typical_customer_value: Mapped[sa.Numeric] = mapped_column(  # type: ignore[type-arg]
+        Numeric(precision=14, scale=2), nullable=False
+    )
+    primary_action: Mapped[str] = mapped_column(String(255), nullable=False)
+    monthly_budget_pln: Mapped[sa.Numeric] = mapped_column(  # type: ignore[type-arg]
+        Numeric(precision=14, scale=2), nullable=False
+    )
+    # Stored as a JSON array of strings.
+    exclusions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    language: Mapped[str] = mapped_column(String(10), nullable=False, server_default="pl")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class LaunchProposalModel(Base):
+    """Persists a ``CampaignProposal`` — the AI-generated campaign structure."""
+
+    __tablename__ = "launch_proposals"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    brief_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("launch_briefs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    campaign_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    daily_budget_micros: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    location_targeting: Mapped[str] = mapped_column(String(255), nullable=False)
+    bidding_strategy: Mapped[str] = mapped_column(String(100), nullable=False)
+    # Campaign-level negative keywords as a JSON array of strings.
+    negative_keywords: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    estimated_cpc_min_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    estimated_cpc_max_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class LaunchAdGroupModel(Base):
+    """Persists an ``AdGroupProposal`` belonging to a ``LaunchProposalModel``."""
+
+    __tablename__ = "launch_ad_groups"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("launch_proposals.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Ordering within the proposal (0-based).
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class LaunchKeywordModel(Base):
+    """Persists a ``KeywordProposal`` belonging to a ``LaunchAdGroupModel``."""
+
+    __tablename__ = "launch_keywords"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ad_group_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("launch_ad_groups.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    match_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    estimated_cpc_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class LaunchAdModel(Base):
+    """Persists an ``AdProposal`` belonging to a ``LaunchAdGroupModel``."""
+
+    __tablename__ = "launch_ads"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    ad_group_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("launch_ad_groups.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    # RSA headlines and descriptions stored as JSON arrays.
+    headlines: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    descriptions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    final_url: Mapped[str] = mapped_column(Text, nullable=False)
+    path1: Mapped[str] = mapped_column(String(15), nullable=False, server_default="")
+    path2: Mapped[str] = mapped_column(String(15), nullable=False, server_default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
