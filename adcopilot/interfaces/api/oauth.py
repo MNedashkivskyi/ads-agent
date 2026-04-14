@@ -6,9 +6,9 @@ from typing import Annotated
 from urllib.parse import urlencode
 
 import httpx
+import redis as redis_sync
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import Settings, get_settings
@@ -20,6 +20,12 @@ from adcopilot.infrastructure.db.repositories.oauth_credentials_repository impor
     SqlOAuthCredentialsRepository,
 )
 from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
+from adcopilot.security import (
+    StateAlreadyUsedError,
+    StateTokenInvalidError,
+    consume_state_jwt,
+    issue_state_jwt,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -28,28 +34,17 @@ router = APIRouter(prefix="/oauth", tags=["oauth"])
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_ADS_SCOPE = "https://www.googleapis.com/auth/adwords"
-STATE_JWT_ALGORITHM = "HS256"
-STATE_JWT_EXPIRY_MINUTES = 10
 
 
-def _make_state_jwt(user_id: str, secret_key: str) -> str:
-    payload = {
-        "sub": user_id,
-        "exp": datetime.now(UTC) + timedelta(minutes=STATE_JWT_EXPIRY_MINUTES),
-        "jti": str(uuid.uuid4()),
-    }
-    token: str = jwt.encode(payload, secret_key, algorithm=STATE_JWT_ALGORITHM)
-    return token
+def _get_redis_client(settings: Annotated[Settings, Depends(get_settings)]) -> redis_sync.Redis:
+    """FastAPI dependency — returns a sync Redis client for state replay storage.
 
-
-def _verify_state_jwt(token: str, secret_key: str) -> str:
-    """Returns user_id or raises HTTPException."""
-    try:
-        payload = jwt.decode(token, secret_key, algorithms=[STATE_JWT_ALGORITHM])
-        user_id: str = payload["sub"]
-        return user_id
-    except JWTError as exc:
-        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state") from exc
+    We use the sync client intentionally: the ``consume_state_jwt`` helper
+    performs a single ``SET NX`` call, and building the client per request
+    (connection pooled under the hood) is simpler than managing an async
+    pool in the single-consumer OAuth callback hot path.
+    """
+    return redis_sync.Redis.from_url(settings.REDIS_URL)
 
 
 from collections.abc import AsyncGenerator  # noqa: E402
@@ -73,7 +68,7 @@ async def oauth_google_start(
     if not settings.GOOGLE_ADS_CLIENT_ID:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
 
-    state = _make_state_jwt(user_id, settings.SECRET_KEY)
+    state = issue_state_jwt(user_id, settings.SECRET_KEY)
     callback_url = "http://localhost:8000/oauth/google/callback"  # configurable in prod
 
     params = {
@@ -95,13 +90,21 @@ async def oauth_google_callback(
     state: Annotated[str, Query()],
     settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(_get_db_session)],
+    redis_client: Annotated[redis_sync.Redis, Depends(_get_redis_client)],
 ) -> dict[str, object]:
     """Exchanges code for tokens, stores credentials, returns linked customer IDs."""
     if not settings.GOOGLE_ADS_CLIENT_ID or not settings.GOOGLE_ADS_CLIENT_SECRET:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
 
-    # Validate state JWT — prevents CSRF
-    user_id = _verify_state_jwt(state, settings.SECRET_KEY)
+    # Validate state JWT — prevents CSRF and, via Redis single-use marker,
+    # also prevents replay of a captured state value.
+    try:
+        user_id = consume_state_jwt(state, settings.SECRET_KEY, redis_client=redis_client)
+    except StateAlreadyUsedError as exc:
+        logger.warning("oauth state replay attempted")
+        raise HTTPException(status_code=400, detail="OAuth state already used") from exc
+    except StateTokenInvalidError as exc:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state") from exc
 
     user_repo = SqlUserRepository(session)
     user = await user_repo.get_by_id(UserId(user_id))
@@ -131,9 +134,7 @@ async def oauth_google_callback(
     refresh_token: str = token_data.get("refresh_token", "")
     access_token: str | None = token_data.get("access_token")
     expires_in: int | None = token_data.get("expires_in")
-    expires_at = (
-        datetime.now(UTC) + timedelta(seconds=expires_in) if expires_in else None
-    )
+    expires_at = datetime.now(UTC) + timedelta(seconds=expires_in) if expires_in else None
 
     if not refresh_token:
         raise HTTPException(status_code=400, detail="No refresh_token in Google response")

@@ -88,9 +88,9 @@ async def test_oauth_callback_stores_encrypted_credentials(db_session: AsyncSess
             ]
             mock_ads_cls.return_value = mock_ads_instance
 
-            from adcopilot.interfaces.api.oauth import _make_state_jwt
+            from adcopilot.security import issue_state_jwt
 
-            state = _make_state_jwt(user_id, settings.SECRET_KEY)
+            state = issue_state_jwt(user_id, settings.SECRET_KEY)
 
             app = create_app()
             app.dependency_overrides = {}
@@ -98,6 +98,24 @@ async def test_oauth_callback_stores_encrypted_credentials(db_session: AsyncSess
             # Override settings dependency
             from adcopilot.config import get_settings
             app.dependency_overrides[get_settings] = lambda: settings
+
+            # Fake Redis for single-use state storage — the real integration
+            # here is covered in tests/unit/test_oauth_state.py.
+            from adcopilot.interfaces.api.oauth import _get_redis_client
+
+            class _FakeRedis:
+                def __init__(self) -> None:
+                    self._store: dict[str, str] = {}
+
+                def set(
+                    self, key: str, value: str, nx: bool = False, ex: int | None = None
+                ) -> bool | None:
+                    if nx and key in self._store:
+                        return None
+                    self._store[key] = value
+                    return True
+
+            app.dependency_overrides[_get_redis_client] = lambda: _FakeRedis()
 
             with TestClient(app, raise_server_exceptions=True) as client:
                 resp = client.get(

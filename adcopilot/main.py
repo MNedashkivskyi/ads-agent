@@ -29,8 +29,8 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     if settings.TELEGRAM_BOT_TOKEN:
         from adcopilot.infrastructure.telegram.bot import (
             build_telegram_app,
-            compute_webhook_secret,
             register_webhook,
+            resolve_webhook_secret,
         )
 
         tg_app = build_telegram_app(settings)
@@ -40,7 +40,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
         if settings.TELEGRAM_WEBHOOK_URL:
             webhook_url = settings.TELEGRAM_WEBHOOK_URL.rstrip("/") + "/telegram/webhook"
-            secret = compute_webhook_secret(settings.TELEGRAM_BOT_TOKEN)
+            secret = resolve_webhook_secret(settings)
             try:
                 await register_webhook(tg_app.bot, webhook_url, secret)
             except Exception as exc:
@@ -76,6 +76,7 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.telegram import router as telegram_router
     from adcopilot.interfaces.api.users import router as users_router
     from adcopilot.rate_limit import limiter
+    from adcopilot.security import PathPrefixRateLimitMiddleware
 
     # Initialise Sentry before the ASGI app is built so FastAPI/Starlette
     # integrations hook into the request lifecycle.  Idempotent.
@@ -86,24 +87,34 @@ def create_app() -> FastAPI:
     application.state.limiter = limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     application.add_middleware(SlowAPIMiddleware)
+    # Path-prefix rate limits envelope the per-endpoint slowapi decorators.
+    # Configured limits: /oauth/* 10/min, /api/* 60/min, /webhooks/* 100/min,
+    # /telegram/webhook 100/min.  See adcopilot/security/rate_limiting.py.
+    application.add_middleware(PathPrefixRateLimitMiddleware, storage_uri=get_settings().REDIS_URL)
     application.add_middleware(RequestIdMiddleware)
     application.add_middleware(SentryContextMiddleware)
 
-    # CORS — allow the frontend origin(s).  APP_URL is the canonical frontend
-    # base URL (e.g. https://tryadept.com).  In development any localhost
-    # origin is also accepted.
+    # CORS — origin allow-list.  In production the ONLY accepted origin is
+    # the canonical web domain set via APP_URL (e.g. https://tryadept.com).
+    # No wildcards.  In non-production environments we additionally allow
+    # localhost so the Next.js dev server can talk to a local API.
     from fastapi.middleware.cors import CORSMiddleware
 
+    from adcopilot.security import build_cors_allowed_origins
+
     settings = get_settings()
-    allowed_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]
-    if settings.APP_URL:
-        allowed_origins.append(settings.APP_URL.rstrip("/"))
+    allowed_origins = build_cors_allowed_origins(settings)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=allowed_origins,
+        # Do NOT use allow_origin_regex — any regex here effectively widens
+        # the allow-list and can regress into a de-facto wildcard.
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        # Explicit methods/headers — no "*" even though the ASGI CORS
+        # middleware would otherwise accept it.  If a new method or header
+        # is required, it must be added here deliberately.
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
     application.include_router(auth_router)
     application.include_router(oauth_router)

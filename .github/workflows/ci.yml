@@ -49,3 +49,37 @@ jobs:
 
       - name: Run unit tests
         run: uv run pytest tests/ -m "not integration" -v
+
+  security-audit:
+    # Required check — fails the build on any HIGH or CRITICAL vulnerability
+    # in the resolved dependency set.  MEDIUM/LOW are reported but do not
+    # block.  See scripts/ci_pip_audit.py for the severity-classification
+    # logic; raw findings are uploaded as the pip-audit.json artefact.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Install pip-audit
+        run: uv pip install pip-audit
+
+      - name: Run pip-audit (fail on HIGH/CRITICAL)
+        run: uv run python scripts/ci_pip_audit.py
+
+      - name: Upload pip-audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: pip-audit.json
+          if-no-files-found: ignore

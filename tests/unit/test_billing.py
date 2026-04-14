@@ -149,16 +149,17 @@ async def test_oauth_callback_enforces_starter_account_limit() -> None:
     mock_ads_client.list_accessible_customers = AsyncMock(return_value=["123-456-7890"])
 
     with (
-        patch("adcopilot.interfaces.api.oauth._verify_state_jwt", return_value=str(_USER_ID)),
+        patch(
+            "adcopilot.interfaces.api.oauth.consume_state_jwt",
+            return_value=str(_USER_ID),
+        ),
         patch("adcopilot.interfaces.api.oauth.SqlUserRepository", return_value=mock_user_repo),
         patch(
             "adcopilot.interfaces.api.oauth.SqlGoogleAdsAccountRepository",
             return_value=mock_acc_repo,
         ),
         patch("adcopilot.interfaces.api.oauth.SqlOAuthCredentialsRepository", MagicMock()),
-        patch(
-            "adcopilot.interfaces.api.oauth.httpx.AsyncClient"
-        ) as mock_http_cls,
+        patch("adcopilot.interfaces.api.oauth.httpx.AsyncClient") as mock_http_cls,
         patch(
             "adcopilot.infrastructure.google_ads.client.GoogleAdsClientAdapter",
             return_value=mock_ads_client,
@@ -183,6 +184,7 @@ async def test_oauth_callback_enforces_starter_account_limit() -> None:
                 state="state_jwt",
                 settings=settings,
                 session=mock_session,
+                redis_client=MagicMock(),
             )
 
     assert exc_info.value.status_code == 402
@@ -223,7 +225,10 @@ async def test_oauth_callback_allows_growth_second_account() -> None:
     mock_ads_client.list_accessible_customers = AsyncMock(return_value=["123-456-7890"])
 
     with (
-        patch("adcopilot.interfaces.api.oauth._verify_state_jwt", return_value=str(_USER_ID)),
+        patch(
+            "adcopilot.interfaces.api.oauth.consume_state_jwt",
+            return_value=str(_USER_ID),
+        ),
         patch("adcopilot.interfaces.api.oauth.SqlUserRepository", return_value=mock_user_repo),
         patch(
             "adcopilot.interfaces.api.oauth.SqlGoogleAdsAccountRepository",
@@ -257,6 +262,7 @@ async def test_oauth_callback_allows_growth_second_account() -> None:
             state="state_jwt",
             settings=settings,
             session=mock_session,
+            redis_client=MagicMock(),
         )
 
     assert "linked_customer_ids" in result

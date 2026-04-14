@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -12,7 +13,7 @@ from jose import JWTError, jwt
 from telegram import Update
 
 from adcopilot.config import Settings, get_settings
-from adcopilot.infrastructure.telegram.bot import compute_webhook_secret
+from adcopilot.infrastructure.telegram.bot import resolve_webhook_secret
 
 logger = structlog.get_logger(__name__)
 
@@ -61,9 +62,14 @@ async def telegram_webhook(
     if not settings.TELEGRAM_BOT_TOKEN:
         raise HTTPException(status_code=503, detail="Telegram bot not configured")
 
-    # Verify the secret token header that Telegram sends on every update.
-    expected_secret = compute_webhook_secret(settings.TELEGRAM_BOT_TOKEN)
-    if x_telegram_bot_api_secret_token != expected_secret:
+    # Verify the secret token Telegram echoes on every webhook request.
+    # Prefers TELEGRAM_WEBHOOK_SECRET when set, otherwise the HMAC-derived
+    # value.  ``hmac.compare_digest`` is constant-time to prevent timing
+    # attacks.  A missing or mismatched header returns 403 immediately.
+    expected_secret = resolve_webhook_secret(settings)
+    if x_telegram_bot_api_secret_token is None or not hmac.compare_digest(
+        x_telegram_bot_api_secret_token, expected_secret
+    ):
         raise HTTPException(status_code=403, detail="Invalid webhook secret token")
 
     tg_app = getattr(request.app.state, "telegram_app", None)

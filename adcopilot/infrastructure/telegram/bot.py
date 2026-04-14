@@ -16,12 +16,29 @@ logger = structlog.get_logger(__name__)
 def compute_webhook_secret(bot_token: str) -> str:
     """Derive a deterministic webhook secret from the bot token.
 
-    The same value is passed to ``setWebhook`` as ``secret_token`` and checked
-    against the ``X-Telegram-Bot-Api-Secret-Token`` header on every incoming
-    update.  Using the bot token as the key means we never need to store an
-    extra secret.
+    Used as a fallback when ``TELEGRAM_WEBHOOK_SECRET`` is not configured
+    explicitly — see :func:`resolve_webhook_secret`.
     """
     return hmac.new(b"WebhookSecret", bot_token.encode(), hashlib.sha256).hexdigest()
+
+
+def resolve_webhook_secret(settings: Settings) -> str:
+    """Return the secret to use for this process.
+
+    Prefers the explicit ``TELEGRAM_WEBHOOK_SECRET`` env var.  If unset,
+    falls back to the HMAC-derived value so existing deployments continue
+    to work without any config change.  Raises ``RuntimeError`` if neither
+    the explicit secret nor the bot token is available — in that case the
+    webhook cannot be verified at all.
+    """
+    if settings.TELEGRAM_WEBHOOK_SECRET:
+        return settings.TELEGRAM_WEBHOOK_SECRET
+    if settings.TELEGRAM_BOT_TOKEN:
+        return compute_webhook_secret(settings.TELEGRAM_BOT_TOKEN)
+    raise RuntimeError(
+        "No Telegram webhook secret available: set TELEGRAM_WEBHOOK_SECRET "
+        "or TELEGRAM_BOT_TOKEN"
+    )
 
 
 async def register_webhook(bot: object, webhook_url: str, secret: str) -> None:
