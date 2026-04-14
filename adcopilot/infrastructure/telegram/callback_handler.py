@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import sentry_sdk
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from telegram import Update
 from telegram.ext import ContextTypes
 
 from adcopilot.config import get_settings
+from adcopilot.observability import clear_context, set_account_context, set_user_context
 
 logger = structlog.get_logger(__name__)
 
@@ -22,6 +24,7 @@ async def recommendation_callback_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """Handle approve/decline/snooze inline button presses."""
+    clear_context()
     query = update.callback_query
     if query is None or query.data is None:
         return
@@ -37,6 +40,13 @@ async def recommendation_callback_handler(
     telegram_chat_id = query.from_user.id if query.from_user else None
     if telegram_chat_id is None:
         return
+
+    txn = sentry_sdk.start_transaction(
+        op="telegram.callback",
+        name=f"telegram.{action}",
+    )
+    txn.set_tag("telegram.action", action)
+    txn.set_tag("recommendation_id", rec_id_str)
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -76,12 +86,14 @@ async def recommendation_callback_handler(
                 return
 
             user_id = UserId(str(user_model.id))
+            set_user_context(str(user_id))
             rec_id = RecommendationId(rec_id_str)
             rec = await rec_repo.get(rec_id)
             if rec is None:
                 await query.edit_message_text("Rekomendacja nie znaleziona lub już przetworzona.")
                 return
 
+            set_account_context(rec.account_id)
             user_accounts = await account_repo.list_for_user(user_id)
             user_account_ids = {a.id for a in user_accounts}
             if rec.account_id not in user_account_ids:
@@ -91,7 +103,9 @@ async def recommendation_callback_handler(
                     rec_id=rec_id,
                     rec_account_id=rec.account_id,
                 )
-                await query.edit_message_text("Nieautoryzowany: ta rekomendacja nie należy do Ciebie.")
+                await query.edit_message_text(
+                    "Nieautoryzowany: ta rekomendacja nie należy do Ciebie."
+                )
                 return
 
             rec_savings_micros = rec.estimated_monthly_savings_micros
@@ -124,11 +138,15 @@ async def recommendation_callback_handler(
 
     except Exception:
         logger.exception("callback handler error", action=action, rec_id=rec_id_str)
+        sentry_sdk.capture_exception()
         await query.edit_message_text("Wystąpił błąd. Spróbuj ponownie.")
+        txn.set_status("internal_error")
+        txn.finish()
         return
     finally:
         await engine.dispose()
 
+    txn.finish()
     logger.info("recommendation action taken", action=action, rec_id=rec_id_str)
 
     if action == "approve":
@@ -148,9 +166,7 @@ async def recommendation_callback_handler(
         await query.edit_message_text(f"✓ {label}")
 
 
-async def undo_callback_handler(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def undo_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle undo_exec:{rec_id} inline button presses."""
     query = update.callback_query
     if query is None or query.data is None:
@@ -241,12 +257,12 @@ async def undo_callback_handler(
         await engine.dispose()
 
     logger.info("recommendation undone via telegram", rec_id=rec_id_str)
-    await query.edit_message_text("↩️ Cofnięto: akcja została cofnięta. Konto wróciło do poprzedniego stanu.")
+    await query.edit_message_text(
+        "↩️ Cofnięto: akcja została cofnięta. Konto wróciło do poprzedniego stanu."
+    )
 
 
-async def more_callback_handler(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def more_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle more:{rec_id} — show formatted evidence for a recommendation."""
     query = update.callback_query
     if query is None or query.data is None:

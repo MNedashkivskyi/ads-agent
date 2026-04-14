@@ -6,6 +6,7 @@ import time
 from dataclasses import dataclass
 from datetime import date
 
+import sentry_sdk
 import structlog
 
 from adcopilot.application.ports.google_ads import GoogleAdsClientPort
@@ -48,9 +49,19 @@ class SnapshotAccountUseCase:
         self._credentials_repo = credentials_repo
         self._account_repo = account_repo
 
-    async def execute(
-        self, account_id: AccountId, snapshot_date: date
-    ) -> SnapshotResult:
+    async def execute(self, account_id: AccountId, snapshot_date: date) -> SnapshotResult:
+        from adcopilot.observability import set_account_context
+
+        set_account_context(account_id)
+        with sentry_sdk.start_transaction(
+            op="snapshot.execute",
+            name="SnapshotAccountUseCase.execute",
+        ) as txn:
+            txn.set_tag("account_id", account_id)
+            txn.set_tag("snapshot_date", snapshot_date.isoformat())
+            return await self._execute_inner(account_id, snapshot_date)
+
+    async def _execute_inner(self, account_id: AccountId, snapshot_date: date) -> SnapshotResult:
         start = time.monotonic()
 
         # 1. Load account
@@ -92,6 +103,7 @@ class SnapshotAccountUseCase:
 
         # 3. Pull all 14 entity types in parallel
         try:
+            fetch_span = sentry_sdk.start_span(op="snapshot.fetch", name="google_ads.fetch_all")
             (
                 campaigns,
                 ad_groups,
@@ -117,12 +129,8 @@ class SnapshotAccountUseCase:
                 self._ads_client.query_device_performance(
                     refresh_token, customer_id, snapshot_date
                 ),
-                self._ads_client.query_geo_performance(
-                    refresh_token, customer_id, snapshot_date
-                ),
-                self._ads_client.query_hour_performance(
-                    refresh_token, customer_id, snapshot_date
-                ),
+                self._ads_client.query_geo_performance(refresh_token, customer_id, snapshot_date),
+                self._ads_client.query_hour_performance(refresh_token, customer_id, snapshot_date),
                 self._ads_client.query_day_of_week_performance(
                     refresh_token, customer_id, snapshot_date
                 ),
@@ -139,6 +147,7 @@ class SnapshotAccountUseCase:
                     refresh_token, customer_id, snapshot_date
                 ),
             )
+            fetch_span.finish()
         except GoogleAdsAuthError as exc:
             logger.warning(
                 "google ads auth error during snapshot",
@@ -164,6 +173,7 @@ class SnapshotAccountUseCase:
 
         # 4. Upsert all in one transaction — callers are responsible for session scope,
         #    but we flush after each upsert batch and expect a single outer transaction.
+        upsert_span = sentry_sdk.start_span(op="snapshot.upsert", name="snapshot.upsert_all")
         await self._snapshot_repo.upsert_campaigns(account_id, campaigns)
         await self._snapshot_repo.upsert_ad_groups(account_id, ad_groups)
         await self._snapshot_repo.upsert_keywords(account_id, keywords)
@@ -180,6 +190,7 @@ class SnapshotAccountUseCase:
         await self._snapshot_repo.upsert_conversion_actions(account_id, conversion_actions)
         await self._snapshot_repo.upsert_campaign_extensions(account_id, campaign_extensions)
         await self._snapshot_repo.upsert_sitelink_performance(account_id, sitelink_performance)
+        upsert_span.finish()
 
         duration = time.monotonic() - start
         logger.info(

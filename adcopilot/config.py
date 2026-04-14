@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     STRIPE_PRO_PRICE_ID: str | None = None
     STRIPE_BUSINESS_PRICE_ID: str | None = None
 
+    # Sentry observability.  DSN is optional — the app runs fine without
+    # Sentry, but when DSN is set all unhandled exceptions in the API,
+    # Celery workers, and Telegram bot are reported.  Sample rate controls
+    # performance tracing for the hot paths (snapshot / detection / execute).
+    SENTRY_DSN: str | None = None
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.1
+
     @property
     def is_production(self) -> bool:
         return self.ENV == "production"

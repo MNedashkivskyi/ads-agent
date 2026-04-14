@@ -5,9 +5,18 @@ from celery.schedules import crontab
 
 from adcopilot.config import get_settings
 
+# Importing the signals module connects the Celery signal handlers at import
+# time.  These handlers reset the per-request context on task_prerun and
+# re-initialise Sentry inside each forked worker process.
+from adcopilot.observability import celery_sentry, init_sentry  # noqa: F401
+
 
 def create_celery_app() -> Celery:
     settings = get_settings()
+
+    # Initialise Sentry for beat/embedded contexts.  Fork worker processes
+    # re-init via the worker_process_init signal (see celery_sentry.py).
+    init_sentry(component="celery-app")
 
     app = Celery("adcopilot")
     app.config_from_object(

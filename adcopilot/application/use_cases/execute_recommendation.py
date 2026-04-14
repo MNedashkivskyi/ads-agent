@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+import sentry_sdk
 import structlog
 
 from adcopilot.application.ports.audit_log_repository import AuditLogRepository
@@ -68,13 +69,25 @@ class ExecuteRecommendationUseCase:
         self._executors = executors if executors is not None else _default_executors()
 
     async def execute(self, rec_id: RecommendationId) -> dict[str, Any]:
+        with sentry_sdk.start_transaction(
+            op="execute.recommendation",
+            name="ExecuteRecommendationUseCase.execute",
+        ) as txn:
+            txn.set_tag("recommendation_id", rec_id)
+            return await self._execute_inner(rec_id, txn)
+
+    async def _execute_inner(self, rec_id: RecommendationId, txn: Any) -> dict[str, Any]:
+        from adcopilot.observability import set_account_context
+
         rec = await self._rec_repo.get(rec_id)
         if rec is None:
             raise ValueError(f"Recommendation {rec_id} not found")
         if rec.status != RecommendationStatus.APPROVED:
-            raise ValueError(
-                f"Recommendation {rec_id} is not APPROVED (status={rec.status.value})"
-            )
+            raise ValueError(f"Recommendation {rec_id} is not APPROVED (status={rec.status.value})")
+
+        set_account_context(rec.account_id)
+        txn.set_tag("account_id", rec.account_id)
+        txn.set_tag("recommendation_kind", rec.kind.value)
 
         executor = self._executors.get(rec.kind)
         if executor is None:
@@ -88,12 +101,19 @@ class ExecuteRecommendationUseCase:
         if credentials is None:
             raise ValueError(f"No OAuth credentials for account {rec.account_id}")
 
-        result = await executor.execute(
-            rec=rec,
-            mutations=self._mutations,
-            refresh_token=credentials.refresh_token,
-            customer_id=account.customer_id,
-        )
+        # One span per executor so the Sentry waterfall shows which action
+        # dominated the latency (pause_keyword vs adjust_budget etc.).
+        with sentry_sdk.start_span(
+            op="execute.action",
+            name=f"{executor.__class__.__name__}.execute",
+        ) as span:
+            span.set_tag("kind", rec.kind.value)
+            result = await executor.execute(
+                rec=rec,
+                mutations=self._mutations,
+                refresh_token=credentials.refresh_token,
+                customer_id=account.customer_id,
+            )
 
         await self._rec_repo.update_status(rec_id, RecommendationStatus.EXECUTED)
 

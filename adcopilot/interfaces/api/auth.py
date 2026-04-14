@@ -81,9 +81,7 @@ async def signup(
     try:
         async with AsyncSession(engine) as session:
             # Check if email already taken
-            result = await session.execute(
-                select(UserModel).where(UserModel.email == body.email)
-            )
+            result = await session.execute(select(UserModel).where(UserModel.email == body.email))
             if result.scalar_one_or_none() is not None:
                 raise HTTPException(status_code=409, detail="Email already registered")
 
@@ -101,6 +99,9 @@ async def signup(
     finally:
         await engine.dispose()
 
+    from adcopilot.observability import set_user_context
+
+    set_user_context(saved.id)
     token = _make_jwt(saved.id, settings.SECRET_KEY)
     logger.info("user signed up", user_id=saved.id)
     return AuthResponse(user_id=saved.id, email=saved.email, token=token)
@@ -130,6 +131,9 @@ async def login(
     if not _verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    from adcopilot.observability import set_user_context
+
+    set_user_context(user.id)
     token = _make_jwt(user.id, settings.SECRET_KEY)
     logger.info("user logged in", user_id=user.id)
     return AuthResponse(user_id=user.id, email=user.email, token=token)
