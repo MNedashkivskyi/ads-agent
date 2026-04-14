@@ -6,7 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from adcopilot.infrastructure.telegram.bot import compute_webhook_secret
+from adcopilot.infrastructure.telegram.bot import (
+    compute_webhook_secret,
+    resolve_webhook_secret,
+)
 
 _BOT_TOKEN = "123456:ABCDefgh_test_token"
 _SECRET = compute_webhook_secret(_BOT_TOKEN)
@@ -52,9 +55,14 @@ def _make_request(
     return request
 
 
-def _make_settings(bot_token: str | None = _BOT_TOKEN) -> MagicMock:
+def _make_settings(
+    bot_token: str | None = _BOT_TOKEN,
+    webhook_secret: str | None = None,
+) -> MagicMock:
     settings = MagicMock()
     settings.TELEGRAM_BOT_TOKEN = bot_token
+    # Default to None so the HMAC-derived fallback is used in existing tests.
+    settings.TELEGRAM_WEBHOOK_SECRET = webhook_secret
     return settings
 
 
@@ -153,6 +161,74 @@ async def test_webhook_returns_503_when_no_bot_token() -> None:
         )
 
     assert exc_info.value.status_code == 503
+
+
+# ---------------------------------------------------------------------------
+# resolve_webhook_secret — explicit TELEGRAM_WEBHOOK_SECRET takes precedence
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_prefers_explicit_secret_over_derived() -> None:
+    settings = _make_settings(webhook_secret="explicit-value")
+    assert resolve_webhook_secret(settings) == "explicit-value"
+
+
+def test_resolve_falls_back_to_hmac_when_secret_unset() -> None:
+    settings = _make_settings(webhook_secret=None)
+    assert resolve_webhook_secret(settings) == _SECRET
+
+
+def test_resolve_raises_when_both_missing() -> None:
+    settings = _make_settings(bot_token=None, webhook_secret=None)
+    with pytest.raises(RuntimeError, match="No Telegram webhook secret"):
+        resolve_webhook_secret(settings)
+
+
+@pytest.mark.asyncio
+async def test_webhook_accepts_explicit_secret_from_env() -> None:
+    """When TELEGRAM_WEBHOOK_SECRET is set, the header must match it.
+
+    Acceptance criterion: a valid explicit secret is accepted.
+    """
+    from adcopilot.interfaces.api.telegram import telegram_webhook
+
+    tg_app = MagicMock()
+    tg_app.bot = MagicMock()
+    tg_app.process_update = AsyncMock()
+
+    request = _make_request(body={"update_id": 1}, app_state_tg_app=tg_app)
+    settings = _make_settings(webhook_secret="rotated-secret-123")
+
+    with patch("adcopilot.interfaces.api.telegram.Update.de_json", return_value=MagicMock()):
+        result = await telegram_webhook(
+            request=request,
+            settings=settings,
+            x_telegram_bot_api_secret_token="rotated-secret-123",
+        )
+    assert result == {"ok": "true"}
+
+
+@pytest.mark.asyncio
+async def test_webhook_rejects_hmac_when_explicit_secret_set() -> None:
+    """A request signed with the HMAC fallback must be rejected once the
+    explicit secret is in use — prevents attackers from replaying pre-rotation
+    values."""
+    from fastapi import HTTPException
+
+    from adcopilot.interfaces.api.telegram import telegram_webhook
+
+    tg_app = MagicMock()
+    request = _make_request(body={}, app_state_tg_app=tg_app)
+    settings = _make_settings(webhook_secret="new-rotated-secret")
+
+    with pytest.raises(HTTPException) as exc_info:
+        await telegram_webhook(
+            request=request,
+            settings=settings,
+            # Old HMAC-derived secret — must now be rejected.
+            x_telegram_bot_api_secret_token=_SECRET,
+        )
+    assert exc_info.value.status_code == 403
 
 
 # ---------------------------------------------------------------------------

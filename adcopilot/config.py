@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     # When set, the app registers a Telegram webhook on startup and webhook
     # mode is used instead of polling.  Leave blank for local development.
     TELEGRAM_WEBHOOK_URL: str | None = None
+    # Secret token Telegram echoes on every webhook request in the
+    # X-Telegram-Bot-Api-Secret-Token header.  When set explicitly this value
+    # is used verbatim for registration and verification.  When unset the
+    # app falls back to an HMAC of TELEGRAM_BOT_TOKEN so existing deployments
+    # keep working with no config changes.
+    TELEGRAM_WEBHOOK_SECRET: str | None = None
     # Public URL of the web application — used to build deep-links in Telegram
     # messages (e.g. the re-authentication link sent when a Google Ads token
     # is revoked).  Example: https://app.example.com

@@ -29,8 +29,8 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     if settings.TELEGRAM_BOT_TOKEN:
         from adcopilot.infrastructure.telegram.bot import (
             build_telegram_app,
-            compute_webhook_secret,
             register_webhook,
+            resolve_webhook_secret,
         )
 
         tg_app = build_telegram_app(settings)
@@ -40,7 +40,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
 
         if settings.TELEGRAM_WEBHOOK_URL:
             webhook_url = settings.TELEGRAM_WEBHOOK_URL.rstrip("/") + "/telegram/webhook"
-            secret = compute_webhook_secret(settings.TELEGRAM_BOT_TOKEN)
+            secret = resolve_webhook_secret(settings)
             try:
                 await register_webhook(tg_app.bot, webhook_url, secret)
             except Exception as exc:
