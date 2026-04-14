@@ -76,6 +76,7 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.telegram import router as telegram_router
     from adcopilot.interfaces.api.users import router as users_router
     from adcopilot.rate_limit import limiter
+    from adcopilot.security import PathPrefixRateLimitMiddleware
 
     # Initialise Sentry before the ASGI app is built so FastAPI/Starlette
     # integrations hook into the request lifecycle.  Idempotent.
@@ -86,6 +87,12 @@ def create_app() -> FastAPI:
     application.state.limiter = limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     application.add_middleware(SlowAPIMiddleware)
+    # Path-prefix rate limits envelope the per-endpoint slowapi decorators.
+    # Configured limits: /oauth/* 10/min, /api/* 60/min, /webhooks/* 100/min,
+    # /telegram/webhook 100/min.  See adcopilot/security/rate_limiting.py.
+    application.add_middleware(
+        PathPrefixRateLimitMiddleware, storage_uri=get_settings().REDIS_URL
+    )
     application.add_middleware(RequestIdMiddleware)
     application.add_middleware(SentryContextMiddleware)
 
