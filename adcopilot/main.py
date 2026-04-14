@@ -10,6 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from adcopilot.config import get_settings
 from adcopilot.logging_config import configure_logging
 from adcopilot.middleware import RequestIdMiddleware
+from adcopilot.observability import init_sentry
+from adcopilot.observability.fastapi_middleware import SentryContextMiddleware
 
 logger = structlog.get_logger(__name__)
 
@@ -67,6 +69,7 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.accounts import router as accounts_router
     from adcopilot.interfaces.api.auth import router as auth_router
     from adcopilot.interfaces.api.billing import router as billing_router
+    from adcopilot.interfaces.api.debug import router as debug_router
     from adcopilot.interfaces.api.digest import router as digest_router
     from adcopilot.interfaces.api.oauth import router as oauth_router
     from adcopilot.interfaces.api.snapshots import router as snapshots_router
@@ -74,12 +77,17 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.users import router as users_router
     from adcopilot.rate_limit import limiter
 
+    # Initialise Sentry before the ASGI app is built so FastAPI/Starlette
+    # integrations hook into the request lifecycle.  Idempotent.
+    init_sentry(component="api")
+
     application = FastAPI(title="AdCopilot", version="0.1.0", lifespan=lifespan)
     # Rate limiting — must be registered before SlowAPIMiddleware is added.
     application.state.limiter = limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     application.add_middleware(SlowAPIMiddleware)
     application.add_middleware(RequestIdMiddleware)
+    application.add_middleware(SentryContextMiddleware)
 
     # CORS — allow the frontend origin(s).  APP_URL is the canonical frontend
     # base URL (e.g. https://tryadept.com).  In development any localhost
@@ -105,6 +113,7 @@ def create_app() -> FastAPI:
     application.include_router(users_router)
     application.include_router(accounts_router)
     application.include_router(billing_router)
+    application.include_router(debug_router)
 
     @application.get("/health")
     async def health() -> JSONResponse:

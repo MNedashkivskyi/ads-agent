@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import sentry_sdk
 import structlog
 
 from adcopilot.application.detection.base import DetectionContext, HistoricalStats
@@ -42,6 +43,18 @@ class RunDetectionUseCase:
 
         Returns a count dict keyed by severity name, e.g. {'CRITICAL': 2, 'HIGH': 5}.
         """
+        from adcopilot.observability import set_account_context
+
+        set_account_context(account_id)
+        with sentry_sdk.start_transaction(
+            op="detection.run",
+            name="RunDetectionUseCase.execute",
+        ) as txn:
+            txn.set_tag("account_id", account_id)
+            txn.set_tag("snapshot_date", snapshot_date.isoformat())
+            return await self._execute_inner(account_id, snapshot_date)
+
+    async def _execute_inner(self, account_id: AccountId, snapshot_date: date) -> dict[str, int]:
         # 1. Load account entity
         account = await self._account_repo.get(account_id)
         if account is None:
@@ -118,7 +131,8 @@ class RunDetectionUseCase:
         )
 
         # 6. Run rule engine
-        new_recs = await self._engine.run(ctx)
+        with sentry_sdk.start_span(op="detection.engine", name="RuleEngine.run"):
+            new_recs = await self._engine.run(ctx)
 
         # 7. Aggregate by severity
         counts: dict[str, int] = {s.value: 0 for s in RecommendationSeverity}
@@ -153,9 +167,7 @@ async def _load_targeting_performance(
         device = await snapshot_repo.get_device_performance(account_id, start_date_7d, end_date)
         geo = await snapshot_repo.get_geo_performance(account_id, start_date_30d, end_date)
         hour = await snapshot_repo.get_hour_performance(account_id, start_date_30d, end_date)
-        dow = await snapshot_repo.get_day_of_week_performance(
-            account_id, start_date_30d, end_date
-        )
+        dow = await snapshot_repo.get_day_of_week_performance(account_id, start_date_30d, end_date)
         audience = await snapshot_repo.get_audience_performance(account_id, snapshot_date)
         return device, geo, hour, dow, audience
     except Exception:
