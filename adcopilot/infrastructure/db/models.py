@@ -622,10 +622,14 @@ class LaunchBriefModel(Base):
     exclusions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
     language: Mapped[str] = mapped_column(String(10), nullable=False, server_default="pl")
     status: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
-    # 0 = not started, 1-6 = waiting for that question, 7 = summary shown
+    # 0 = not started, 1-6 = waiting for that question, 7 = summary/proposal shown,
+    # 8 = awaiting revision text
     interview_step: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0", default=0
     )
+    # Google Ads resource name for the created campaign (e.g. "customers/123/campaigns/456").
+    # Set after create_campaign succeeds; required for enable_campaign.
+    campaign_resource_name: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

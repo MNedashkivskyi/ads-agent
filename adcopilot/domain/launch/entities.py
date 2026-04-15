@@ -190,6 +190,10 @@ class CampaignBrief:
     4 = waiting for Q4 (primary action — collected via inline button)
     5 = waiting for Q5 (monthly budget)
     6 = waiting for Q6 (exclusions, optional)
-    7 = all questions answered; summary displayed
+    7 = all questions answered; summary displayed / proposal shown
+    8 = awaiting revision text (user clicked "Make changes")
     0 = not yet started
     """
+
+    campaign_resource_name: str | None = None
+    """Google Ads campaign resource name, set after the campaign is created (PAUSED state)."""

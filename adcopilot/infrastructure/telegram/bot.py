@@ -80,6 +80,10 @@ def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-
         launch_command_handler,
         voice_message_handler,
     )
+    from adcopilot.infrastructure.telegram.proposal_handler import (
+        panic_command_handler,
+        proposal_callback_handler,
+    )
 
     app: Application = (  # type: ignore[type-arg]
         Application.builder().token(token).build()
@@ -96,6 +100,8 @@ def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-
     # Campaign-launch interview commands
     app.add_handler(CommandHandler("launch", launch_command_handler))
     app.add_handler(CommandHandler("cancel", cancel_interview_handler))
+    # Campaign proposal/launch/monitoring commands
+    app.add_handler(CommandHandler("panic", panic_command_handler))
 
     # Callback query handlers (order matters — more specific patterns first)
     app.add_handler(CallbackQueryHandler(undo_callback_handler, pattern=r"^undo_exec:"))
@@ -104,6 +110,13 @@ def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-
         CallbackQueryHandler(
             recommendation_callback_handler,
             pattern=r"^(approve|decline|snooze):",
+        )
+    )
+    # Proposal review / launch / monitoring callbacks
+    app.add_handler(
+        CallbackQueryHandler(
+            proposal_callback_handler,
+            pattern=r"^(proposal_|campaign_panic_pause:)",
         )
     )
     # Interview flow callbacks (iv_* prefix)

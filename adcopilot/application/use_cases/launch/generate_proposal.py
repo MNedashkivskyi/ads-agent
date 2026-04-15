@@ -58,12 +58,26 @@ class GenerateCampaignProposalUseCase:
         self._generator = generator
         self._website_url = website_url
 
-    async def execute(self, brief: CampaignBrief) -> CampaignProposal:
+    async def execute(
+        self,
+        brief: CampaignBrief,
+        revision_feedback: str | None = None,
+    ) -> CampaignProposal:
         """Generate, persist, and return a ``CampaignProposal`` for *brief*.
 
         Status transitions:
           COLLECTING → GENERATING → PROPOSED   (success path)
           COLLECTING → GENERATING → PROPOSED   (template fallback path)
+
+        Parameters
+        ----------
+        brief
+            The campaign brief to generate a proposal for.
+        revision_feedback
+            Optional free-text feedback from the user requesting changes to a
+            previously generated proposal.  When provided it is passed as LLM
+            feedback to the structure and ad-copy stages so the model adjusts
+            the output accordingly.
 
         Raises
         ------
@@ -77,10 +91,14 @@ class GenerateCampaignProposalUseCase:
             )
 
         await self._brief_repo.update_status(brief.id, LaunchStatus.GENERATING)
-        logger.info("proposal_generation_started", brief_id=brief.id)
+        logger.info(
+            "proposal_generation_started",
+            brief_id=brief.id,
+            revision=bool(revision_feedback),
+        )
 
         try:
-            proposal = await self._run_pipeline(brief)
+            proposal = await self._run_pipeline(brief, revision_feedback=revision_feedback)
             logger.info(
                 "proposal_generation_succeeded",
                 brief_id=brief.id,
@@ -109,7 +127,11 @@ class GenerateCampaignProposalUseCase:
     # Internal pipeline
     # ------------------------------------------------------------------
 
-    async def _run_pipeline(self, brief: CampaignBrief) -> CampaignProposal:
+    async def _run_pipeline(
+        self,
+        brief: CampaignBrief,
+        revision_feedback: str | None = None,
+    ) -> CampaignProposal:
         """Run all four LLM stages; validate; retry once; raise on second failure."""
         # Stage 1 — vertical detection
         vertical = await self._generator.detect_vertical(
@@ -117,13 +139,17 @@ class GenerateCampaignProposalUseCase:
         )
         logger.debug("vertical_detected", vertical=vertical.vertical, brief_id=brief.id)
 
-        # Stage 2 — campaign structure
-        structure = await self._generator.build_structure(brief, vertical)
+        # Stage 2 — campaign structure (pass revision feedback when provided)
+        structure = await self._generator.build_structure(
+            brief, vertical, feedback=revision_feedback
+        )
 
         # Stage 3 — ad copy (one call per ad group, sequential)
         ad_copies = []
         for ag in structure.ad_groups:
-            copy = await self._generator.generate_ad_copy(ag, brief)
+            copy = await self._generator.generate_ad_copy(
+                ag, brief, feedback=revision_feedback
+            )
             ad_copies.append(copy)
 
         # Stage 4 — negative keywords
@@ -143,7 +169,13 @@ class GenerateCampaignProposalUseCase:
             brief_id=brief.id,
             error_count=len(errors),
         )
-        feedback = "\n".join(f"- {e}" for e in errors)
+        validation_feedback = "\n".join(f"- {e}" for e in errors)
+        # Merge revision feedback into the validation feedback if both exist
+        combined_feedback = (
+            f"{revision_feedback}\n\nValidation issues to fix:\n{validation_feedback}"
+            if revision_feedback
+            else validation_feedback
+        )
 
         has_copy_errors = any(
             "headline" in e or "description" in e or "path" in e
@@ -152,13 +184,15 @@ class GenerateCampaignProposalUseCase:
         has_structure_errors = any("keyword" in e for e in errors)
 
         if has_structure_errors:
-            structure = await self._generator.build_structure(brief, vertical, feedback=feedback)
+            structure = await self._generator.build_structure(
+                brief, vertical, feedback=combined_feedback
+            )
 
         if has_copy_errors or has_structure_errors:
             ad_copies = []
             for ag in structure.ad_groups:
                 copy = await self._generator.generate_ad_copy(
-                    ag, brief, feedback=feedback if has_copy_errors else None
+                    ag, brief, feedback=combined_feedback if has_copy_errors else None
                 )
                 ad_copies.append(copy)
 

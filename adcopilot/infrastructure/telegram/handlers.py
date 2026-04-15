@@ -438,10 +438,12 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     text = (
         "*Dostępne komendy:*\n\n"
         "/status — Podsumowanie konta\n"
+        "/launch — Utwórz nową kampanię\n"
         "/history — Ostatnie rekomendacje\n"
         "/pause — Wstrzymaj codzienne powiadomienia\n"
         "/resume — Wznów powiadomienia\n"
         "/undo — Cofnij ostatnią zmianę\n"
+        "/panic — Natychmiast wstrzymaj wszystkie kampanie\n"
         "/help — Lista komend"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
@@ -460,6 +462,8 @@ async def fallback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
+    revision_brief_id: str | None = None
+    revision_text: str | None = None
     try:
         async with AsyncSession(engine) as session, session.begin():
             from sqlalchemy import select
@@ -471,7 +475,6 @@ async def fallback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             )
             from adcopilot.infrastructure.telegram.interview_handler import (
                 QUESTIONS,
-                InterviewResult,
                 _primary_action_keyboard,
                 _resume_banner,
                 fsm_handle_text,
@@ -501,6 +504,27 @@ async def fallback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
             step = brief.interview_step
 
+            # ── Step 8: revision mode (user submitted change request) ─────────
+            if step == 8:
+                import dataclasses as _dc
+
+                from adcopilot.domain.launch.entities import LaunchStatus
+
+                # Transition back to GENERATING immediately so no duplicate requests
+                updated = _dc.replace(
+                    brief,
+                    status=LaunchStatus.GENERATING,
+                    interview_step=7,
+                )
+                await repo.save(updated)
+                await update.message.reply_text(
+                    "⏳ Revising your proposal based on your feedback…\n\n"
+                    "I'll notify you when the updated proposal is ready."
+                )
+                revision_brief_id = str(brief.id)
+                revision_text = text
+                return  # fall through to task dispatch below
+
             # Resume banner after long pause
             if is_long_pause(brief):
                 banner = (
@@ -513,10 +537,6 @@ async def fallback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
             # Q4 is answered via inline buttons only
             if step == 4:
-                from adcopilot.infrastructure.telegram.interview_handler import (
-                    _primary_action_keyboard,
-                )
-
                 keyboard = _primary_action_keyboard(brief.id)
                 await update.message.reply_text(
                     banner + QUESTIONS[4],
@@ -541,3 +561,9 @@ async def fallback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             )
     finally:
         await engine.dispose()
+
+    # Dispatch revision task after DB session commits
+    if revision_brief_id is not None:
+        from adcopilot.interfaces.worker.tasks import generate_campaign_task
+
+        generate_campaign_task.delay(revision_brief_id, revision_text, chat_id)
