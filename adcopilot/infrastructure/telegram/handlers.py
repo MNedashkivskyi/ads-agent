@@ -128,6 +128,8 @@ async def status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 return
 
             lines: list[str] = []
+            has_enabled_campaigns = False
+
             for account in accounts:
                 acct_uuid = uuid.UUID(account.id)
 
@@ -153,6 +155,20 @@ async def status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 total_savings_micros: int = savings_result.scalar_one() or 0
                 total_savings = format_micros_as_currency(total_savings_micros)
 
+                # Check whether this account has any enabled campaigns
+                from adcopilot.infrastructure.db.models import CampaignSnapshotModel
+
+                campaign_result = await session.execute(
+                    select(CampaignSnapshotModel)
+                    .where(
+                        CampaignSnapshotModel.account_id == acct_uuid,
+                        CampaignSnapshotModel.status == "ENABLED",
+                    )
+                    .limit(1)
+                )
+                if campaign_result.scalar_one_or_none() is not None:
+                    has_enabled_campaigns = True
+
                 name = account.descriptive_name or account.customer_id
                 lines.append(
                     f"📊 *Konto: {name}*\n"
@@ -160,7 +176,32 @@ async def status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                     f"Oszczędności od początku: {total_savings}"
                 )
 
-            await update.message.reply_text("\n\n".join(lines), parse_mode="Markdown")
+            # If no enabled campaigns exist across all accounts, offer to build one
+            launch_keyboard = None
+            if not has_enabled_campaigns and accounts:
+                first_account = next(
+                    (a for a in accounts if not a.is_manager), accounts[0]
+                )
+                launch_keyboard = InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                "🚀 Let's build your first campaign",
+                                callback_data=f"iv_start:{first_account.id}",
+                            )
+                        ]
+                    ]
+                )
+                lines.append(
+                    "\n🎯 *No active campaigns found.*\n"
+                    "Tap the button below to create your first campaign!"
+                )
+
+            await update.message.reply_text(
+                "\n\n".join(lines),
+                parse_mode="Markdown",
+                reply_markup=launch_keyboard,
+            )
     finally:
         await engine.dispose()
 
@@ -407,10 +448,96 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def fallback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Catch-all for any unrecognized message."""
-    if update.message is None:
+    """Catch-all: routes to the active interview if one exists, else shows help."""
+    if update.message is None or update.message.text is None:
         return
 
-    await update.message.reply_text(
-        "Mogę pomóc z Twoim kontem Google Ads. Wyślij /help, aby zobaczyć dostępne komendy."
-    )
+    chat_id = update.message.chat_id
+    text = update.message.text
+
+    # /skip is only meaningful during Q6 of the interview
+    is_skip = text.strip().lower() in ("/skip", "skip")
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            from sqlalchemy import select
+
+            from adcopilot.domain.entities import UserId
+            from adcopilot.infrastructure.db.models import UserModel
+            from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
+                SqlCampaignBriefRepository,
+            )
+            from adcopilot.infrastructure.telegram.interview_handler import (
+                QUESTIONS,
+                InterviewResult,
+                _primary_action_keyboard,
+                _resume_banner,
+                fsm_handle_text,
+                fsm_skip_q6,
+                is_long_pause,
+            )
+
+            result = await session.execute(
+                select(UserModel).where(UserModel.telegram_chat_id == chat_id)
+            )
+            user_model = result.scalar_one_or_none()
+            if user_model is None:
+                await update.message.reply_text(
+                    "Mogę pomóc z Twoim kontem Google Ads. Wyślij /help, aby zobaczyć dostępne komendy."
+                )
+                return
+
+            user_id = UserId(str(user_model.id))
+            repo = SqlCampaignBriefRepository(session)
+            brief = await repo.get_active_for_user(user_id)
+
+            if brief is None or brief.interview_step == 0:
+                await update.message.reply_text(
+                    "Mogę pomóc z Twoim kontem Google Ads. Wyślij /help, aby zobaczyć dostępne komendy."
+                )
+                return
+
+            step = brief.interview_step
+
+            # Resume banner after long pause
+            if is_long_pause(brief):
+                banner = (
+                    "👋 Welcome back! Let's continue your campaign interview.\n\n"
+                    + _resume_banner(brief)
+                    + "\n\n"
+                )
+            else:
+                banner = ""
+
+            # Q4 is answered via inline buttons only
+            if step == 4:
+                from adcopilot.infrastructure.telegram.interview_handler import (
+                    _primary_action_keyboard,
+                )
+
+                keyboard = _primary_action_keyboard(brief.id)
+                await update.message.reply_text(
+                    banner + QUESTIONS[4],
+                    reply_markup=keyboard,
+                    parse_mode="Markdown",
+                )
+                return
+
+            # /skip shortcut for Q6
+            if step == 6 and is_skip:
+                ir = await fsm_skip_q6(brief, repo)
+            else:
+                try:
+                    ir = await fsm_handle_text(brief, text, repo)
+                except ValueError as exc:
+                    await update.message.reply_text(f"⚠️ {exc}")
+                    return
+
+            reply = banner + ir.text if banner else ir.text
+            await update.message.reply_text(
+                reply, reply_markup=ir.keyboard, parse_mode="Markdown"
+            )
+    finally:
+        await engine.dispose()

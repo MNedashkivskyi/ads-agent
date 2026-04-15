@@ -181,3 +181,15 @@ class CampaignBrief:
 
     created_at: datetime
     status: LaunchStatus
+    interview_step: int = 0
+    """Which interview question we are currently waiting to receive.
+
+    1 = waiting for Q1 (business description)
+    2 = waiting for Q2 (location)
+    3 = waiting for Q3 (typical customer value)
+    4 = waiting for Q4 (primary action — collected via inline button)
+    5 = waiting for Q5 (monthly budget)
+    6 = waiting for Q6 (exclusions, optional)
+    7 = all questions answered; summary displayed
+    0 = not yet started
+    """

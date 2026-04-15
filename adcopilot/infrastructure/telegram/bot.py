@@ -74,6 +74,12 @@ def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-
         status_handler,
         undo_handler,
     )
+    from adcopilot.infrastructure.telegram.interview_handler import (
+        cancel_interview_handler,
+        interview_callback_handler,
+        launch_command_handler,
+        voice_message_handler,
+    )
 
     app: Application = (  # type: ignore[type-arg]
         Application.builder().token(token).build()
@@ -87,6 +93,9 @@ def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-
     app.add_handler(CommandHandler("resume", resume_handler))
     app.add_handler(CommandHandler("undo", undo_handler))
     app.add_handler(CommandHandler("help", help_handler))
+    # Campaign-launch interview commands
+    app.add_handler(CommandHandler("launch", launch_command_handler))
+    app.add_handler(CommandHandler("cancel", cancel_interview_handler))
 
     # Callback query handlers (order matters — more specific patterns first)
     app.add_handler(CallbackQueryHandler(undo_callback_handler, pattern=r"^undo_exec:"))
@@ -97,8 +106,13 @@ def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-
             pattern=r"^(approve|decline|snooze):",
         )
     )
+    # Interview flow callbacks (iv_* prefix)
+    app.add_handler(CallbackQueryHandler(interview_callback_handler, pattern=r"^iv_"))
 
-    # Fallback: catch any non-command text
+    # Voice messages during interview
+    app.add_handler(MessageHandler(filters.VOICE, voice_message_handler))
+
+    # Fallback: catch any non-command text (also routes to active interview)
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, fallback_handler))
 
     return app

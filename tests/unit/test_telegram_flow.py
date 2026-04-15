@@ -167,11 +167,38 @@ async def test_fallback_handler_replies_with_help_hint() -> None:
     from adcopilot.infrastructure.telegram.handlers import fallback_handler
 
     update = MagicMock()
-    update.message = AsyncMock()
+    update.message = MagicMock()
+    update.message.text = "random message"
+    update.message.chat_id = 12345
     update.message.reply_text = AsyncMock()
     context = MagicMock()
 
-    await fallback_handler(update, context)
+    # Mock DB engine so the handler can look up the user (returns None → help hint)
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = mock_result
+    # session.begin() must return a sync context manager (not a coroutine)
+    mock_session.begin = MagicMock(return_value=AsyncMock())
+
+    mock_session_ctx = MagicMock()
+    mock_session_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session_ctx.__aexit__ = AsyncMock(return_value=False)
+
+    mock_engine = MagicMock()
+    mock_engine.dispose = AsyncMock()
+
+    with patch(
+        "adcopilot.infrastructure.telegram.handlers.create_async_engine",
+        return_value=mock_engine,
+    ), patch(
+        "adcopilot.infrastructure.telegram.handlers.AsyncSession",
+        return_value=mock_session_ctx,
+    ), patch(
+        "adcopilot.infrastructure.telegram.handlers.get_settings"
+    ) as mock_settings:
+        mock_settings.return_value.DATABASE_URL = "postgresql+asyncpg://x:y@localhost/z"
+        await fallback_handler(update, context)
 
     update.message.reply_text.assert_awaited_once()
     call_text: str = update.message.reply_text.call_args[0][0]
