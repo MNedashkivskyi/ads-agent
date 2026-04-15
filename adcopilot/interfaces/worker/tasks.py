@@ -1394,7 +1394,7 @@ async def _pause_all_enabled_campaigns(
     from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter
 
     assert isinstance(settings, Settings)
-    assert isinstance(account_id, AccountId)
+    account_id_typed = AccountId(str(account_id))
 
     adapter = GoogleAdsClientAdapter(settings)
     client = adapter._build_client(refresh_token)
@@ -1431,16 +1431,16 @@ async def _pause_all_enabled_campaigns(
     # Audit log
     import uuid as _uuid
     from datetime import datetime
+    from typing import cast
 
     from adcopilot.application.ports.audit_log_repository import AuditLogRepository
     from adcopilot.domain.audit_log import AuditLog, AuditLogId
     from adcopilot.domain.recommendation import RecommendationId
 
-    assert isinstance(audit_repo, AuditLogRepository)
     log = AuditLog(
         id=AuditLogId(str(_uuid.uuid4())),
         recommendation_id=RecommendationId("00000000-0000-0000-0000-000000000000"),
-        account_id=account_id,
+        account_id=account_id_typed,
         kind="PANIC_PAUSE",
         action="EXECUTE",
         payload={
@@ -1449,7 +1449,7 @@ async def _pause_all_enabled_campaigns(
         },
         created_at=datetime.now(UTC),
     )
-    await audit_repo.save(log)
+    await cast(AuditLogRepository, audit_repo).save(log)
 
     logger.info(
         "panic_pause_complete",
