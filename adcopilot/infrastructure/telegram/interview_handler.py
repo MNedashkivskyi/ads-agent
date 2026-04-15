@@ -393,6 +393,8 @@ async def interview_callback_handler(
     settings = get_settings()
 
     engine = create_async_engine(settings.DATABASE_URL)
+    # brief_id to dispatch a generation task for, set inside the session block
+    generate_brief_id: str | None = None
     try:
         async with AsyncSession(engine) as session, session.begin():
             from sqlalchemy import select
@@ -437,7 +439,8 @@ async def interview_callback_handler(
                         "⏳ Generating your campaign proposal…\n\n"
                         "I'll notify you when it's ready! This usually takes 30–60 seconds."
                     )
-                    logger.info("campaign generation queued", brief_id=brief_id_str)
+                    generate_brief_id = brief_id_str
+                    logger.info("campaign generation dispatched", brief_id=brief_id_str)
 
             # ── iv_fix:{brief_id} ─────────────────────────────────────────────
             elif data.startswith("iv_fix:"):
@@ -484,8 +487,17 @@ async def interview_callback_handler(
     except Exception:
         logger.exception("interview_callback_handler error", data=data)
         await query.answer("An error occurred. Please try again.", show_alert=True)
+        return
     finally:
         await engine.dispose()
+
+    # Dispatch after DB session committed to avoid race condition
+    if generate_brief_id is not None:
+        from adcopilot.interfaces.worker.tasks import generate_campaign_task
+
+        generate_campaign_task.delay(
+            generate_brief_id, None, telegram_chat_id
+        )
 
 
 async def _send_result(

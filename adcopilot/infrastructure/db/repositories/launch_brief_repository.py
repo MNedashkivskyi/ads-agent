@@ -32,6 +32,7 @@ def _model_to_domain(m: LaunchBriefModel) -> CampaignBrief:
         created_at=m.created_at,
         status=LaunchStatus(m.status),
         interview_step=m.interview_step,
+        campaign_resource_name=m.campaign_resource_name,
     )
 
 
@@ -70,6 +71,20 @@ class SqlCampaignBriefRepository:
         m = result.scalar_one_or_none()
         return _model_to_domain(m) if m else None
 
+    async def get_proposed_for_user(self, user_id: UserId) -> CampaignBrief | None:
+        """Return the latest PROPOSED brief for *user_id*, or None."""
+        result = await self._session.execute(
+            select(LaunchBriefModel)
+            .where(
+                LaunchBriefModel.user_id == uuid.UUID(user_id),
+                LaunchBriefModel.status == LaunchStatus.PROPOSED.value,
+            )
+            .order_by(LaunchBriefModel.created_at.desc())
+            .limit(1)
+        )
+        m = result.scalar_one_or_none()
+        return _model_to_domain(m) if m else None
+
     async def save(self, brief: CampaignBrief) -> CampaignBrief:
         """Upsert *brief* and return the persisted entity."""
         m = await self._session.get(LaunchBriefModel, uuid.UUID(brief.id))
@@ -88,6 +103,7 @@ class SqlCampaignBriefRepository:
         m.language = brief.language
         m.status = brief.status.value
         m.interview_step = brief.interview_step
+        m.campaign_resource_name = brief.campaign_resource_name
         m.created_at = brief.created_at
 
         await self._session.flush()
