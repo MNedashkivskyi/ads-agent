@@ -622,6 +622,10 @@ class LaunchBriefModel(Base):
     exclusions: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
     language: Mapped[str] = mapped_column(String(10), nullable=False, server_default="pl")
     status: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    # 0 = not started, 1-6 = waiting for that question, 7 = summary shown
+    interview_step: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0", default=0
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

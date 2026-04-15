@@ -2,7 +2,8 @@ import os
 from collections.abc import AsyncGenerator
 
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.infrastructure.db.models import Base
 
@@ -14,27 +15,25 @@ def get_test_db_url() -> str:
     )
 
 
-@pytest_asyncio.fixture(scope="session")
-async def db_engine() -> AsyncGenerator[AsyncEngine, None]:
+@pytest_asyncio.fixture
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    """Provide an AsyncSession for each test with full rollback isolation.
+
+    Uses NullPool so every connect() opens a brand-new asyncpg connection
+    in the current event loop — no cross-loop Future issues.
+    """
     url = get_test_db_url()
-    engine = create_async_engine(url, echo=False)
+    engine = create_async_engine(url, echo=False, poolclass=NullPool)
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    yield engine
-
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        session = AsyncSession(bind=conn, expire_on_commit=False)
+        try:
+            yield session
+        finally:
+            await session.close()
+            await conn.rollback()
 
     await engine.dispose()
-
-
-@pytest_asyncio.fixture
-async def db_session(db_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
-    async with db_engine.connect() as conn:
-        await conn.begin_nested()
-        session = AsyncSession(bind=conn, expire_on_commit=False)
-        yield session
-        await session.rollback()
-        await session.close()
