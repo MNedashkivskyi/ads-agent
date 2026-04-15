@@ -79,7 +79,7 @@ async def get_proposal_preview(proposal_id: str) -> ProposalPreviewResponse:
     try:
         uuid.UUID(proposal_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid proposal ID format")
+        raise HTTPException(status_code=400, detail="Invalid proposal ID format") from None
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)

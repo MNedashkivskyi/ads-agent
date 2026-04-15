@@ -109,7 +109,9 @@ async def _run_snapshot(settings: object, account_id: object, snap_date: date) -
             use_case = SnapshotAccountUseCase(
                 ads_client=GoogleAdsQueriesAdapter(settings),
                 snapshot_repo=SqlSnapshotRepository(session),
-                credentials_repo=SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY),
+                credentials_repo=SqlOAuthCredentialsRepository(
+                    session, settings.TOKEN_ENCRYPTION_KEY
+                ),
                 account_repo=SqlGoogleAdsAccountRepository(session),
             )
             result = await use_case.execute(AccountId(str(account_id)), snap_date)
@@ -256,7 +258,9 @@ async def _run_send_digests(settings: object) -> dict[str, object]:
                                 ),
                             )
                 except Exception:
-                    logger.exception("failed to send inactive sub warning", user_id=str(user_model.id))
+                    logger.exception(
+                        "failed to send inactive sub warning", user_id=str(user_model.id)
+                    )
                 skipped += 1
                 continue
             try:
@@ -471,7 +475,9 @@ async def _run_execute_recommendation(rec_id: str) -> dict[str, object]:
                 rec_repo=SqlRecommendationRepository(session),
                 audit_log_repo=SqlAuditLogRepository(session),
                 account_repo=SqlGoogleAdsAccountRepository(session),
-                credentials_repo=SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY),
+                credentials_repo=SqlOAuthCredentialsRepository(
+                    session, settings.TOKEN_ENCRYPTION_KEY
+                ),
                 mutations=GoogleAdsMutationsAdapter(settings),
             )
             result = await use_case.execute(RecommendationId(rec_id))
@@ -729,8 +735,9 @@ async def _run_generate_campaign(
                 chat_id = user.telegram_chat_id if user else None
 
             if not settings.LLM_API_KEY:
-                from adcopilot.domain.launch.templates import build_proposal_from_template
                 from adcopilot.domain.launch.entities import LaunchStatus
+                from adcopilot.domain.launch.templates import build_proposal_from_template
+
                 proposal = build_proposal_from_template(brief)
                 await proposal_repo.save(proposal)
                 await brief_repo.update_status(brief.id, LaunchStatus.PROPOSED)
@@ -773,6 +780,7 @@ async def _run_generate_campaign(
             try:
                 async with AsyncSession(engine2) as session2:
                     from adcopilot.domain.launch.entities import CampaignProposalId
+
                     proposal_repo2 = SqlCampaignProposalRepository(session2)
                     proposal_obj = await proposal_repo2.get(CampaignProposalId(proposal_id))  # type: ignore[arg-type]
             finally:
@@ -814,9 +822,7 @@ def create_campaign_task(brief_id: str, telegram_chat_id: int) -> dict[str, obje
     return asyncio.run(_run_create_campaign(brief_id, telegram_chat_id))
 
 
-async def _run_create_campaign(
-    brief_id: str, telegram_chat_id: int
-) -> dict[str, object]:
+async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str, object]:
     import dataclasses
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -854,9 +860,7 @@ async def _run_create_campaign(
             brief_repo = SqlCampaignBriefRepository(session)
             proposal_repo = SqlCampaignProposalRepository(session)
             account_repo = SqlGoogleAdsAccountRepository(session)
-            credentials_repo = SqlOAuthCredentialsRepository(
-                session, settings.TOKEN_ENCRYPTION_KEY
-            )
+            credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
             audit_repo = SqlAuditLogRepository(session)
 
             brief = await brief_repo.get(CampaignBriefId(brief_id))
@@ -897,7 +901,7 @@ async def _run_create_campaign(
                     campaign_rn,
                     proposal.ad_groups,
                 )
-                for ag_rn, ag_proposal in zip(ag_rns, proposal.ad_groups):
+                for ag_rn, ag_proposal in zip(ag_rns, proposal.ad_groups, strict=False):
                     kws = await writer.create_keywords(
                         account.customer_id,
                         credentials.refresh_token,
@@ -928,7 +932,7 @@ async def _run_create_campaign(
                 )
                 await brief_repo.save(updated_brief)
 
-            except Exception as exc:
+            except Exception:
                 logger.exception(
                     "campaign creation failed — rolling back",
                     brief_id=brief_id,
@@ -1007,9 +1011,7 @@ def enable_campaign_task(brief_id: str, telegram_chat_id: int) -> dict[str, obje
     return asyncio.run(_run_enable_campaign(brief_id, telegram_chat_id))
 
 
-async def _run_enable_campaign(
-    brief_id: str, telegram_chat_id: int
-) -> dict[str, object]:
+async def _run_enable_campaign(brief_id: str, telegram_chat_id: int) -> dict[str, object]:
     import dataclasses
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -1041,9 +1043,7 @@ async def _run_enable_campaign(
         async with AsyncSession(engine) as session, session.begin():
             brief_repo = SqlCampaignBriefRepository(session)
             account_repo = SqlGoogleAdsAccountRepository(session)
-            credentials_repo = SqlOAuthCredentialsRepository(
-                session, settings.TOKEN_ENCRYPTION_KEY
-            )
+            credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
             audit_repo = SqlAuditLogRepository(session)
 
             brief = await brief_repo.get(CampaignBriefId(brief_id))
@@ -1284,9 +1284,7 @@ async def _run_monitor_new_campaign(
     retry_backoff=True,
     name="adcopilot.interfaces.worker.tasks.panic_pause_campaigns_task",
 )
-def panic_pause_campaigns_task(
-    account_id: str, telegram_chat_id: int
-) -> dict[str, object]:
+def panic_pause_campaigns_task(account_id: str, telegram_chat_id: int) -> dict[str, object]:
     """Pause all ENABLED campaigns in *account_id* immediately.
 
     Dispatched by /panic command or the [🛑 Pause everything now] button.
@@ -1297,9 +1295,7 @@ def panic_pause_campaigns_task(
     return asyncio.run(_run_panic_pause(account_id, telegram_chat_id))
 
 
-async def _run_panic_pause(
-    account_id: str, telegram_chat_id: int
-) -> dict[str, object]:
+async def _run_panic_pause(account_id: str, telegram_chat_id: int) -> dict[str, object]:
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import get_settings
@@ -1323,9 +1319,7 @@ async def _run_panic_pause(
     try:
         async with AsyncSession(engine) as session, session.begin():
             account_repo = SqlGoogleAdsAccountRepository(session)
-            credentials_repo = SqlOAuthCredentialsRepository(
-                session, settings.TOKEN_ENCRYPTION_KEY
-            )
+            credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
             audit_repo = SqlAuditLogRepository(session)
 
             account = await account_repo.get(AccountId(account_id))
@@ -1368,7 +1362,7 @@ async def _run_panic_pause(
         elif paused_count == 0:
             await bot.send_message(
                 chat_id=telegram_chat_id,
-                text="ℹ️ No enabled campaigns found to pause in this account.",
+                text="No enabled campaigns found to pause in this account.",
             )
         else:
             await bot.send_message(
@@ -1428,6 +1422,7 @@ async def _pause_all_enabled_campaigns(
         campaign.resource_name = rn
         campaign.status = client.enums.CampaignStatusEnum.PAUSED
         from google.protobuf import field_mask_pb2
+
         op.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
         ops.append(op)
 
