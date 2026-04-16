@@ -47,6 +47,12 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.send_trial_reminders_task",
                     "schedule": crontab(hour=10, minute=0),
                 },
+                "hourly-anomaly-detection": {
+                    # Runs at :05 past every hour so fresh data is available
+                    # from the Google Ads API before the check executes.
+                    "task": "adcopilot.interfaces.worker.tasks.run_anomaly_detection_task",
+                    "schedule": crontab(minute=5),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},
