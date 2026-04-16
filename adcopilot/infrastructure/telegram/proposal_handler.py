@@ -57,7 +57,7 @@ def format_proposal_summary(proposal: CampaignProposal) -> str:
         f"📈 Bidding: {proposal.bidding_strategy}",
         f"📊 Structure: {len(proposal.ad_groups)} ad groups · {total_kws} keywords · {total_ads} ads",
         f"🚫 Negative keywords: {len(proposal.negative_keywords)}",
-        f"💵 Est. CPC: {cpc_min:.2f}–{cpc_max:.2f} PLN",
+        f"💵 Est. CPC: {cpc_min:.2f}-{cpc_max:.2f} PLN",
     ]
 
     # Example ad from the first ad group
@@ -150,9 +150,7 @@ def panic_pause_keyboard(account_id: str) -> InlineKeyboardMarkup:
 # ---------------------------------------------------------------------------
 
 
-async def proposal_callback_handler(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def proposal_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Route all proposal_* and campaign_panic_pause callback_data strings."""
     query = update.callback_query
     if query is None or query.data is None:
@@ -195,9 +193,7 @@ async def proposal_callback_handler(
                 if not brief or brief.user_id != user_id:
                     return
                 if brief.status != LaunchStatus.PROPOSED:
-                    await query.answer(
-                        "This proposal is no longer active.", show_alert=True
-                    )
+                    await query.answer("This proposal is no longer active.", show_alert=True)
                     return
                 updated = dataclasses.replace(brief, status=LaunchStatus.APPROVED)
                 await repo.save(updated)
@@ -214,9 +210,7 @@ async def proposal_callback_handler(
                 if not brief or brief.user_id != user_id:
                     return
                 if brief.status != LaunchStatus.PROPOSED:
-                    await query.answer(
-                        "This proposal is no longer active.", show_alert=True
-                    )
+                    await query.answer("This proposal is no longer active.", show_alert=True)
                     return
                 # Enter revision mode: status → COLLECTING, step=8
                 updated = dataclasses.replace(
@@ -250,9 +244,7 @@ async def proposal_callback_handler(
                 if not brief or brief.user_id != user_id:
                     return
                 if brief.status != LaunchStatus.CREATED_PAUSED:
-                    await query.answer(
-                        "Campaign is not in PAUSED state.", show_alert=True
-                    )
+                    await query.answer("Campaign is not in PAUSED state.", show_alert=True)
                     return
                 if not brief.campaign_resource_name:
                     await query.answer(
@@ -312,9 +304,7 @@ async def proposal_callback_handler(
 # ---------------------------------------------------------------------------
 
 
-async def panic_command_handler(
-    update: Update, context: ContextTypes.DEFAULT_TYPE
-) -> None:
+async def panic_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/panic — pause all enabled campaigns across all accounts immediately."""
     if update.message is None:
         return
@@ -352,9 +342,7 @@ async def panic_command_handler(
         await engine.dispose()
 
     if not account_ids:
-        await update.message.reply_text(
-            "No Google Ads accounts connected. Nothing to pause."
-        )
+        await update.message.reply_text("No Google Ads accounts connected. Nothing to pause.")
         return
 
     await update.message.reply_text(
