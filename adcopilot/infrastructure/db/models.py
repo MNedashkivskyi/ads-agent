@@ -14,6 +14,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -23,6 +24,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 __all__ = [
     "AdGroupSnapshotModel",
     "AdSnapshotModel",
+    "AlertKindSuppressionModel",
     "AlertModel",
     "AudiencePerformanceSnapshotModel",
     "AuditLogModel",
@@ -777,3 +779,20 @@ class AlertModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class AlertKindSuppressionModel(Base):
+    """Persists a per-account, per-kind suppression window set by the user acknowledging alerts."""
+
+    __tablename__ = "alert_kind_suppressions"
+    __table_args__ = (
+        UniqueConstraint("account_id", "kind", name="uq_alert_kind_suppressions_acct_kind"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(100), nullable=False)
+    suppressed_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

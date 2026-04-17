@@ -67,6 +67,7 @@ def create_app() -> FastAPI:
     from slowapi.middleware import SlowAPIMiddleware
 
     from adcopilot.interfaces.api.accounts import router as accounts_router
+    from adcopilot.interfaces.api.alerts import router as alerts_router
     from adcopilot.interfaces.api.auth import router as auth_router
     from adcopilot.interfaces.api.billing import router as billing_router
     from adcopilot.interfaces.api.debug import router as debug_router
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
     application.include_router(billing_router)
     application.include_router(debug_router)
     application.include_router(launch_router)
+    application.include_router(alerts_router)
 
     @application.get("/health")
     async def health() -> JSONResponse:

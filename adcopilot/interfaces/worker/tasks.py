@@ -1572,6 +1572,40 @@ async def _run_anomaly_detection_all_accounts(settings: object) -> dict[str, obj
                     alerts_created=result.alerts_created,
                     alerts_suppressed=result.alerts_suppressed,
                 )
+
+                # ── Send immediate Telegram alerts ─────────────────────────────
+                if result.created_alerts and settings.TELEGRAM_BOT_TOKEN:
+                    import uuid as _uuid
+
+                    from sqlalchemy import select as sa_select
+
+                    from adcopilot.infrastructure.db.models import UserModel
+                    from adcopilot.infrastructure.telegram.alert_notifier import AlertNotifier
+
+                    async with AsyncSession(engine) as session:
+                        user_result = await session.execute(
+                            sa_select(UserModel).where(
+                                UserModel.id == _uuid.UUID(str(acct.user_id))
+                            )
+                        )
+                        user_model = user_result.scalar_one_or_none()
+
+                    chat_id: int | None = (
+                        getattr(user_model, "telegram_chat_id", None) if user_model else None
+                    )
+                    if chat_id:
+                        notifier = AlertNotifier(settings.TELEGRAM_BOT_TOKEN)
+                        account_name = acct.descriptive_name or customer_id
+                        for alert in result.created_alerts:
+                            try:
+                                await notifier.send_alert(chat_id, alert, account_name)
+                            except Exception:
+                                logger.exception(
+                                    "alert telegram delivery failed",
+                                    alert_id=alert.id,
+                                    chat_id=chat_id,
+                                )
+
             except Exception:
                 logger.exception("anomaly_detection.failed", account_id=str(acct.id))
                 accounts_errored += 1

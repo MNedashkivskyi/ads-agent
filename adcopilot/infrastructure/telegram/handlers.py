@@ -312,13 +312,14 @@ async def pause_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def resume_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """/resume — resume daily digest notifications."""
+    """/resume — resume daily digest notifications and restore any panic-paused campaigns."""
     if update.message is None:
         return
 
     chat_id = update.message.chat_id
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
+    paused_campaigns_count = 0
     try:
         async with AsyncSession(engine) as session:
             from sqlalchemy import select
@@ -344,12 +345,99 @@ async def resume_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             updated = dataclasses.replace(user, notifications_paused=False)
             await repo.save(updated)
             await session.commit()
+
+            # Also re-enable campaigns paused via /panic
+            try:
+                from sqlalchemy import select as sa_select
+
+                from adcopilot.domain.entities import AccountId
+                from adcopilot.infrastructure.db.models import AuditLogModel, GoogleAdsAccountModel
+
+                # Find all accounts for this user
+                accounts_result = await session.execute(
+                    sa_select(GoogleAdsAccountModel).where(
+                        GoogleAdsAccountModel.user_id == user_model.id
+                    )
+                )
+                account_models = accounts_result.scalars().all()
+
+                for account_model in account_models:
+                    # Find the most recent PANIC_PAUSE audit entry for this account (last 7 days)
+                    since = datetime.now(UTC) - timedelta(days=7)
+                    audit_result = await session.execute(
+                        sa_select(AuditLogModel)
+                        .where(
+                            AuditLogModel.account_id == account_model.id,
+                            AuditLogModel.kind == "PANIC_PAUSE",
+                            AuditLogModel.created_at >= since,
+                        )
+                        .order_by(AuditLogModel.created_at.desc())
+                        .limit(1)
+                    )
+                    audit_entry = audit_result.scalar_one_or_none()
+                    if audit_entry is None:
+                        continue
+
+                    campaign_rns: list[str] = audit_entry.payload.get(
+                        "campaign_resource_names", []
+                    )
+                    if not campaign_rns:
+                        continue
+
+                    # Get credentials for this account
+                    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+                        SqlOAuthCredentialsRepository,
+                    )
+
+                    creds_repo = SqlOAuthCredentialsRepository(
+                        session, settings.TOKEN_ENCRYPTION_KEY
+                    )
+                    creds = await creds_repo.get(AccountId(str(account_model.id)))
+                    if creds is None:
+                        continue
+
+                    # Re-enable campaigns
+                    try:
+                        from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter
+
+                        adapter = GoogleAdsClientAdapter(settings)
+                        client = adapter._build_client(creds.refresh_token)
+                        cid = account_model.customer_id.replace("-", "")
+                        campaign_service = client.get_service("CampaignService")
+                        ops = []
+                        for rn in campaign_rns:
+                            op = client.get_type("CampaignOperation")
+                            campaign = op.update
+                            campaign.resource_name = rn
+                            campaign.status = client.enums.CampaignStatusEnum.ENABLED
+                            from google.protobuf import field_mask_pb2
+
+                            op.update_mask.CopyFrom(
+                                field_mask_pb2.FieldMask(paths=["status"])
+                            )
+                            ops.append(op)
+                        campaign_service.mutate_campaigns(customer_id=cid, operations=ops)
+                        paused_campaigns_count += len(campaign_rns)
+                    except Exception as exc:
+                        logger.warning(
+                            "resume_campaigns failed",
+                            account_id=str(account_model.id),
+                            error=str(exc),
+                        )
+            except Exception as exc:
+                logger.warning("resume_handler campaign restore failed", error=str(exc))
     finally:
         await engine.dispose()
 
-    await update.message.reply_text(
-        "▶️ Wznowiono. Zaczniesz otrzymywać rekomendacje od jutra rano."
-    )
+    if paused_campaigns_count > 0:
+        await update.message.reply_text(
+            f"▶️ Wznowiono. Zaczniesz otrzymywać rekomendacje od jutra rano.\n"
+            f"✅ Przywrócono {paused_campaigns_count} kampanię/kampanii."
+        )
+    else:
+        await update.message.reply_text(
+            "▶️ Wznowiono. Zaczniesz otrzymywać rekomendacje od jutra rano."
+        )
 
 
 async def undo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

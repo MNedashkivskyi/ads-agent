@@ -47,3 +47,13 @@ class Alert:
     payload: dict[str, Any]
     message: str
     created_at: datetime
+    acknowledged_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class AlertKindSuppression:
+    """Records that the user has acknowledged a kind of alert and wants it suppressed."""
+
+    account_id: AccountId
+    kind: AlertKind
+    suppressed_until: datetime
