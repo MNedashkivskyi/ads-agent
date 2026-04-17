@@ -345,7 +345,7 @@ def _parse_pln(text: str, label: str) -> Decimal:
         raise ValueError(
             f"{label} must be a number (e.g. 500 or 1500.50). "
             f"I couldn't understand '{text}' — please try again."
-        )
+        )  # noqa: B904
 
 
 def _match_primary_action(text: str) -> str:

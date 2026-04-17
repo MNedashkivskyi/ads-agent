@@ -160,7 +160,7 @@ class TestCampaignWriterIntegration:
 
             # Step 3 — keywords
             kw_rns: list[str] = []
-            for ag_prop, ag_rn in zip(proposal.ad_groups, ag_rns):
+            for ag_prop, ag_rn in zip(proposal.ad_groups, ag_rns):  # noqa: B905
                 kws = await writer.create_keywords(cid, rt, ag_rn, ag_prop.keywords)
                 kw_rns.extend(kws)
             assert len(kw_rns) == sum(len(ag.keywords) for ag in proposal.ad_groups)
@@ -168,7 +168,7 @@ class TestCampaignWriterIntegration:
 
             # Step 4 — ads
             ad_rns: list[str] = []
-            for ag_prop, ag_rn in zip(proposal.ad_groups, ag_rns):
+            for ag_prop, ag_rn in zip(proposal.ad_groups, ag_rns):  # noqa: B905
                 ads = await writer.create_ads(cid, rt, ag_rn, ag_prop.ads)
                 ad_rns.extend(ads)
             assert len(ad_rns) == sum(len(ag.ads) for ag in proposal.ad_groups)

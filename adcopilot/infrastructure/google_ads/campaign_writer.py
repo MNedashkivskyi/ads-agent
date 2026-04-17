@@ -339,7 +339,7 @@ class CampaignWriter:
                         )
                     rsa.headlines.append(asset)
 
-                for i, desc in enumerate(adp.descriptions[:4]):
+                for i, desc in enumerate(adp.descriptions[:4]):  # noqa: B007
                     asset = client.get_type("AdTextAsset")
                     asset.text = desc
                     rsa.descriptions.append(asset)

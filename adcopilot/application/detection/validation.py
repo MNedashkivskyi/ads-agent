@@ -203,7 +203,7 @@ def _rule_protected_keywords(
     # Merge built-in list with caller-supplied extras
     extra_patterns: list[re.Pattern[str]] = []
     for brand in ctx.protected_brands:
-        try:
+        try:  # noqa: SIM105
             extra_patterns.append(
                 re.compile(r"\b" + re.escape(brand.lower()) + r"\b", re.IGNORECASE)
             )
@@ -488,7 +488,7 @@ def _rule_landing_page(
             )
 
         # Language check (case-insensitive, e.g. "en", "pl")
-        if result.language_detected is not None:
+        if result.language_detected is not None: # noqa: SIM102
             if result.language_detected.lower() != brief.language.lower():
                 errors.append(
                     f"Rule 6 (Landing Page): URL '{url}' appears to be in "
@@ -601,7 +601,7 @@ def _rule_geographic(
     brief_country = _extract_country(brief.location)
     proposal_country = _extract_country(proposal.location_targeting)
 
-    if brief_country and proposal_country:
+    if brief_country and proposal_country:  # noqa: SIM102
         if brief_country.upper() != proposal_country.upper():
             errors.append(
                 f"Rule 8 (Geo): location_targeting country '{proposal_country}' "

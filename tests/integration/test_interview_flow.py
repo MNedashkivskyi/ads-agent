@@ -475,7 +475,7 @@ async def test_get_active_returns_latest_collecting(
     repo: SqlCampaignBriefRepository,
 ) -> None:
     # Create two COLLECTING briefs
-    ir1 = await fsm_start(_USER_ID, _ACCOUNT_ID, "en", repo)
+    ir1 = await fsm_start(_USER_ID, _ACCOUNT_ID, "en", repo)  # noqa: F841
     ir2 = await fsm_start(_USER_ID, _ACCOUNT_ID, "en", repo)
 
     active = await repo.get_active_for_user(_USER_ID)

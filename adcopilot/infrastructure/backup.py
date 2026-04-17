@@ -116,7 +116,7 @@ def run_backup() -> str:
             stderr=subprocess.PIPE,
             env=env,
             check=True,
-        )
+        )   # noqa: UP022
 
         with gzip.open(tmp_path, "wb") as gz:
             gz.write(result.stdout)

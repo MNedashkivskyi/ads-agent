@@ -128,7 +128,7 @@ def _extract_json(raw: str) -> str:
     return m.group(1) if m else raw.strip()
 
 
-def _parse_model(raw: str, model_cls: type[_T], stage: str) -> _T:
+def _parse_model(raw: str, model_cls: type[_T], stage: str) -> _T:  # noqa: UP047
     """Parse LLM text into *model_cls*; raises ``LLMError`` on failure."""
     json_str = _extract_json(raw)
     try:
@@ -362,7 +362,7 @@ class CampaignGenerator:
         ad_groups: list[AdGroupProposal] = []
         all_cpcs: list[int] = []
 
-        for ag_item, copy_resp in zip(structure.ad_groups, ad_copies):
+        for ag_item, copy_resp in zip(structure.ad_groups, ad_copies):  # noqa: B905
             keywords: list[KeywordProposal] = []
             for kw in ag_item.keywords:
                 cpc_micros = max(1, int(kw.estimated_cpc_pln * 1_000_000))
