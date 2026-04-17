@@ -97,6 +97,11 @@ class InMemoryAlertRepository:
                 return a
         return None
 
+    async def is_kind_suppressed(
+        self, account_id: AccountId, kind: AlertKind, now: datetime
+    ) -> bool:
+        return False  # no user-ack suppression in unit tests
+
 
 class FakeHourlyMetrics:
     """Configurable stub for HourlyMetricsPort."""
