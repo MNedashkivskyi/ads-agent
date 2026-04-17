@@ -8,7 +8,7 @@ account per 24 hours to prevent alert fatigue.
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -36,6 +36,7 @@ class AnomalyDetectionResult:
     alerts_created: int
     alerts_suppressed: int
     checks_run: int
+    created_alerts: list[Alert] = field(default_factory=list)
 
 
 class AnomalyDetectionUseCase:
@@ -89,9 +90,18 @@ class AnomalyDetectionUseCase:
         checks_run = 0
         alerts_created = 0
         alerts_suppressed = 0
+        created_alerts: list[Alert] = []
 
         async def _maybe_create(kind: AlertKind, message: str, payload: dict[str, Any]) -> None:
             nonlocal alerts_created, alerts_suppressed
+            # Check user-acknowledgement suppression (24h window)
+            if await self._alert_repo.is_kind_suppressed(account_id, kind, now):  # type: ignore[arg-type]
+                alerts_suppressed += 1
+                log.info(
+                    "anomaly suppressed (user ack)",
+                    kind=kind.value,
+                )
+                return
             if alerts_created >= remaining_quota:
                 alerts_suppressed += 1
                 log.warning(
@@ -111,6 +121,7 @@ class AnomalyDetectionUseCase:
                 created_at=now,  # type: ignore[arg-type]
             )
             await self._alert_repo.save(alert)
+            created_alerts.append(alert)
             alerts_created += 1
             log.warning("alert created", kind=kind.value, message=message)
 
@@ -164,6 +175,7 @@ class AnomalyDetectionUseCase:
             alerts_created=alerts_created,
             alerts_suppressed=alerts_suppressed,
             checks_run=checks_run,
+            created_alerts=created_alerts,
         )
 
     # ── Internal check methods ───────────────────────────────────────────────

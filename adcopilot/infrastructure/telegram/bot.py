@@ -59,6 +59,9 @@ def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-
     if not token:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is not set")
 
+    from adcopilot.infrastructure.telegram.alert_callback_handler import (
+        alert_callback_handler,
+    )
     from adcopilot.infrastructure.telegram.callback_handler import (
         more_callback_handler,
         recommendation_callback_handler,
@@ -104,6 +107,8 @@ def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-
     app.add_handler(CommandHandler("panic", panic_command_handler))
 
     # Callback query handlers (order matters — more specific patterns first)
+    # Alert action callbacks (alert_pause:, alert_investigate:, alert_ack:)
+    app.add_handler(CallbackQueryHandler(alert_callback_handler, pattern=r"^alert_"))
     app.add_handler(CallbackQueryHandler(undo_callback_handler, pattern=r"^undo_exec:"))
     app.add_handler(CallbackQueryHandler(more_callback_handler, pattern=r"^more:"))
     app.add_handler(
