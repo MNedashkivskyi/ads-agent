@@ -6,7 +6,11 @@ import structlog
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 
 from adcopilot.application.detection.templates import format_micros_as_currency
-from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS, Recommendation, RecommendationSeverity
+from adcopilot.domain.recommendation import (
+    NON_EXECUTABLE_KINDS,
+    Recommendation,
+    RecommendationSeverity,
+)
 
 logger = structlog.get_logger(__name__)
 

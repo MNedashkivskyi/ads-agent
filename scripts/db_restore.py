@@ -173,7 +173,7 @@ async def _count_rows(database_url: str, tables: list[str]) -> dict[str, int]:
         for table in tables:
             try:
                 counts[table] = await conn.fetchval(f'SELECT COUNT(*) FROM "{table}"')
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 counts[table] = -1
                 print(f"    WARNING: could not query {table}: {exc}")
         return counts

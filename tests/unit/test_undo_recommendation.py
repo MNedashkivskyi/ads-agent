@@ -26,7 +26,7 @@ from adcopilot.infrastructure.google_ads.fake_mutations import FakeGoogleAdsMuta
 _ACCOUNT_ID = AccountId("acct-1")
 _CUSTOMER_ID = "123-456-7890"
 _REFRESH_TOKEN = "tok"
-_NOW = datetime(2026, 4, 10, 12, 0, 0, tzinfo=UTC)
+_NOW = datetime.now()
 
 
 def _rec(

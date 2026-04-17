@@ -8,16 +8,12 @@ Test naming convention:
 from __future__ import annotations
 
 import uuid
-from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
-
-import pytest
 
 from adcopilot.application.detection.validation import (
     LandingPageCheckResult,
     ValidationContext,
-    ValidationResult,
     validate_proposal,
 )
 from adcopilot.domain.entities import AccountId, UserId
@@ -32,7 +28,6 @@ from adcopilot.domain.launch.entities import (
     LaunchStatus,
     MatchType,
 )
-
 
 # ---------------------------------------------------------------------------
 # Factories — build valid baseline objects

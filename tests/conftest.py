@@ -2,8 +2,8 @@ import os
 from collections.abc import AsyncGenerator
 
 import pytest_asyncio
-from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from adcopilot.infrastructure.db.models import Base
 

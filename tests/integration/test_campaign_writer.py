@@ -19,7 +19,6 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import UTC, datetime
-from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -30,12 +29,10 @@ from adcopilot.domain.entities import AccountId
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
-    CampaignBrief,
     CampaignBriefId,
     CampaignProposal,
     CampaignProposalId,
     KeywordProposal,
-    LaunchStatus,
     MatchType,
 )
 from adcopilot.infrastructure.google_ads.campaign_writer import CampaignWriter

@@ -37,7 +37,6 @@ from __future__ import annotations
 import dataclasses
 import re
 import uuid
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import NamedTuple

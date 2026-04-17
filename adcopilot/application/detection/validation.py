@@ -42,7 +42,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import NamedTuple
 
 from adcopilot.domain.launch.entities import CampaignBrief, CampaignProposal
 
