@@ -10,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
+    CampaignBriefId,
     CampaignProposal,
     CampaignProposalId,
-    CampaignBriefId,
     KeywordProposal,
     MatchType,
 )
@@ -22,7 +22,6 @@ from adcopilot.infrastructure.db.models import (
     LaunchKeywordModel,
     LaunchProposalModel,
 )
-
 
 # ---------------------------------------------------------------------------
 # Domain ↔ ORM conversion

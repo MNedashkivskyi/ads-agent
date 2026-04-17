@@ -27,18 +27,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adcopilot.domain.entities import AccountId, UserId
-from adcopilot.domain.launch.entities import CampaignBrief, CampaignBriefId, LaunchStatus
+from adcopilot.domain.launch.entities import CampaignBriefId, LaunchStatus
 from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
     SqlCampaignBriefRepository,
 )
 from adcopilot.infrastructure.telegram.interview_handler import (
     QUESTIONS,
-    InterviewResult,
-    _primary_action_keyboard,
     _resume_banner,
     _voice_confirm_keyboard,
     format_summary,
@@ -150,7 +147,6 @@ async def test_voice_confirmation_accept(repo: SqlCampaignBriefRepository) -> No
 @pytest.mark.asyncio
 async def test_voice_message_handler_no_transcription(repo: SqlCampaignBriefRepository) -> None:
     """When no active user is found the handler returns without error."""
-    from unittest.mock import AsyncMock, MagicMock, patch
 
     from adcopilot.infrastructure.telegram.interview_handler import voice_message_handler
 
@@ -479,7 +475,7 @@ async def test_get_active_returns_latest_collecting(
     repo: SqlCampaignBriefRepository,
 ) -> None:
     # Create two COLLECTING briefs
-    ir1 = await fsm_start(_USER_ID, _ACCOUNT_ID, "en", repo)
+    ir1 = await fsm_start(_USER_ID, _ACCOUNT_ID, "en", repo)  # noqa: F841
     ir2 = await fsm_start(_USER_ID, _ACCOUNT_ID, "en", repo)
 
     active = await repo.get_active_for_user(_USER_ID)

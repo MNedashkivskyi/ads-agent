@@ -737,7 +737,6 @@ async def _run_generate_campaign(
             if not settings.LLM_API_KEY:
                 from adcopilot.domain.launch.entities import LaunchStatus
                 from adcopilot.domain.launch.templates import build_proposal_from_template
-
                 proposal = build_proposal_from_template(brief)
                 await proposal_repo.save(proposal)
                 await brief_repo.update_status(brief.id, LaunchStatus.PROPOSED)
@@ -1485,3 +1484,110 @@ def nightly_db_backup_task() -> dict[str, object]:
 
     logger.info("nightly_db_backup.done", key=key, deleted_old=deleted)
     return {"key": key, "deleted_old_backups": deleted}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    max_retries=1,
+    default_retry_delay=60,
+    autoretry_for=(Exception,),
+    name="adcopilot.interfaces.worker.tasks.run_anomaly_detection_task",
+)
+def run_anomaly_detection_task() -> dict[str, object]:
+    """Queue per-account anomaly detection checks — runs every hour at :05.
+
+    Iterates all active accounts, calls AnomalyDetectionUseCase for each,
+    and returns an aggregated summary dict.
+    """
+    import asyncio
+
+    from adcopilot.config import get_settings
+
+    settings = get_settings()
+    return asyncio.run(_run_anomaly_detection_all_accounts(settings))
+
+
+async def _run_anomaly_detection_all_accounts(settings: object) -> dict[str, object]:
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.anomaly.anomaly_detection_use_case import AnomalyDetectionUseCase
+    from adcopilot.config import Settings
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.infrastructure.db.repositories.alert_repository import SqlAlertRepository
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
+    )
+    from adcopilot.infrastructure.google_ads.hourly_metrics_adapter import (
+        GoogleAdsHourlyMetricsAdapter,
+    )
+
+    assert isinstance(settings, Settings)
+    engine = create_async_engine(settings.DATABASE_URL)
+
+    total_alerts = 0
+    total_suppressed = 0
+    accounts_checked = 0
+    accounts_errored = 0
+
+    try:
+        # Fetch all active accounts with OAuth credentials
+        async with AsyncSession(engine) as session:
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            credentials_repo = SqlOAuthCredentialsRepository(
+                session, settings.TOKEN_ENCRYPTION_KEY
+            )
+            accounts = await account_repo.list_active()
+            account_creds: list[tuple[object, str, str]] = []
+            for acct in accounts:
+                if acct.is_manager:
+                    continue
+                creds = await credentials_repo.get(AccountId(acct.id))
+                if creds is None:
+                    continue
+                account_creds.append((acct, acct.customer_id, creds.refresh_token))
+
+        metrics_adapter = GoogleAdsHourlyMetricsAdapter(settings)
+
+        for acct, customer_id, refresh_token in account_creds:
+            try:
+                async with AsyncSession(engine) as session, session.begin():
+                    alert_repo = SqlAlertRepository(session)
+                    use_case = AnomalyDetectionUseCase(
+                        metrics=metrics_adapter,
+                        alert_repo=alert_repo,
+                    )
+                    result = await use_case.execute(
+                        AccountId(str(acct.id)),
+                        customer_id,
+                        refresh_token,
+                    )
+                total_alerts += result.alerts_created
+                total_suppressed += result.alerts_suppressed
+                accounts_checked += 1
+                logger.info(
+                    "anomaly_detection.done",
+                    account_id=str(acct.id),
+                    alerts_created=result.alerts_created,
+                    alerts_suppressed=result.alerts_suppressed,
+                )
+            except Exception:
+                logger.exception("anomaly_detection.failed", account_id=str(acct.id))
+                accounts_errored += 1
+    finally:
+        await engine.dispose()
+
+    logger.info(
+        "anomaly_detection.summary",
+        accounts_checked=accounts_checked,
+        accounts_errored=accounts_errored,
+        total_alerts=total_alerts,
+        total_suppressed=total_suppressed,
+    )
+    return {
+        "accounts_checked": accounts_checked,
+        "accounts_errored": accounts_errored,
+        "total_alerts": total_alerts,
+        "total_suppressed": total_suppressed,
+    }

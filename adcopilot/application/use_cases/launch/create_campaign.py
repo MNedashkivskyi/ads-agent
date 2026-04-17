@@ -120,7 +120,7 @@ class CreateCampaignUseCase:
             )
 
             # Step 3 — Keywords (per ad group, sequential)
-            for ag_proposal, ag_rn in zip(proposal.ad_groups, ad_group_rns):
+            for ag_proposal, ag_rn in zip(proposal.ad_groups, ad_group_rns):  # noqa: B905
                 kw_rns = await self._writer.create_keywords(
                     cid, rt, ag_rn, ag_proposal.keywords
                 )
@@ -132,7 +132,7 @@ class CreateCampaignUseCase:
             )
 
             # Step 4 — Ads (per ad group, sequential)
-            for ag_proposal, ag_rn in zip(proposal.ad_groups, ad_group_rns):
+            for ag_proposal, ag_rn in zip(proposal.ad_groups, ad_group_rns):   # noqa: B905
                 a_rns = await self._writer.create_ads(
                     cid, rt, ag_rn, ag_proposal.ads
                 )

@@ -21,15 +21,11 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Re-export for convenience
 __all__ = [
-    "LaunchAdGroupModel",
-    "LaunchAdModel",
-    "LaunchBriefModel",
-    "LaunchKeywordModel",
-    "LaunchProposalModel",
     "AdGroupSnapshotModel",
     "AdSnapshotModel",
-    "AuditLogModel",
+    "AlertModel",
     "AudiencePerformanceSnapshotModel",
+    "AuditLogModel",
     "Base",
     "CampaignExtensionSnapshotModel",
     "CampaignSnapshotModel",
@@ -41,6 +37,11 @@ __all__ = [
     "GoogleAdsAccountModel",
     "HourPerformanceSnapshotModel",
     "KeywordSnapshotModel",
+    "LaunchAdGroupModel",
+    "LaunchAdModel",
+    "LaunchBriefModel",
+    "LaunchKeywordModel",
+    "LaunchProposalModel",
     "NegativeKeywordSnapshotModel",
     "OAuthCredentialsModel",
     "RecommendationModel",
@@ -256,7 +257,10 @@ class DevicePerformanceSnapshotModel(Base):
     __table_args__ = (
         Index(
             "uq_device_performance_snapshots",
-            "account_id", "snapshot_date", "campaign_id", "device",
+            "account_id",
+            "snapshot_date",
+            "campaign_id",
+            "device",
             unique=True,
         ),
     )
@@ -283,7 +287,10 @@ class GeoPerformanceSnapshotModel(Base):
     __table_args__ = (
         Index(
             "uq_geo_performance_snapshots",
-            "account_id", "snapshot_date", "campaign_id", "location_id",
+            "account_id",
+            "snapshot_date",
+            "campaign_id",
+            "location_id",
             unique=True,
         ),
     )
@@ -310,7 +317,10 @@ class HourPerformanceSnapshotModel(Base):
     __table_args__ = (
         Index(
             "uq_hour_performance_snapshots",
-            "account_id", "snapshot_date", "campaign_id", "hour_of_day",
+            "account_id",
+            "snapshot_date",
+            "campaign_id",
+            "hour_of_day",
             unique=True,
         ),
     )
@@ -337,7 +347,10 @@ class DayOfWeekPerformanceSnapshotModel(Base):
     __table_args__ = (
         Index(
             "uq_day_of_week_performance_snapshots",
-            "account_id", "snapshot_date", "campaign_id", "day_of_week",
+            "account_id",
+            "snapshot_date",
+            "campaign_id",
+            "day_of_week",
             unique=True,
         ),
     )
@@ -364,7 +377,11 @@ class AudiencePerformanceSnapshotModel(Base):
     __table_args__ = (
         Index(
             "uq_audience_performance_snapshots",
-            "account_id", "snapshot_date", "campaign_id", "ad_group_id", "criterion_id",
+            "account_id",
+            "snapshot_date",
+            "campaign_id",
+            "ad_group_id",
+            "criterion_id",
             unique=True,
         ),
     )
@@ -447,6 +464,7 @@ class ConversionActionSnapshotModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+
 class CampaignExtensionSnapshotModel(Base):
     __tablename__ = "campaign_extension_snapshots"
     __table_args__ = (
@@ -524,7 +542,9 @@ class RecommendationSnoozeModel(Base):
     __tablename__ = "recommendation_snoozes"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    recommendation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    recommendation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
     account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String(100), nullable=False)
     target_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -536,9 +556,7 @@ class RecommendationSnoozeModel(Base):
 
 class DigestSentLogModel(Base):
     __tablename__ = "digest_sent_log"
-    __table_args__ = (
-        Index("uq_digest_sent_log_user_date", "user_id", "sent_date", unique=True),
-    )
+    __table_args__ = (Index("uq_digest_sent_log_user_date", "user_id", "sent_date", unique=True),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
@@ -572,7 +590,9 @@ class RecommendationModel(Base):
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     evidence: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     target_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    estimated_monthly_savings_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    estimated_monthly_savings_micros: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0
+    )
     explanation: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -586,7 +606,9 @@ class AuditLogModel(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    recommendation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    recommendation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
     account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String(100), nullable=False)
     action: Mapped[str] = mapped_column(String(20), nullable=False)
@@ -655,9 +677,7 @@ class LaunchProposalModel(Base):
     location_targeting: Mapped[str] = mapped_column(String(255), nullable=False)
     bidding_strategy: Mapped[str] = mapped_column(String(100), nullable=False)
     # Campaign-level negative keywords as a JSON array of strings.
-    negative_keywords: Mapped[list[str]] = mapped_column(
-        JSONB, nullable=False, server_default="[]"
-    )
+    negative_keywords: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
     estimated_cpc_min_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     estimated_cpc_max_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -729,4 +749,31 @@ class LaunchAdModel(Base):
     path2: Mapped[str] = mapped_column(String(15), nullable=False, server_default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+# ---------------------------------------------------------------------------
+# Anomaly alert model
+# ---------------------------------------------------------------------------
+
+
+class AlertModel(Base):
+    """Persists a real-time anomaly Alert.
+
+    Rate-limited to 3 per account per 24 hours. Separate from
+    RecommendationModel because alerts require immediate attention and
+    do not go through the approval workflow.
+    """
+
+    __tablename__ = "alerts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(100), nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="CRITICAL")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="OPEN", index=True)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )

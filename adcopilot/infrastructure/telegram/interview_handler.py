@@ -37,7 +37,6 @@ from __future__ import annotations
 import dataclasses
 import re
 import uuid
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import NamedTuple
@@ -343,7 +342,7 @@ def _parse_pln(text: str, label: str) -> Decimal:
     try:
         return Decimal(cleaned)
     except InvalidOperation:
-        raise ValueError(
+        raise ValueError(  # noqa: B904
             f"{label} must be a number (e.g. 500 or 1500.50). "
             f"I couldn't understand '{text}' — please try again."
         )

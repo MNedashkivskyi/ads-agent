@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from adcopilot.domain.launch.entities import AdGroupProposal, AdProposal, CampaignProposal, KeywordProposal
+from adcopilot.domain.launch.entities import (
+    AdGroupProposal,
+    AdProposal,
+    CampaignProposal,
+    KeywordProposal,
+)
 
 
 @dataclass(frozen=True)

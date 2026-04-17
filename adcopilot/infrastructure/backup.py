@@ -110,7 +110,7 @@ def run_backup() -> str:
     try:
         logger.info("backup.pg_dump.start", key=key, host=db["host"], dbname=db["dbname"])
 
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: UP022
             pg_dump_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

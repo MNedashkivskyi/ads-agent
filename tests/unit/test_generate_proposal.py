@@ -641,7 +641,7 @@ async def test_template_proposal_always_passes_validator() -> None:
     """Every built-in template produces a proposal that passes the rule-based validator."""
     from adcopilot.domain.launch.templates import _TEMPLATES, build_proposal_from_template
 
-    for vertical_key, tmpl in _TEMPLATES.items():
+    for vertical_key, tmpl in _TEMPLATES.items():  # noqa: B007
         # Build a brief that references this vertical
         desc_map = {
             "salon": "hair salon in Warsaw",
