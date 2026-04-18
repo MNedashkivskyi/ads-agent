@@ -65,6 +65,7 @@ def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-
         undo_callback_handler,
     )
     from adcopilot.infrastructure.telegram.handlers import (
+        connect_handler,
         fallback_handler,
         help_handler,
         history_handler,
@@ -91,6 +92,7 @@ def build_telegram_app(settings: Settings) -> Application:  # type: ignore[type-
 
     # Command handlers
     app.add_handler(CommandHandler("start", start_handler))
+    app.add_handler(CommandHandler("connect", connect_handler))
     app.add_handler(CommandHandler("status", status_handler))
     app.add_handler(CommandHandler("history", history_handler))
     app.add_handler(CommandHandler("pause", pause_handler))

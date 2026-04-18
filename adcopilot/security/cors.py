@@ -25,6 +25,8 @@ from adcopilot.config import Settings
 _DEV_ORIGINS: tuple[str, ...] = (
     "http://localhost:3000",
     "http://localhost:5173",
+    "https://adswise.xyz",
+    "https://www.adswise.xyz",
 )
 
 _DISALLOWED_ORIGIN_VALUES: frozenset[str] = frozenset({"", "*", "null"})
@@ -58,3 +60,10 @@ def build_cors_allowed_origins(settings: Settings) -> list[str]:
     if app_url and app_url not in _DISALLOWED_ORIGIN_VALUES:
         origins.append(app_url)
     return origins
+
+
+def is_allowed_origin(origin: str, settings: Settings) -> bool:
+    """Check if an origin is allowed — used by middleware for dynamic CORS."""
+    allowed = build_cors_allowed_origins(settings)
+    normalised = _normalise(origin)
+    return normalised in allowed

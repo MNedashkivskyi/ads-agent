@@ -253,7 +253,7 @@ async def _run_send_digests(settings: object) -> dict[str, object]:
                             await bot.send_message(
                                 chat_id=user_model.telegram_chat_id,
                                 text=(
-                                    "⚠️ Twoja subskrypcja jest nieaktywna. Odwiedź tryadept.com/app/billing, "
+                                    "⚠️ Twoja subskrypcja jest nieaktywna. Odwiedź adswise.xyz/app/billing, "
                                     "aby wznowić dostęp."
                                 ),
                             )
@@ -391,7 +391,7 @@ async def _run_trial_reminders(settings: object) -> dict[str, object]:
                         chat_id=user_model.telegram_chat_id,
                         text=(
                             "⏳ Twój 14-dniowy okres próbny kończy się za 2 dni. "
-                            "Odwiedź tryadept.com/app/billing, aby wybrać plan i kontynuować korzystanie z AdCopilot."
+                            "Odwiedź adswise.xyz/app/billing, aby wybrać plan i kontynuować korzystanie z AdsWise."
                         ),
                     )
                 sent += 1

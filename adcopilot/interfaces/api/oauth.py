@@ -9,6 +9,7 @@ import httpx
 import redis as redis_sync
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import Settings, get_settings
@@ -63,17 +64,16 @@ async def _get_db_session(
 async def oauth_google_start(
     user_id: str,
     settings: Annotated[Settings, Depends(get_settings)],
-) -> dict[str, str]:
-    """Returns the Google OAuth redirect URL. The caller should redirect the user there."""
+) -> RedirectResponse:
+    """Redirects the browser directly to Google's OAuth consent screen."""
     if not settings.GOOGLE_ADS_CLIENT_ID:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
 
     state = issue_state_jwt(user_id, settings.SECRET_KEY)
-    callback_url = "http://localhost:8000/oauth/google/callback"  # configurable in prod
 
     params = {
         "client_id": settings.GOOGLE_ADS_CLIENT_ID,
-        "redirect_uri": callback_url,
+        "redirect_uri": settings.OAUTH_REDIRECT_URI,
         "response_type": "code",
         "scope": GOOGLE_ADS_SCOPE,
         "access_type": "offline",
@@ -81,17 +81,17 @@ async def oauth_google_start(
         "state": state,
     }
     auth_url = f"{GOOGLE_AUTH_URL}?{urlencode(params)}"
-    return {"auth_url": auth_url}
+    return RedirectResponse(url=auth_url, status_code=302)
 
 
-@router.get("/google/callback")
+@router.get("/google/callback", response_model=None)
 async def oauth_google_callback(
     code: Annotated[str, Query()],
     state: Annotated[str, Query()],
     settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(_get_db_session)],
     redis_client: Annotated[redis_sync.Redis, Depends(_get_redis_client)],
-) -> dict[str, object]:
+) -> RedirectResponse | dict[str, object]:
     """Exchanges code for tokens, stores credentials, returns linked customer IDs."""
     if not settings.GOOGLE_ADS_CLIENT_ID or not settings.GOOGLE_ADS_CLIENT_SECRET:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
@@ -111,8 +111,6 @@ async def oauth_google_callback(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    callback_url = "http://localhost:8000/oauth/google/callback"
-
     # Exchange authorization code for tokens
     async with httpx.AsyncClient() as client:
         token_resp = await client.post(
@@ -121,7 +119,7 @@ async def oauth_google_callback(
                 "code": code,
                 "client_id": settings.GOOGLE_ADS_CLIENT_ID,
                 "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
-                "redirect_uri": callback_url,
+                "redirect_uri": settings.OAUTH_REDIRECT_URI,
                 "grant_type": "authorization_code",
             },
         )
@@ -194,4 +192,12 @@ async def oauth_google_callback(
     await session.commit()
     logger.info("google oauth complete", user_id=user_id, accounts=len(linked_ids))
 
+    # Redirect the browser back to the frontend dashboard.
+    # APP_URL is the frontend origin (e.g. https://approve-ads-bot.pages.dev).
+    # Falls back to a generic success message if APP_URL is not configured.
+    if settings.APP_URL:
+        return RedirectResponse(
+            url=f"{settings.APP_URL.rstrip('/')}/app?connected={len(linked_ids)}",
+            status_code=302,
+        )
     return {"user_id": user_id, "linked_customer_ids": linked_ids}

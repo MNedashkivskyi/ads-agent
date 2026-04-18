@@ -14,6 +14,7 @@ from telegram import Bot, BotCommand
 from adcopilot.config import get_settings
 
 COMMANDS = [
+    BotCommand("connect", "Connect Google Ads account"),
     BotCommand("status", "Account summary"),
     BotCommand("history", "Recent recommendations"),
     BotCommand("pause", "Pause daily recommendations"),
@@ -23,12 +24,12 @@ COMMANDS = [
 ]
 
 DESCRIPTION = (
-    "Adept — Professional Google Ads optimization. "
-    "Connect your account at tryadept.com to get started."
+    "AdsWise — Professional Google Ads optimization. "
+    "Connect your account at adswise.xyz to get started."
 )
 
 SHORT_DESCRIPTION = (
-    "Adept monitors your Google Ads account and sends optimization "
+    "AdsWise monitors your Google Ads account and sends optimization "
     "recommendations you can approve or decline right here."
 )
 
