@@ -57,18 +57,35 @@ END
 $$;
 """
 
-# asyncpg requires one statement per op.execute() call — no multi-statement
-# strings.  Each REVOKE/GRANT is therefore a separate execute().
+# ---------------------------------------------------------------------------
+# Grant/revoke statements kept as named constants so unit tests can
+# inspect the SQL text without executing it against a real database.
+#
+# asyncpg cannot execute multiple statements in one op.execute() call, so
+# upgrade() and downgrade() issue each statement individually.
+# ---------------------------------------------------------------------------
+
+_APPLY_GRANTS_SQL = (
+    "REVOKE ALL ON TABLE audit_logs FROM adept_app;\n"
+    "REVOKE ALL ON TABLE audit_logs FROM adept_admin;\n"
+    "GRANT SELECT, INSERT ON TABLE audit_logs TO adept_app;\n"
+    "GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLE audit_logs TO adept_admin;"
+)
+
+_REVOKE_GRANTS_SQL = (
+    "REVOKE ALL ON TABLE audit_logs FROM adept_app;\n"
+    "REVOKE ALL ON TABLE audit_logs FROM adept_admin;"
+)
 
 
 def upgrade() -> None:
     op.execute(_CREATE_ROLES_SQL)
     # Revoke stale grants first, then re-apply clean ones.
+    # Each statement is a separate execute() — asyncpg forbids multiple
+    # commands in a single prepared statement.
     op.execute("REVOKE ALL ON TABLE audit_logs FROM adept_app")
     op.execute("REVOKE ALL ON TABLE audit_logs FROM adept_admin")
-    # adept_app: append-only (SELECT + INSERT only).
     op.execute("GRANT SELECT, INSERT ON TABLE audit_logs TO adept_app")
-    # adept_admin: full privileges for migrations and manual corrections.
     op.execute("GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLE audit_logs TO adept_admin")
 
 

@@ -19,9 +19,12 @@ def _load_migration() -> object:
 
 
 def test_migration_chains_from_0019() -> None:
+    # This migration was renumbered to 0020b (from 0020) to resolve a
+    # duplicate-revision conflict when two branches both created a 0020
+    # migration.  It now sits between 0020 (launch_tables) and 0021.
     mod = _load_migration()
-    assert mod.revision == "0020"  # type: ignore[attr-defined]
-    assert mod.down_revision == "0019"  # type: ignore[attr-defined]
+    assert mod.revision == "0020b"  # type: ignore[attr-defined]
+    assert mod.down_revision == "0020"  # type: ignore[attr-defined]
 
 
 def test_migration_creates_both_roles() -> None:
