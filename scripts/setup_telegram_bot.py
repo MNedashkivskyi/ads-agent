@@ -14,6 +14,7 @@ from telegram import Bot, BotCommand
 from adcopilot.config import get_settings
 
 COMMANDS = [
+    BotCommand("connect", "Connect Google Ads account"),
     BotCommand("status", "Account summary"),
     BotCommand("history", "Recent recommendations"),
     BotCommand("pause", "Pause daily recommendations"),

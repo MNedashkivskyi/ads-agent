@@ -430,6 +430,65 @@ async def undo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await engine.dispose()
 
 
+async def connect_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """/connect — send a Google Ads OAuth link to the user."""
+    if update.message is None:
+        return
+
+    chat_id = update.message.chat_id
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            from sqlalchemy import select
+
+            from adcopilot.infrastructure.db.models import UserModel
+
+            result = await session.execute(
+                select(UserModel).where(UserModel.telegram_chat_id == chat_id)
+            )
+            user_model = result.scalar_one_or_none()
+            if user_model is None:
+                await update.message.reply_text(
+                    "Najpierw połącz konto Telegram przez stronę.\n"
+                    "Odwiedź tryadept.com/app/telegram i zeskanuj kod QR."
+                )
+                return
+
+            if not settings.GOOGLE_ADS_CLIENT_ID:
+                await update.message.reply_text(
+                    "Integracja Google Ads nie jest jeszcze skonfigurowana."
+                )
+                return
+
+            from urllib.parse import urlencode
+
+            from adcopilot.security import issue_state_jwt
+
+            state = issue_state_jwt(str(user_model.id), settings.SECRET_KEY)
+            params = {
+                "client_id": settings.GOOGLE_ADS_CLIENT_ID,
+                "redirect_uri": settings.OAUTH_REDIRECT_URI,
+                "response_type": "code",
+                "scope": "https://www.googleapis.com/auth/adwords",
+                "access_type": "offline",
+                "prompt": "consent",
+                "state": state,
+            }
+            auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+
+            keyboard = InlineKeyboardMarkup(
+                [[InlineKeyboardButton("🔗 Połącz Google Ads", url=auth_url)]]
+            )
+            await update.message.reply_text(
+                "Kliknij poniższy przycisk, aby połączyć swoje konto Google Ads.\n\n"
+                "⚠️ Upewnij się, że jesteś zalogowany na właściwe konto Google.",
+                reply_markup=keyboard,
+            )
+    finally:
+        await engine.dispose()
+
+
 async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """/help — list all available commands."""
     if update.message is None:
@@ -437,6 +496,7 @@ async def help_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     text = (
         "*Dostępne komendy:*\n\n"
+        "/connect — Połącz konto Google Ads\n"
         "/status — Podsumowanie konta\n"
         "/launch — Utwórz nową kampanię\n"
         "/history — Ostatnie rekomendacje\n"
