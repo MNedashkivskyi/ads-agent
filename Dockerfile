@@ -20,6 +20,7 @@ RUN addgroup --system appgroup && adduser --system --ingroup appgroup --no-creat
 
 COPY --from=builder /app/.venv /app/.venv
 COPY alembic.ini ./
+COPY start.sh ./
 COPY adcopilot ./adcopilot
 
 ENV PATH="/app/.venv/bin:$PATH"
@@ -27,8 +28,10 @@ ENV PYTHONPATH="/app"
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+RUN chmod +x /app/start.sh
+
 USER appuser
 
 EXPOSE 8000
 
-CMD ["uvicorn", "adcopilot.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/app/start.sh"]
