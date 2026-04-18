@@ -42,7 +42,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not args:
         await update.message.reply_text(
             "Witaj! Jestem Adept — Twoim asystentem Google Ads.\n\n"
-            "Aby połączyć konto, odwiedź tryadept.com i wygeneruj link aktywacyjny."
+            "Aby połączyć konto, odwiedź adswise.xyz i wygeneruj link aktywacyjny."
         )
         return
 
@@ -52,7 +52,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     user_id = _verify_link_jwt(deep_link_token, settings.SECRET_KEY)
     if user_id is None:
         await update.message.reply_text(
-            "Ten link wygasł. Wygeneruj nowy na tryadept.com/app/telegram"
+            "Ten link wygasł. Wygeneruj nowy na adswise.xyz/app/telegram"
         )
         return
 
@@ -63,7 +63,7 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             user = await repo.get_by_id(UserId(user_id))
             if user is None:
                 await update.message.reply_text(
-                    "Użytkownik nie znaleziony. Zarejestruj się na tryadept.com"
+                    "Użytkownik nie znaleziony. Zarejestruj się na adswise.xyz"
                 )
                 return
 
@@ -123,7 +123,7 @@ async def status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
             if not accounts:
                 await update.message.reply_text(
-                    "Brak połączonych kont Google Ads. Odwiedź tryadept.com, aby połączyć konto."
+                    "Brak połączonych kont Google Ads. Odwiedź adswise.xyz, aby połączyć konto."
                 )
                 return
 
@@ -451,7 +451,7 @@ async def connect_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if user_model is None:
                 await update.message.reply_text(
                     "Najpierw połącz konto Telegram przez stronę.\n"
-                    "Odwiedź tryadept.com/app/telegram i zeskanuj kod QR."
+                    "Odwiedź adswise.xyz/app/telegram i zeskanuj kod QR."
                 )
                 return
 

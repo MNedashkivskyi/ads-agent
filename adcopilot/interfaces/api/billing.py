@@ -280,7 +280,7 @@ async def _handle_payment_failed(invoice: Any, settings: Settings) -> None:
                         await bot.send_message(
                             chat_id=user_model.telegram_chat_id,
                             text=(
-                                "⚠️ Płatność nieudana. Odwiedź tryadept.com/app/billing, "
+                                "⚠️ Płatność nieudana. Odwiedź adswise.xyz/app/billing, "
                                 "aby zaktualizować dane płatności i uniknąć przerwy w usłudze."
                             ),
                         )

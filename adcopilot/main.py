@@ -83,7 +83,7 @@ def create_app() -> FastAPI:
     # integrations hook into the request lifecycle.  Idempotent.
     init_sentry(component="api")
 
-    application = FastAPI(title="AdCopilot", version="0.1.0", lifespan=lifespan)
+    application = FastAPI(title="AdsWise", version="0.1.0", lifespan=lifespan)
     # Rate limiting — must be registered before SlowAPIMiddleware is added.
     application.state.limiter = limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -96,7 +96,7 @@ def create_app() -> FastAPI:
     application.add_middleware(SentryContextMiddleware)
 
     # CORS — origin allow-list.  In production the ONLY accepted origin is
-    # the canonical web domain set via APP_URL (e.g. https://tryadept.com).
+    # the canonical web domain set via APP_URL (e.g. https://adswise.xyz).
     # No wildcards.  In non-production environments we additionally allow
     # localhost so the Next.js dev server can talk to a local API.
     from fastapi.middleware.cors import CORSMiddleware

@@ -24,12 +24,12 @@ COMMANDS = [
 ]
 
 DESCRIPTION = (
-    "Adept — Professional Google Ads optimization. "
-    "Connect your account at tryadept.com to get started."
+    "AdsWise — Professional Google Ads optimization. "
+    "Connect your account at adswise.xyz to get started."
 )
 
 SHORT_DESCRIPTION = (
-    "Adept monitors your Google Ads account and sends optimization "
+    "AdsWise monitors your Google Ads account and sends optimization "
     "recommendations you can approve or decline right here."
 )
 
