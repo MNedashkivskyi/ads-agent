@@ -11,7 +11,7 @@ dockerfilePath = "Dockerfile"
 [deploy]
 # Railway injects $PORT automatically (default 8080).
 # --proxy-headers is required so FastAPI sees the real client IPs behind Railway's proxy.
-startCommand = "sh -c 'uvicorn adcopilot.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2 --proxy-headers --forwarded-allow-ips *'"
+startCommand = "sh -c 'uvicorn adcopilot.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2 --proxy-headers'"
 
 # Run Alembic migrations before each new deployment goes live.
 # If the migration fails the deploy is aborted and the previous version keeps serving traffic.
