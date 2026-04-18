@@ -1,7 +1,7 @@
 """Create append-only Postgres roles for the audit_logs table.
 
-Revision ID: 0020
-Revises: 0019
+Revision ID: 0020b
+Revises: 0020
 Create Date: 2026-04-14
 
 Two roles are created and granted minimum-necessary privileges on the
@@ -33,8 +33,8 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "0020"
-down_revision = "0019"
+revision = "0020b"
+down_revision = "0020"
 branch_labels = None
 depends_on = None
 
@@ -57,36 +57,24 @@ END
 $$;
 """
 
-# ---------------------------------------------------------------------------
-# Revoke everything first, then grant only what each role needs.  This
-# protects against stale grants from an earlier manual setup.
-# ---------------------------------------------------------------------------
-
-_APPLY_GRANTS_SQL = """
-REVOKE ALL ON TABLE audit_logs FROM adept_app;
-REVOKE ALL ON TABLE audit_logs FROM adept_admin;
-
--- adept_app: append-only.  SELECT is included so the API can show users
--- their own history.  No UPDATE, no DELETE, no TRUNCATE.
-GRANT SELECT, INSERT ON TABLE audit_logs TO adept_app;
-
--- adept_admin: full privileges for migrations and manual corrections.
-GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLE audit_logs TO adept_admin;
-"""
-
-_REVOKE_GRANTS_SQL = """
-REVOKE ALL ON TABLE audit_logs FROM adept_app;
-REVOKE ALL ON TABLE audit_logs FROM adept_admin;
-"""
+# asyncpg requires one statement per op.execute() call — no multi-statement
+# strings.  Each REVOKE/GRANT is therefore a separate execute().
 
 
 def upgrade() -> None:
     op.execute(_CREATE_ROLES_SQL)
-    op.execute(_APPLY_GRANTS_SQL)
+    # Revoke stale grants first, then re-apply clean ones.
+    op.execute("REVOKE ALL ON TABLE audit_logs FROM adept_app")
+    op.execute("REVOKE ALL ON TABLE audit_logs FROM adept_admin")
+    # adept_app: append-only (SELECT + INSERT only).
+    op.execute("GRANT SELECT, INSERT ON TABLE audit_logs TO adept_app")
+    # adept_admin: full privileges for migrations and manual corrections.
+    op.execute("GRANT SELECT, INSERT, UPDATE, DELETE, TRUNCATE ON TABLE audit_logs TO adept_admin")
 
 
 def downgrade() -> None:
     # Remove grants but leave the roles in place — dropping a role that is
     # currently the owner of an object or referenced elsewhere would fail,
     # and we don't want a downgrade to block on operator intervention.
-    op.execute(_REVOKE_GRANTS_SQL)
+    op.execute("REVOKE ALL ON TABLE audit_logs FROM adept_app")
+    op.execute("REVOKE ALL ON TABLE audit_logs FROM adept_admin")

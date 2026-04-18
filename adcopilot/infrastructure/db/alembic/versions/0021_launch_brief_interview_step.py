@@ -1,7 +1,7 @@
 """Add interview_step column to launch_briefs.
 
 Revision ID: 0021
-Revises: 0020
+Revises: 0020b
 Create Date: 2026-04-14
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0021"
-down_revision = "0020"
+down_revision = "0020b"
 branch_labels = None
 depends_on = None
 

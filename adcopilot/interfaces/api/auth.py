@@ -8,7 +8,7 @@ from typing import Annotated
 
 import bcrypt
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from jose import jwt
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -68,6 +68,7 @@ def _make_jwt(user_id: str, secret_key: str) -> str:
 @limiter.limit(_SIGNUP_LIMIT)
 async def signup(
     request: Request,  # Required by slowapi for per-route rate limiting
+    response: Response,  # Required by slowapi to inject X-RateLimit-* headers
     body: SignupRequest,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthResponse:
@@ -111,6 +112,7 @@ async def signup(
 @limiter.limit(_LOGIN_LIMIT)
 async def login(
     request: Request,  # Required by slowapi for per-route rate limiting
+    response: Response,  # Required by slowapi to inject X-RateLimit-* headers
     body: LoginRequest,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> AuthResponse:

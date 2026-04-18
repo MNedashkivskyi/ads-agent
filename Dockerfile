@@ -19,6 +19,7 @@ RUN apt-get update \
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup --no-create-home appuser
 
 COPY --from=builder /app/.venv /app/.venv
+COPY alembic.ini ./
 COPY adcopilot ./adcopilot
 
 ENV PATH="/app/.venv/bin:$PATH"
