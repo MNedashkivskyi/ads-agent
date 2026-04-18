@@ -84,7 +84,7 @@ async def oauth_google_start(
     return RedirectResponse(url=auth_url, status_code=302)
 
 
-@router.get("/google/callback")
+@router.get("/google/callback", response_model=None)
 async def oauth_google_callback(
     code: Annotated[str, Query()],
     state: Annotated[str, Query()],
