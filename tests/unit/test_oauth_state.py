@@ -114,8 +114,17 @@ def test_different_tokens_do_not_collide() -> None:
 def test_consume_rejects_tampered_signature() -> None:
     redis = FakeRedis()
     token = issue_state_jwt(_USER, _SECRET)
-    # Flip a character in the signature.
-    bad = token[:-1] + ("A" if token[-1] != "A" else "B")
+    # Tamper the payload section (middle part between the two dots).
+    # Flipping the last character of the full token is unreliable: if the
+    # base64url signature length mod 4 leaves padding bits, the last char
+    # doesn't fully contribute to the decoded bytes, so the tampered token
+    # decodes to the same HMAC and jwt.decode accepts it.
+    # Modifying the payload always produces a different signed message,
+    # guaranteeing a verification failure.
+    header, payload, signature = token.split(".")
+    mid = len(payload) // 2
+    tampered_payload = payload[:mid] + ("A" if payload[mid] != "A" else "B") + payload[mid + 1 :]
+    bad = f"{header}.{tampered_payload}.{signature}"
     with pytest.raises(StateTokenInvalidError):
         consume_state_jwt(bad, _SECRET, redis_client=redis)
 
