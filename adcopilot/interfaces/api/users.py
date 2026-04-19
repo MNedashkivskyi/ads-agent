@@ -68,9 +68,39 @@ class SettingsUpdateRequest(BaseModel):
     language: str | None = None
 
 
+class UserMeResponse(BaseModel):
+    user_id: str
+    email: str
+    telegram_chat_id: int | None
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+
+@router.get("/{user_id}/me", response_model=UserMeResponse)
+async def get_user_me(
+    user_id: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> UserMeResponse:
+    """Return basic user info including Telegram connection status."""
+    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            repo = SqlUserRepository(session)
+            user = await repo.get_by_id(UserId(user_id))
+            if user is None:
+                raise HTTPException(status_code=404, detail="User not found")
+            return UserMeResponse(
+                user_id=str(user.id),
+                email=user.email,
+                telegram_chat_id=user.telegram_chat_id,
+            )
+    finally:
+        await engine.dispose()
 
 
 @router.get("/{user_id}/accounts", response_model=list[AccountResponse])
