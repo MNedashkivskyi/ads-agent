@@ -142,12 +142,32 @@ async def oauth_google_callback(
     # Extract the plain numeric ID from each resource name.
     from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter
 
+    # Guard: developer token is required for every Google Ads API call.
+    if not settings.GOOGLE_ADS_DEVELOPER_TOKEN:
+        logger.error(
+            "GOOGLE_ADS_DEVELOPER_TOKEN is not set — cannot call Google Ads API. "
+            "Set this env var in Railway to enable Google Ads account linking."
+        )
+        if settings.APP_URL:
+            return RedirectResponse(
+                url=f"{settings.APP_URL.rstrip('/')}/app?connected=0&error=missing_developer_token",
+                status_code=302,
+            )
+        raise HTTPException(status_code=503, detail="Google Ads API not configured: missing GOOGLE_ADS_DEVELOPER_TOKEN")
+
     ads_client = GoogleAdsClientAdapter(settings)
+    google_ads_api_error: str | None = None
     try:
         resource_names = await ads_client.list_accessible_customers(refresh_token)
         customer_ids = [rn.split("/")[-1] for rn in resource_names]
     except Exception as exc:
-        logger.warning("failed to list google ads customers", error=str(exc))
+        logger.error(
+            "failed to list google ads customers",
+            error=str(exc),
+            developer_token_set=bool(settings.GOOGLE_ADS_DEVELOPER_TOKEN),
+            client_id_set=bool(settings.GOOGLE_ADS_CLIENT_ID),
+        )
+        google_ads_api_error = str(exc)
         customer_ids = []
 
     acc_repo = SqlGoogleAdsAccountRepository(session)
@@ -243,8 +263,12 @@ async def oauth_google_callback(
     # APP_URL is the frontend origin (e.g. https://adswise.xyz).
     # Falls back to a generic success message if APP_URL is not configured.
     if settings.APP_URL:
-        return RedirectResponse(
-            url=f"{settings.APP_URL.rstrip('/')}/app?connected={len(linked_ids)}",
-            status_code=302,
-        )
+        base = settings.APP_URL.rstrip("/")
+        if google_ads_api_error and not linked_ids:
+            # API call failed — show a distinct error message on the frontend
+            # so the user knows it's a configuration issue, not "no accounts".
+            redirect_url = f"{base}/app?connected=0&error=google_ads_api_error"
+        else:
+            redirect_url = f"{base}/app?connected={len(linked_ids)}"
+        return RedirectResponse(url=redirect_url, status_code=302)
     return {"user_id": user_id, "linked_customer_ids": linked_ids}
