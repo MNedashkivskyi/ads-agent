@@ -161,13 +161,17 @@ async def oauth_google_callback(
         resource_names = await ads_client.list_accessible_customers(refresh_token)
         customer_ids = [rn.split("/")[-1] for rn in resource_names]
     except Exception as exc:
+        import traceback
+
         logger.error(
             "failed to list google ads customers",
             error=str(exc),
+            error_type=type(exc).__name__,
+            traceback=traceback.format_exc(),
             developer_token_set=bool(settings.GOOGLE_ADS_DEVELOPER_TOKEN),
             client_id_set=bool(settings.GOOGLE_ADS_CLIENT_ID),
         )
-        google_ads_api_error = str(exc)
+        google_ads_api_error = f"{type(exc).__name__}: {exc}"
         customer_ids = []
 
     acc_repo = SqlGoogleAdsAccountRepository(session)

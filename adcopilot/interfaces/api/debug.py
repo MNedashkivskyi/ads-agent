@@ -161,6 +161,52 @@ async def env_check() -> EnvCheckResponse:
     )
 
 
+class GoogleAdsTestResponse(BaseModel):
+    ok: bool
+    resource_names: list[str]
+    customer_ids: list[str]
+    error: str | None
+    error_type: str | None
+
+
+@router.get("/google-ads-test")
+async def google_ads_test(refresh_token: str) -> GoogleAdsTestResponse:
+    """Test Google Ads API connectivity with a given refresh token.
+
+    Pass ?refresh_token=<token> to verify that the developer token and OAuth
+    credentials work together. Returns the raw resource names returned by
+    list_accessible_customers, plus any error details.
+
+    Use this to diagnose why the OAuth callback returns error=google_ads_api_error.
+    """
+    import traceback
+
+    settings = get_settings()
+    from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter
+
+    client = GoogleAdsClientAdapter(settings)
+    try:
+        resource_names = await client.list_accessible_customers(refresh_token)
+        customer_ids = [rn.split("/")[-1] for rn in resource_names]
+        return GoogleAdsTestResponse(
+            ok=True,
+            resource_names=resource_names,
+            customer_ids=customer_ids,
+            error=None,
+            error_type=None,
+        )
+    except Exception as exc:
+        tb = traceback.format_exc()
+        logger.error("google-ads-test failed", error=str(exc), traceback=tb)
+        return GoogleAdsTestResponse(
+            ok=False,
+            resource_names=[],
+            customer_ids=[],
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+
+
 @router.get("/sentry")
 async def trigger_sentry() -> None:
     """Raise a ``SentryDebugError`` so the Sentry integration can be verified.
