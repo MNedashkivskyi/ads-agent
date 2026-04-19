@@ -119,8 +119,8 @@ async def test_start_without_args_sends_instructions(mock_get_settings: MagicMoc
 
     update.message.reply_text.assert_called_once()
     call_text: str = update.message.reply_text.call_args[0][0]
-    # Handler now sends Polish welcome message
-    assert "adept" in call_text.lower() or "tryadept" in call_text.lower()
+    # Handler sends AdsWise branded welcome message
+    assert "adswise" in call_text.lower()
 
 
 @patch("adcopilot.infrastructure.telegram.handlers.get_settings")

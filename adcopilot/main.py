@@ -38,15 +38,35 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
         application.state.telegram_app = tg_app
         logger.info("telegram bot initialised")
 
-        if settings.TELEGRAM_WEBHOOK_URL:
-            webhook_url = settings.TELEGRAM_WEBHOOK_URL.rstrip("/") + "/telegram/webhook"
+        # Determine the webhook base URL.
+        # Prefer the explicit TELEGRAM_WEBHOOK_URL env var.
+        # Fall back to RAILWAY_PUBLIC_DOMAIN so Railway deployments work
+        # automatically even when the explicit var is not set.
+        import os as _os
+
+        _base = settings.TELEGRAM_WEBHOOK_URL or (
+            f"https://{_os.environ['RAILWAY_PUBLIC_DOMAIN']}"
+            if _os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+            else None
+        )
+        if _base:
+            webhook_url = _base.rstrip("/") + "/telegram/webhook"
             secret = resolve_webhook_secret(settings)
             try:
                 await register_webhook(tg_app.bot, webhook_url, secret)
             except Exception as exc:
-                # Non-fatal: log and continue — updates won't arrive but the
-                # rest of the app still works.
-                logger.warning("telegram webhook registration failed", error=str(exc))
+                # Non-fatal — log clearly so it shows up in Railway logs.
+                logger.warning(
+                    "telegram webhook registration failed — bot will not receive updates",
+                    error=str(exc),
+                    webhook_url=webhook_url,
+                )
+        else:
+            logger.warning(
+                "TELEGRAM_WEBHOOK_URL not set and RAILWAY_PUBLIC_DOMAIN unavailable "
+                "— webhook not registered, bot will not receive updates. "
+                "Set TELEGRAM_WEBHOOK_URL=https://<your-api-service>.up.railway.app"
+            )
     # ----------------------------------------------------------------------
 
     yield

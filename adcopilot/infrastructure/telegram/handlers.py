@@ -41,8 +41,8 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     if not args:
         await update.message.reply_text(
-            "Witaj! Jestem Adept — Twoim asystentem Google Ads.\n\n"
-            "Aby połączyć konto, odwiedź adswise.xyz i wygeneruj link aktywacyjny."
+            "Witaj! Jestem AdsWise — Twój asystent Google Ads.\n\n"
+            "Aby połączyć konto, odwiedź adswise.xyz/app/telegram i zeskanuj kod QR."
         )
         return
 
