@@ -6,7 +6,7 @@ import structlog
 
 from adcopilot.application.ports.google_ads import CustomerInfo
 from adcopilot.config import Settings
-from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
+from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsTokenNotApproved, GoogleAdsUnavailable
 
 logger = structlog.get_logger(__name__)
 
@@ -22,6 +22,22 @@ _AUTH_ERROR_SIGNATURES = (
     "authenticationerror",
     "access_denied",
 )
+
+# Substrings (lower-cased) that indicate the developer token is not approved
+# for production use (i.e. it is a test token or pending approval).
+_TEST_TOKEN_SIGNATURES = (
+    "developer token",
+    "developertoken",
+    "developer_token",
+    "not approved",
+    "test account",
+)
+
+
+def is_test_token_error(exc: Exception) -> bool:
+    """Return True if *exc* indicates the developer token is in test/unapproved state."""
+    error_str = str(exc).lower()
+    return any(sig in error_str for sig in _TEST_TOKEN_SIGNATURES)
 
 
 def is_google_auth_error(exc: Exception) -> bool:
@@ -76,6 +92,11 @@ class GoogleAdsClientAdapter:
         except Exception as exc:
             if is_google_auth_error(exc):
                 raise GoogleAdsAuthError(str(exc)) from exc
+            if is_test_token_error(exc):
+                raise GoogleAdsTokenNotApproved(
+                    "Developer token is in test mode or not yet approved for production access. "
+                    "Apply for Standard Access at Google Ads → Admin → API Center."
+                ) from exc
             raise GoogleAdsUnavailable(str(exc)) from exc
 
     async def get_customer_info(self, refresh_token: str, customer_id: str) -> CustomerInfo:

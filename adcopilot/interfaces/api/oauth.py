@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import Settings, get_settings
 from adcopilot.domain.entities import AccountId, GoogleAdsAccount, OAuthCredentials, UserId
+from adcopilot.domain.exceptions import GoogleAdsTokenNotApproved
 from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
     SqlGoogleAdsAccountRepository,
 )
@@ -160,6 +161,18 @@ async def oauth_google_callback(
     try:
         resource_names = await ads_client.list_accessible_customers(refresh_token)
         customer_ids = [rn.split("/")[-1] for rn in resource_names]
+    except GoogleAdsTokenNotApproved as exc:
+        logger.error(
+            "google ads developer token not approved for production — "
+            "apply for Standard Access at Google Ads → Admin → API Center",
+            error=str(exc),
+        )
+        if settings.APP_URL:
+            return RedirectResponse(
+                url=f"{settings.APP_URL.rstrip('/')}/app?connected=0&error=token_not_approved",
+                status_code=302,
+            )
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
         import traceback
 
