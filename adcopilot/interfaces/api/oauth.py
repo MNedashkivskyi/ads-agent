@@ -137,12 +137,15 @@ async def oauth_google_callback(
     if not refresh_token:
         raise HTTPException(status_code=400, detail="No refresh_token in Google response")
 
-    # List accessible Google Ads customer IDs
+    # List accessible Google Ads customer IDs.
+    # list_accessible_customers returns resource names like "customers/1234567890".
+    # Extract the plain numeric ID from each resource name.
     from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter
 
     ads_client = GoogleAdsClientAdapter(settings)
     try:
-        customer_ids = await ads_client.list_accessible_customers(refresh_token)
+        resource_names = await ads_client.list_accessible_customers(refresh_token)
+        customer_ids = [rn.split("/")[-1] for rn in resource_names]
     except Exception as exc:
         logger.warning("failed to list google ads customers", error=str(exc))
         customer_ids = []
@@ -158,24 +161,44 @@ async def oauth_google_callback(
     }
     existing_accounts = await acc_repo.list_for_user(UserId(user_id))
     account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
-    if len(existing_accounts) >= account_limit:
+    slots_remaining = account_limit - len(existing_accounts)
+    if slots_remaining <= 0:
         raise HTTPException(
             status_code=402,
             detail=f"Account limit reached for {user.plan.value} plan ({account_limit} max). Upgrade to add more accounts.",
         )
 
     linked_ids: list[str] = []
-    for customer_id in customer_ids:
+    for customer_id in customer_ids[:slots_remaining]:
         account_id = AccountId(str(uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}")))
+
+        # Fetch real account details so the dashboard shows name/currency/timezone.
+        descriptive_name = ""
+        currency = ""
+        timezone = ""
+        is_manager = False
+        try:
+            info = await ads_client.get_customer_info(refresh_token, customer_id)
+            descriptive_name = info.descriptive_name
+            currency = info.currency
+            timezone = info.timezone
+            is_manager = info.is_manager
+        except Exception as exc:
+            logger.warning(
+                "failed to fetch customer info — saving with defaults",
+                customer_id=customer_id,
+                error=str(exc),
+            )
+
         account = GoogleAdsAccount(
             id=account_id,
             user_id=UserId(user_id),
             customer_id=customer_id,
-            descriptive_name="",
-            currency="",
-            timezone="",
-            is_manager=False,
-            write_enabled=False,
+            descriptive_name=descriptive_name,
+            currency=currency,
+            timezone=timezone,
+            is_manager=is_manager,
+            write_enabled=not is_manager,
             connected_at=datetime.now(UTC),
         )
         await acc_repo.save(account)
@@ -192,8 +215,32 @@ async def oauth_google_callback(
     await session.commit()
     logger.info("google oauth complete", user_id=user_id, accounts=len(linked_ids))
 
+    # Notify the user via Telegram if they have a linked chat.
+    if user.telegram_chat_id and settings.TELEGRAM_BOT_TOKEN:
+        try:
+            from telegram import Bot
+
+            if linked_ids:
+                tg_msg = (
+                    f"✅ Google Ads połączono pomyślnie!\n\n"
+                    f"Połączono {len(linked_ids)} konto{'a' if len(linked_ids) > 1 else ''}.\n"
+                    f"Przejdź do adswise.xyz/app, aby zobaczyć szczegóły i rekomendacje."
+                )
+            else:
+                tg_msg = (
+                    "⚠️ Autoryzacja Google zakończona, ale nie znaleziono żadnych kont Google Ads.\n\n"
+                    "Upewnij się, że masz dostęp do konta Google Ads i spróbuj ponownie na adswise.xyz/app/connect."
+                )
+            async with Bot(token=settings.TELEGRAM_BOT_TOKEN) as bot:
+                await bot.send_message(chat_id=user.telegram_chat_id, text=tg_msg)
+        except Exception:
+            logger.warning(
+                "failed to send google ads connected telegram notification",
+                user_id=user_id,
+            )
+
     # Redirect the browser back to the frontend dashboard.
-    # APP_URL is the frontend origin (e.g. https://approve-ads-bot.pages.dev).
+    # APP_URL is the frontend origin (e.g. https://adswise.xyz).
     # Falls back to a generic success message if APP_URL is not configured.
     if settings.APP_URL:
         return RedirectResponse(
