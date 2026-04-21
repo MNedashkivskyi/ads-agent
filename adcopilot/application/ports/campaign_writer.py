@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from adcopilot.domain.launch.audience_signals import AudienceSignal
+from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -34,12 +35,15 @@ class CreatedCampaignResources:
     audience_resource_names: list[str] = None  # type: ignore[assignment]
     brand_campaign_resource_name: str = ""
     brand_budget_resource_name: str = ""
+    schedule_resource_names: list[str] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         if self.extension_resource_names is None:
             object.__setattr__(self, "extension_resource_names", [])
         if self.audience_resource_names is None:
             object.__setattr__(self, "audience_resource_names", [])
+        if self.schedule_resource_names is None:
+            object.__setattr__(self, "schedule_resource_names", [])
 
 
 class CampaignWriterPort(Protocol):
@@ -117,6 +121,16 @@ class CampaignWriterPort(Protocol):
         audience_signals: list[AudienceSignal],
     ) -> list[str]:
         """Add observation-mode audience criteria to ad groups; return resource_names."""
+        ...
+
+    async def create_ad_schedule(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        campaign_resource_name: str,
+        schedule: list[AdScheduleEntry],
+    ) -> list[str]:
+        """Create CampaignCriterion ad schedule entries; return resource_names."""
         ...
 
     async def enable_campaign(
