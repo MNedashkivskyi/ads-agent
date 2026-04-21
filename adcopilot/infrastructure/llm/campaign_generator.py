@@ -24,6 +24,7 @@ from adcopilot.application.ports.llm import LLMClient
 from adcopilot.domain.exceptions import LLMError
 from adcopilot.domain.launch.bidding_resolver import resolve_bidding_strategy
 from adcopilot.domain.launch.budget_tier import classify_budget_tier
+from adcopilot.domain.launch.structure_rules import build_structure_prompt_fragment
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -160,10 +161,9 @@ Respond ONLY with a valid JSON object — no markdown, no prose:
 _STRUCTURE_SYSTEM = """\
 You are an expert Google Ads campaign architect.
 Design a complete campaign skeleton from the business brief and vertical.
-Include 2-4 ad groups with 8-12 keywords each.
-IMPORTANT: The bidding strategy has been pre-selected based on this account's budget and
-conversion history. Use the provided strategy exactly. Do not choose a different one.
-Respond ONLY with a valid JSON object matching this campaign skeleton schema — no markdown, no prose:
+IMPORTANT: Follow the budget-tier structure constraints provided in the user prompt exactly.
+The bidding strategy has been pre-selected — use it as-is, do not change it.
+Respond ONLY with a valid JSON object matching this schema — no markdown, no prose:
 {
   "campaign_name": "<string ≤ 120 chars>",
   "bidding_strategy": "<use the pre-selected strategy from the user prompt>",
@@ -218,7 +218,11 @@ def _structure_user_prompt(
     vertical: VerticalClassification,
     bidding_strategy: str,
     feedback: str | None = None,
+    has_conversion_tracking: bool = False,
+    existing_monthly_conversions: float = 0.0,
 ) -> str:
+    tier = classify_budget_tier(brief.monthly_budget_pln)
+    structure_fragment = build_structure_prompt_fragment(tier)
     lines = [
         f"Business description: {brief.business_description}",
         f"Location: {brief.location}",
@@ -228,6 +232,8 @@ def _structure_user_prompt(
         f"Language: {brief.language}",
         f"Vertical: {vertical.vertical}",
         f"Pre-selected bidding strategy: {bidding_strategy}",
+        "",
+        structure_fragment,
     ]
     if vertical.sub_vertical:
         lines.append(f"Sub-vertical: {vertical.sub_vertical}")
@@ -322,11 +328,10 @@ class CampaignGenerator:
         has_conversion_tracking: bool = False,
         existing_monthly_conversions: float = 0.0,
     ) -> CampaignStructureResponse:
-        """Stage 2 — design campaign skeleton.
+        """Stage 2 — design tier-aware campaign skeleton.
 
-        The bidding strategy is resolved deterministically via
-        :func:`resolve_bidding_strategy` before the LLM call, then injected
-        into the prompt so the LLM cannot override it.
+        Bidding strategy is resolved deterministically and injected into the
+        prompt; the LLM's choice is overridden via model_copy().
         """
         tier = classify_budget_tier(brief.monthly_budget_pln)
         bidding_rec = resolve_bidding_strategy(
@@ -334,11 +339,14 @@ class CampaignGenerator:
         )
         resolved_strategy = bidding_rec.initial_strategy
 
-        user = _structure_user_prompt(brief, vertical, resolved_strategy, feedback)
+        user = _structure_user_prompt(
+            brief, vertical, resolved_strategy, feedback,
+            has_conversion_tracking, existing_monthly_conversions,
+        )
         response = await self._call_and_parse(
             _STRUCTURE_SYSTEM, user, "structure", CampaignStructureResponse, max_tokens=2000
         )
-        # Override LLM choice with the deterministically resolved strategy
+        # Always override the LLM's bidding choice with the deterministic one
         return response.model_copy(update={"bidding_strategy": resolved_strategy})
 
     async def generate_ad_copy(

@@ -455,10 +455,8 @@ def build_proposal_from_template(
 ) -> CampaignProposal:
     """Build a valid ``CampaignProposal`` from the best-matching vertical template.
 
-    The bidding strategy is resolved deterministically via
-    :func:`resolve_bidding_strategy` rather than taken from the template
-    constant, so fallback proposals follow the same staged progression as
-    LLM-generated ones.
+    Bidding strategy is resolved deterministically via
+    :func:`resolve_bidding_strategy` rather than the hardcoded template value.
     """
     vertical_key = detect_vertical_from_description(brief.business_description)
     tmpl = _TEMPLATES.get(vertical_key, _TEMPLATES["generic"])
