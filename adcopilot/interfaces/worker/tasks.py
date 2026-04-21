@@ -1591,3 +1591,69 @@ async def _run_anomaly_detection_all_accounts(settings: object) -> dict[str, obj
         "total_alerts": total_alerts,
         "total_suppressed": total_suppressed,
     }
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.check_bidding_upgrade_task")  # type: ignore[untyped-decorator]
+def check_bidding_upgrade_task() -> dict[str, object]:
+    """Weekly task: check all active accounts for bidding strategy upgrade eligibility."""
+    import asyncio
+
+    from adcopilot.config import get_settings
+
+    settings = get_settings()
+
+    async def _run() -> dict[str, object]:
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+        from adcopilot.application.use_cases.check_bidding_upgrade import CheckBiddingUpgradeUseCase
+        from adcopilot.domain.entities import AccountId
+        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+            SqlGoogleAdsAccountRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+            SqlRecommendationRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.snapshot_repository import (
+            SqlSnapshotRepository,
+        )
+
+        engine = create_async_engine(settings.DATABASE_URL)
+        total_recs = 0
+        accounts_checked = 0
+        accounts_errored = 0
+        try:
+            async with AsyncSession(engine) as session:
+                account_repo = SqlGoogleAdsAccountRepository(session)
+                accounts = await account_repo.list_active()
+
+            for account in accounts:
+                try:
+                    async with AsyncSession(engine) as session:
+                        use_case = CheckBiddingUpgradeUseCase(
+                            snapshot_repo=SqlSnapshotRepository(session),
+                            rec_repo=SqlRecommendationRepository(session),
+                        )
+                        recs = await use_case.execute(AccountId(str(account.id)))
+                        total_recs += len(recs)
+                        accounts_checked += 1
+                except Exception:
+                    logger.exception(
+                        "bidding_upgrade_check.failed", account_id=str(account.id)
+                    )
+                    accounts_errored += 1
+        finally:
+            await engine.dispose()
+
+        logger.info(
+            "bidding_upgrade_check.summary",
+            accounts_checked=accounts_checked,
+            accounts_errored=accounts_errored,
+            recommendations_created=total_recs,
+        )
+        return {
+            "accounts_checked": accounts_checked,
+            "accounts_errored": accounts_errored,
+            "recommendations_created": total_recs,
+        }
+
+    return asyncio.run(_run())  # type: ignore[return-value]
