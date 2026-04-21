@@ -257,7 +257,19 @@ async def fsm_handle_text(
             brief, monthly_budget_pln=budget, interview_step=6
         )
         await repo.save(updated)
-        return InterviewResult(brief=updated, text=QUESTIONS[6])
+        # Best-effort budget warning against Polish market benchmarks
+        warning_text = ""
+        try:
+            from adcopilot.domain.polish_market.budget_validator import validate_budget
+            vertical = getattr(brief, "vertical", None) or ""
+            location = getattr(brief, "location", None) or ""
+            if vertical and location:
+                result = validate_budget(vertical, location, budget)
+                if result.warning_message:
+                    warning_text = "\n\n" + result.warning_message
+        except Exception:
+            pass
+        return InterviewResult(brief=updated, text=QUESTIONS[6] + warning_text)
 
     if step == 6:
         # Q6 is optional; /skip handled separately
