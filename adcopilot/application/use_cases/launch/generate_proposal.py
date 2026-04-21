@@ -155,8 +155,15 @@ class GenerateCampaignProposalUseCase:
         # Stage 4 — negative keywords
         negatives = await self._generator.generate_negatives(brief, vertical)
 
+        # Stage 5 — extensions (sitelinks, callouts, structured snippets)
+        try:
+            extensions = await self._generator.generate_extensions(brief, vertical)
+        except Exception:
+            extensions = None
+            logger.warning("extensions_generation_failed", brief_id=brief.id)
+
         # Assemble and validate
-        proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives)
+        proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions)
         errors = validate_proposal(proposal, brief)
 
         if not errors:
@@ -196,7 +203,7 @@ class GenerateCampaignProposalUseCase:
                 )
                 ad_copies.append(copy)
 
-        proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives)
+        proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions)
         errors2 = validate_proposal(proposal, brief)
 
         if errors2:

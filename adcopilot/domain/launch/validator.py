@@ -128,4 +128,24 @@ def validate_proposal(
                         f"({len(seg)} > {MAX_PATH_CHARS}): '{seg}'"
                     )
 
+    # ------------------------------------------------------------------
+    # Extension character-limit checks (soft — only if extensions present)
+    # ------------------------------------------------------------------
+    for sl in proposal.sitelinks:
+        if len(sl.link_text) > 25:
+            errors.append(f"sitelink link_text too long ({len(sl.link_text)} > 25): '{sl.link_text}'")
+        if len(sl.description1) > 35:
+            errors.append(f"sitelink description1 too long ({len(sl.description1)} > 35)")
+        if len(sl.description2) > 35:
+            errors.append(f"sitelink description2 too long ({len(sl.description2)} > 35)")
+
+    for co in proposal.callouts:
+        if len(co.text) > 25:
+            errors.append(f"callout text too long ({len(co.text)} > 25): '{co.text}'")
+
+    for sn in proposal.structured_snippets:
+        for v in sn.values:
+            if len(v) > 25:
+                errors.append(f"structured_snippet value too long ({len(v)} > 25): '{v}'")
+
     return errors
