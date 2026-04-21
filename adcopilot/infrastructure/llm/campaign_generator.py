@@ -255,10 +255,18 @@ Respond ONLY with a valid JSON object — no markdown, no prose:
 Produce exactly 3 variants in the array."""
 
 _NEGATIVES_SYSTEM = """\
-You are a Google Ads negative keyword specialist.
+You are a Google Ads negative keyword specialist for the Polish market.
 Return a list of campaign-level negative keywords to block irrelevant searches.
 Include: standard brand-safety negatives, vertical-specific negatives, and any
 user-specified exclusions.  Use plain text only (no match-type syntax).
+
+IMPORTANT — Polish standard negatives to always include at least one from each category:
+- Free/darmowy: "darmowy", "za darmo", "bezpłatnie", "gratis"
+- Job/praca: "praca", "oferty pracy", "rekrutacja", "kariera"
+- DIY: "jak zrobić", "samodzielnie", "zrób sam", "poradnik"
+- Education: "kurs", "szkolenie", "studia", "jak zrobić", "instrukcja"
+- Forum/media: "youtube", "tiktok", "forum", "blog", "opinia"
+
 Respond ONLY with valid JSON — no markdown, no prose:
 { "keywords": ["<string>", "…"] }"""
 
