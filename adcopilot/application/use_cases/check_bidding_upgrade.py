@@ -98,6 +98,7 @@ class CheckBiddingUpgradeUseCase:
                     kind=RecommendationKind.ADJUST_BIDDING_STRATEGY,
                     severity=RecommendationSeverity.HIGH,
                     status=RecommendationStatus.PENDING,
+                    target={"campaign_id": campaign.campaign_id},
                     payload={
                         "campaign_id": campaign.campaign_id,
                         "campaign_name": campaign.name,
@@ -106,6 +107,8 @@ class CheckBiddingUpgradeUseCase:
                         "conversions_30d": conversions,
                         "reason": "upgrade_threshold_reached",
                     },
+                    estimated_monthly_savings_micros=0,
+                    evidence={"conversions_30d": conversions},
                     created_at=datetime.now(UTC),
                 )
 
@@ -120,6 +123,7 @@ class CheckBiddingUpgradeUseCase:
                     kind=RecommendationKind.ADJUST_BIDDING_STRATEGY,
                     severity=RecommendationSeverity.HIGH,
                     status=RecommendationStatus.PENDING,
+                    target={"campaign_id": campaign.campaign_id},
                     payload={
                         "campaign_id": campaign.campaign_id,
                         "campaign_name": campaign.name,
@@ -129,6 +133,8 @@ class CheckBiddingUpgradeUseCase:
                         "conversions_30d": conversions,
                         "reason": "upgrade_threshold_reached",
                     },
+                    estimated_monthly_savings_micros=0,
+                    evidence={"conversions_30d": conversions, "avg_cpa_micros": avg_cpa_micros},
                     created_at=datetime.now(UTC),
                 )
 

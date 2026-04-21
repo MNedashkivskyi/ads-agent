@@ -255,6 +255,7 @@ async def test_oauth_callback_allows_growth_second_account() -> None:
             DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
             GOOGLE_ADS_CLIENT_ID="cid",
             GOOGLE_ADS_CLIENT_SECRET="csec",
+            GOOGLE_ADS_DEVELOPER_TOKEN="dev_token",
         )
 
         result = await oauth_google_callback(
