@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from adcopilot.domain.launch.bidding_resolver import resolve_bidding_strategy
+from adcopilot.domain.launch.budget_tier import classify_budget_tier
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -446,10 +448,25 @@ def detect_vertical_from_description(business_description: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def build_proposal_from_template(brief: CampaignBrief) -> CampaignProposal:
-    """Build a valid ``CampaignProposal`` from the best-matching vertical template."""
+def build_proposal_from_template(
+    brief: CampaignBrief,
+    has_conversion_tracking: bool = False,
+    existing_monthly_conversions: float = 0.0,
+) -> CampaignProposal:
+    """Build a valid ``CampaignProposal`` from the best-matching vertical template.
+
+    The bidding strategy is resolved deterministically via
+    :func:`resolve_bidding_strategy` rather than taken from the template
+    constant, so fallback proposals follow the same staged progression as
+    LLM-generated ones.
+    """
     vertical_key = detect_vertical_from_description(brief.business_description)
     tmpl = _TEMPLATES.get(vertical_key, _TEMPLATES["generic"])
+
+    tier = classify_budget_tier(brief.monthly_budget_pln)
+    bidding_strategy = resolve_bidding_strategy(
+        tier, has_conversion_tracking, existing_monthly_conversions
+    ).initial_strategy
 
     daily_budget_micros = int(brief.monthly_budget_pln / Decimal("30") * Decimal("1000000"))
 
@@ -483,7 +500,7 @@ def build_proposal_from_template(brief: CampaignBrief) -> CampaignProposal:
         campaign_name=tmpl.campaign_name,
         daily_budget_micros=daily_budget_micros,
         location_targeting=brief.location,
-        bidding_strategy=tmpl.bidding_strategy,
+        bidding_strategy=bidding_strategy,
         ad_groups=ad_groups,
         negative_keywords=negatives,
         estimated_cpc_range=(
