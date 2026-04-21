@@ -1941,6 +1941,52 @@ def check_remarketing_campaign_eligibility_task() -> dict[str, object]:
     max_retries=3,
     default_retry_delay=300,
     autoretry_for=(Exception,),
+    name="adcopilot.interfaces.worker.tasks.send_weekly_performance_report_task",
+)
+def send_weekly_performance_report_task() -> dict[str, object]:
+    """Weekly task (Fridays 10:00 UTC): send performance impact summary via Telegram."""
+    import asyncio
+    from adcopilot.config import get_settings
+
+    settings = get_settings()
+
+    async def _run() -> dict[str, object]:
+        from datetime import UTC, datetime
+
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+        from adcopilot.application.use_cases.send_performance_report import SendPerformanceReportUseCase
+        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+            SqlGoogleAdsAccountRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.performance_comparison_repository import (
+            SqlPerformanceComparisonRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+            SqlRecommendationRepository,
+        )
+        from adcopilot.infrastructure.telegram.performance_report import TelegramPerformanceReporter
+
+        engine = create_async_engine(settings.DATABASE_URL)
+        try:
+            async with AsyncSession(engine) as session:
+                use_case = SendPerformanceReportUseCase(
+                    account_repo=SqlGoogleAdsAccountRepository(session),
+                    rec_repo=SqlRecommendationRepository(session),
+                    comparison_repo=SqlPerformanceComparisonRepository(session),
+                    reporter=TelegramPerformanceReporter(settings.TELEGRAM_BOT_TOKEN),
+                )
+                return await use_case.run(now=datetime.now(UTC))
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(_run())  # type: ignore[return-value]
+
+
+@celery_app.task(
+    max_retries=3,
+    default_retry_delay=300,
+    autoretry_for=(Exception,),
     name="adcopilot.interfaces.worker.tasks.compare_recommendation_performance_task",
 )
 def compare_recommendation_performance_task() -> dict[str, object]:

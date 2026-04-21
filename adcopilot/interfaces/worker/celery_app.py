@@ -74,6 +74,11 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.compare_recommendation_performance_task",
                     "schedule": crontab(hour=6, minute=0),
                 },
+                "weekly-performance-reports": {
+                    # Fridays 10:00 AM UTC — weekly impact summary to users with Telegram linked.
+                    "task": "adcopilot.interfaces.worker.tasks.send_weekly_performance_report_task",
+                    "schedule": crontab(hour=10, minute=0, day_of_week="friday"),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},
