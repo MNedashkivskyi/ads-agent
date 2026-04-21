@@ -343,3 +343,39 @@ class FakeGoogleAdsMutations:
                 "target_cpa_micros": target_cpa_micros,
             }
         )
+
+    async def remove_campaign_negative_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "remove_campaign_negative_keyword",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "keyword_text": keyword_text,
+                "match_type": match_type,
+            }
+        )
+
+    async def add_campaign_negative_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "add_campaign_negative_keyword",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "keyword_text": keyword_text,
+                "match_type": match_type,
+            }
+        )

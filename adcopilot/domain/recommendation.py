@@ -112,7 +112,6 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         # Module 3 — structural issues (informational)
         RecommendationKind.OVERSTUFFED_AD_GROUP,
         RecommendationKind.KEYWORD_CANNIBALIZATION,
-        RecommendationKind.NEGATIVE_KEYWORD_CONFLICT,
         RecommendationKind.ORPHANED_CAMPAIGN,
         RecommendationKind.MATCH_TYPE_REDUNDANCY,
         # Module 4 — targeting insights (informational)

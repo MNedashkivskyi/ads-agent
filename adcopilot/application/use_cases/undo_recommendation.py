@@ -222,6 +222,30 @@ class UndoRecommendationUseCase:
                 )
             return {"campaign_asset_resource_names": ca_rns, "action": "extensions_removed"}
 
+        if kind == RecommendationKind.NEGATIVE_KEYWORD_CONFLICT:
+            campaign_id = int(payload["campaign_id"])
+            keyword_text = str(payload["keyword_text"])
+            match_type = str(payload.get("match_type", "EXACT"))
+            conflict_scope = str(payload.get("conflict_scope", "campaign"))
+            ad_group_id = payload.get("ad_group_id")
+            if conflict_scope == "ad_group" and ad_group_id:
+                await self._mutations.add_ad_group_negative_keyword(
+                    refresh_token=refresh_token,
+                    customer_id=customer_id,
+                    ad_group_id=int(ad_group_id),
+                    keyword_text=keyword_text,
+                    match_type=match_type,
+                )
+            else:
+                await self._mutations.add_campaign_negative_keyword(
+                    refresh_token=refresh_token,
+                    customer_id=customer_id,
+                    campaign_id=campaign_id,
+                    keyword_text=keyword_text,
+                    match_type=match_type,
+                )
+            return {"campaign_id": campaign_id, "keyword_text": keyword_text, "action": "negative_keyword_restored"}
+
         if kind == RecommendationKind.RELAX_TARGET_CPA:
             campaign_id = int(payload["campaign_id"])
             original_cpa = int(payload["original_target_cpa_micros"])

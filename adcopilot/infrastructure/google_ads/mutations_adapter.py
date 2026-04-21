@@ -548,6 +548,65 @@ class GoogleAdsMutationsAdapter:
         except Exception as exc:
             raise _wrap_mutation_exc("remove_device_bid_modifier", exc) from exc
 
+    async def remove_campaign_negative_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            ga_service = client.get_service("GoogleAdsService")
+            campaign_criterion_service = client.get_service("CampaignCriterionService")
+            match_type_enum = getattr(client.enums.KeywordMatchTypeEnum, match_type, None)
+            query = (
+                f"SELECT campaign_criterion.resource_name FROM campaign_criterion "
+                f"WHERE campaign_criterion.campaign = 'customers/{cid}/campaigns/{campaign_id}' "
+                f"AND campaign_criterion.negative = TRUE "
+                f"AND campaign_criterion.keyword.text = '{keyword_text}'"
+            )
+            response = ga_service.search(customer_id=cid, query=query)
+            ops = []
+            for row in response:
+                op = client.get_type("CampaignCriterionOperation")
+                op.remove = row.campaign_criterion.resource_name
+                ops.append(op)
+            if ops:
+                campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
+            logger.info("campaign negative keyword removed", customer_id=customer_id, keyword=keyword_text)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("remove_campaign_negative_keyword", exc) from exc
+
+    async def add_campaign_negative_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            campaign_criterion_service = client.get_service("CampaignCriterionService")
+            op = client.get_type("CampaignCriterionOperation")
+            criterion = op.create
+            criterion.campaign = client.get_service("CampaignService").campaign_path(cid, campaign_id)
+            criterion.negative = True
+            criterion.keyword.text = keyword_text
+            criterion.keyword.match_type = getattr(client.enums.KeywordMatchTypeEnum, match_type)
+            campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=[op])
+            logger.info("campaign negative keyword added", customer_id=customer_id, keyword=keyword_text)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("add_campaign_negative_keyword", exc) from exc
+
     async def set_target_cpa(
         self,
         refresh_token: str,

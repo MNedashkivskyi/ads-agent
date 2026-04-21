@@ -178,3 +178,21 @@ class GoogleAdsMutationsPort(Protocol):
         campaign_id: int,
         target_cpa_micros: int,
     ) -> None: ...
+
+    async def remove_campaign_negative_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None: ...
+
+    async def add_campaign_negative_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None: ...
