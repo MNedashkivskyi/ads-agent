@@ -222,6 +222,17 @@ class UndoRecommendationUseCase:
                 )
             return {"campaign_asset_resource_names": ca_rns, "action": "extensions_removed"}
 
+        if kind == RecommendationKind.MATCH_TYPE_REDUNDANCY:
+            ad_group_id = int(payload["ad_group_id"])
+            criterion_id = int(payload["criterion_id"])
+            await self._mutations.enable_keyword(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                ad_group_id=ad_group_id,
+                criterion_id=criterion_id,
+            )
+            return {"ad_group_id": ad_group_id, "criterion_id": criterion_id, "action": "broad_keyword_enabled"}
+
         if kind == RecommendationKind.NEGATIVE_KEYWORD_CONFLICT:
             campaign_id = int(payload["campaign_id"])
             keyword_text = str(payload["keyword_text"])
