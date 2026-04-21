@@ -293,3 +293,37 @@ class FakeGoogleAdsMutations:
                 "location_id": location_id,
             }
         )
+
+    async def set_ad_schedule_bid_modifier(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        hour_of_day: int,
+        bid_modifier: float,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "set_ad_schedule_bid_modifier",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "hour_of_day": hour_of_day,
+                "bid_modifier": bid_modifier,
+            }
+        )
+
+    async def remove_ad_schedule_criterion(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        hour_of_day: int,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "remove_ad_schedule_criterion",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "hour_of_day": hour_of_day,
+            }
+        )
