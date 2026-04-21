@@ -6,10 +6,12 @@ Returns a list of human-readable error messages (empty list = valid).
 
 from __future__ import annotations
 
+from adcopilot.domain.launch.budget_tier import classify_budget_tier
 from adcopilot.domain.launch.entities import CampaignBrief, CampaignProposal
+from adcopilot.domain.launch.structure_rules import get_structure_config
 
 # ---------------------------------------------------------------------------
-# Google Ads RSA / campaign limits
+# Google Ads RSA / campaign limits (absolute hard limits)
 # ---------------------------------------------------------------------------
 
 MAX_HEADLINE_CHARS: int = 30
@@ -17,6 +19,7 @@ MAX_DESCRIPTION_CHARS: int = 90
 MAX_PATH_CHARS: int = 15
 MIN_HEADLINES_PER_AD: int = 3
 MIN_DESCRIPTIONS_PER_AD: int = 2
+# Keyword count defaults — overridden per-tier in validate_proposal()
 MIN_KEYWORDS_PER_AD_GROUP: int = 8
 MAX_KEYWORDS_PER_AD_GROUP: int = 20
 MIN_AD_GROUPS: int = 1
@@ -32,6 +35,12 @@ def validate_proposal(
 ) -> list[str]:
     """Return a (possibly empty) list of validation-error messages."""
     errors: list[str] = []
+
+    # Resolve tier-specific keyword count limits
+    tier = classify_budget_tier(brief.monthly_budget_pln)
+    tier_cfg = get_structure_config(tier)
+    min_kw = tier_cfg.min_keywords_per_group
+    max_kw = tier_cfg.max_keywords_per_group
 
     # ------------------------------------------------------------------
     # Budget check
@@ -64,15 +73,15 @@ def validate_proposal(
     for ag in proposal.ad_groups:
         prefix = f"ad_group '{ag.name}'"
 
-        # Keyword count
+        # Keyword count — tier-dependent limits
         kw_count = len(ag.keywords)
-        if kw_count < MIN_KEYWORDS_PER_AD_GROUP:
+        if kw_count < min_kw:
             errors.append(
-                f"{prefix}: {kw_count} keywords (min {MIN_KEYWORDS_PER_AD_GROUP})"
+                f"{prefix}: {kw_count} keywords (min {min_kw} for {tier} tier)"
             )
-        if kw_count > MAX_KEYWORDS_PER_AD_GROUP:
+        if kw_count > max_kw:
             errors.append(
-                f"{prefix}: {kw_count} keywords (max {MAX_KEYWORDS_PER_AD_GROUP})"
+                f"{prefix}: {kw_count} keywords (max {max_kw} for {tier} tier)"
             )
 
         # Ad copy
