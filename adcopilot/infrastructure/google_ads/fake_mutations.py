@@ -261,3 +261,35 @@ class FakeGoogleAdsMutations:
                 "campaign_id": campaign_id,
             }
         )
+
+    async def exclude_geo_location(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        location_id: int,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "exclude_geo_location",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "location_id": location_id,
+            }
+        )
+
+    async def remove_geo_exclusion(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        location_id: int,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "remove_geo_exclusion",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "location_id": location_id,
+            }
+        )

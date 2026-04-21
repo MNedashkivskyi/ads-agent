@@ -137,3 +137,19 @@ class GoogleAdsMutationsPort(Protocol):
         customer_id: str,
         campaign_id: int,
     ) -> None: ...
+
+    async def exclude_geo_location(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        location_id: int,
+    ) -> None: ...
+
+    async def remove_geo_exclusion(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        location_id: int,
+    ) -> None: ...

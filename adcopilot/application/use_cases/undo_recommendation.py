@@ -222,6 +222,17 @@ class UndoRecommendationUseCase:
                 )
             return {"campaign_asset_resource_names": ca_rns, "action": "extensions_removed"}
 
+        if kind == RecommendationKind.GEO_EXCLUSION:
+            campaign_id = int(payload["campaign_id"])
+            location_id = int(payload["location_id"])
+            await self._mutations.remove_geo_exclusion(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                location_id=location_id,
+            )
+            return {"campaign_id": campaign_id, "location_id": location_id, "action": "geo_exclusion_removed"}
+
         if kind == RecommendationKind.DEVICE_BID_ADJUSTMENT:
             campaign_id = int(payload["campaign_id"])
             await self._mutations.remove_device_bid_modifier(
