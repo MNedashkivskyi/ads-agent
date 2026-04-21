@@ -145,6 +145,25 @@ class CampaignWriterPort(Protocol):
         """
         ...
 
+    async def get_search_ad_group_resource_names(
+        self,
+        customer_id: str,
+        refresh_token: str,
+    ) -> list[str]:
+        """Return resource names of all ENABLED ad groups in active Search campaigns."""
+        ...
+
+    async def create_rlsa_audiences(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        ad_group_resource_names: list[str],
+        user_list_id: int,
+        user_list_name: str,
+    ) -> list[str]:
+        """Add a user list in OBSERVATION mode to ad groups; return resource_names."""
+        ...
+
     async def delete_draft_campaign(
         self,
         customer_id: str,

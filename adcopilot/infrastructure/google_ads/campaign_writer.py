@@ -793,6 +793,96 @@ class CampaignWriter:
             raise _wrap_exc("create_audience_signals", exc) from exc
 
     # ------------------------------------------------------------------
+    # RLSA — add user-list observation audiences to existing Search campaigns
+    # ------------------------------------------------------------------
+
+    async def get_search_ad_group_resource_names(
+        self,
+        customer_id: str,
+        refresh_token: str,
+    ) -> list[str]:
+        """Return resource names of ENABLED ad groups in active Search campaigns."""
+        try:
+            client = self._build_client(refresh_token)
+            cid = self._cid(customer_id)
+            service = client.get_service("GoogleAdsService")
+            query = """
+                SELECT ad_group.resource_name
+                FROM ad_group
+                WHERE ad_group.status = 'ENABLED'
+                  AND campaign.advertising_channel_type = 'SEARCH'
+                  AND campaign.status = 'ENABLED'
+            """
+            stream = service.search_stream(customer_id=cid, query=query)
+            rns: list[str] = []
+            for batch in stream:
+                for row in batch.results:
+                    rns.append(row.ad_group.resource_name)
+            return rns
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_exc("get_search_ad_group_resource_names", exc) from exc
+
+    async def create_rlsa_audiences(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        ad_group_resource_names: list[str],
+        user_list_id: int,
+        user_list_name: str,
+    ) -> list[str]:
+        """Add a remarketing user list in OBSERVATION mode to ad groups.
+
+        Returns AdGroupCriterion resource names created.
+        Skips ad groups that already have this user list attached.
+        """
+        if not ad_group_resource_names:
+            return []
+        try:
+            client = self._build_client(refresh_token)
+            cid = self._cid(customer_id)
+            agc_service = client.get_service("AdGroupCriterionService")
+
+            ops: list[Any] = []
+            for ag_rn in ad_group_resource_names:
+                op = client.get_type("AdGroupCriterionOperation")
+                criterion = op.create
+                criterion.ad_group = ag_rn
+                criterion.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
+                criterion.negative = False
+                criterion.bid_modifier = 1.0
+                criterion.user_list.user_list = f"customers/{cid}/userLists/{user_list_id}"
+                ops.append(op)
+
+            response = agc_service.mutate_ad_group_criteria(
+                customer_id=cid, operations=ops
+            )
+            resource_names = [r.resource_name for r in response.results]
+
+            logger.info(
+                "rlsa_audiences_created",
+                customer_id=customer_id,
+                user_list_id=user_list_id,
+                user_list_name=user_list_name,
+                ad_groups=len(ad_group_resource_names),
+            )
+            await self._log(
+                "RLSA_AUDIENCES_CREATE",
+                {
+                    "user_list_id": user_list_id,
+                    "user_list_name": user_list_name,
+                    "ad_group_resource_names": ad_group_resource_names,
+                    "criterion_resource_names": resource_names,
+                },
+            )
+            return resource_names
+
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_exc("create_rlsa_audiences", exc) from exc
+
     # Enable (second confirmation)
     # ------------------------------------------------------------------
 
