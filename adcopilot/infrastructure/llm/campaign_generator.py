@@ -28,11 +28,14 @@ from adcopilot.domain.launch.structure_rules import build_structure_prompt_fragm
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
+    CalloutProposal,
     CampaignBrief,
     CampaignProposal,
     CampaignProposalId,
     KeywordProposal,
     MatchType,
+    SitelinkProposal,
+    StructuredSnippetProposal,
 )
 
 logger = structlog.get_logger(__name__)
@@ -116,6 +119,24 @@ class NegativeKeywordsResponse(BaseModel):
     """Stage 4 output — campaign-level negative keywords."""
 
     keywords: list[str] = Field(default_factory=list)
+
+
+class SitelinkItem(BaseModel):
+    """One sitelink in the extensions response."""
+
+    link_text: str = Field(max_length=25)
+    description1: str = Field(max_length=35)
+    description2: str = Field(max_length=35)
+    final_url: str = Field(default="https://example.com")
+
+
+class ExtensionsResponse(BaseModel):
+    """Stage 5 output — ad extensions."""
+
+    sitelinks: list[SitelinkItem] = Field(min_length=2, max_length=4)
+    callouts: list[str] = Field(min_length=4, max_length=8)
+    structured_snippet_header: str
+    structured_snippet_values: list[str] = Field(min_length=3, max_length=10)
 
 
 # ---------------------------------------------------------------------------
@@ -206,6 +227,25 @@ Include: standard brand-safety negatives, vertical-specific negatives, and any
 user-specified exclusions.  Use plain text only (no match-type syntax).
 Respond ONLY with valid JSON — no markdown, no prose:
 { "keywords": ["<string>", "…"] }"""
+
+_EXTENSIONS_SYSTEM = """\
+You are a Google Ads extensions specialist.
+Generate sitelinks, callouts, and one structured snippet for a business.
+STRICT character limits (Google Ads will reject longer text):
+• Sitelink link_text: ≤25 characters
+• Sitelink description1/description2: ≤35 characters each
+• Callout text: ≤25 characters each
+• Structured snippet values: ≤25 characters each
+Respond ONLY with valid JSON — no markdown, no prose:
+{
+  "sitelinks": [
+    { "link_text": "<≤25 chars>", "description1": "<≤35 chars>", "description2": "<≤35 chars>", "final_url": "<url>" }
+  ],
+  "callouts": ["<≤25 chars>", "…"],
+  "structured_snippet_header": "<e.g. Services>",
+  "structured_snippet_values": ["<≤25 chars>", "…"]
+}
+Produce 2–4 sitelinks, 4–8 callouts, and 3–10 snippet values."""
 
 
 # ---------------------------------------------------------------------------
@@ -372,6 +412,23 @@ class CampaignGenerator:
             _NEGATIVES_SYSTEM, user, "negatives", NegativeKeywordsResponse, max_tokens=600
         )
 
+    async def generate_extensions(
+        self,
+        brief: CampaignBrief,
+        vertical: VerticalClassification,
+    ) -> ExtensionsResponse:
+        """Stage 5 — generate sitelinks, callouts, and structured snippets."""
+        user = (
+            f"Business: {brief.business_description}\n"
+            f"Vertical: {vertical.vertical}\n"
+            f"Primary action: {brief.primary_action}\n"
+            f"Language: {brief.language}\n"
+            f"Location: {brief.location}"
+        )
+        return await self._call_and_parse(
+            _EXTENSIONS_SYSTEM, user, "extensions", ExtensionsResponse, max_tokens=800
+        )
+
     # ------------------------------------------------------------------
     # Domain-object assembly
     # ------------------------------------------------------------------
@@ -382,6 +439,7 @@ class CampaignGenerator:
         structure: CampaignStructureResponse,
         ad_copies: list[AdGroupCopyResponse],
         negatives: NegativeKeywordsResponse,
+        extensions: ExtensionsResponse | None = None,
     ) -> CampaignProposal:
         """Combine pipeline outputs into a ``CampaignProposal`` domain object."""
         daily_budget_micros = int(
@@ -426,6 +484,30 @@ class CampaignGenerator:
         cpc_min = min(all_cpcs) if all_cpcs else 500_000
         cpc_max = max(all_cpcs) if all_cpcs else 2_000_000
 
+        domain_sitelinks: list[SitelinkProposal] = []
+        domain_callouts: list[CalloutProposal] = []
+        domain_snippets: list[StructuredSnippetProposal] = []
+        if extensions is not None:
+            domain_sitelinks = [
+                SitelinkProposal(
+                    link_text=sl.link_text[:25],
+                    description1=sl.description1[:35],
+                    description2=sl.description2[:35],
+                    final_url=sl.final_url,
+                )
+                for sl in extensions.sitelinks
+            ]
+            domain_callouts = [
+                CalloutProposal(text=co[:25]) for co in extensions.callouts
+            ]
+            if extensions.structured_snippet_values:
+                domain_snippets = [
+                    StructuredSnippetProposal(
+                        header=extensions.structured_snippet_header,
+                        values=[v[:25] for v in extensions.structured_snippet_values],
+                    )
+                ]
+
         return CampaignProposal(
             id=CampaignProposalId(str(uuid.uuid4())),
             brief_id=brief.id,
@@ -435,9 +517,9 @@ class CampaignGenerator:
             bidding_strategy=structure.bidding_strategy,
             ad_groups=ad_groups,
             negative_keywords=negatives.keywords,
-            sitelinks=[],
-            callouts=[],
-            structured_snippets=[],
+            sitelinks=domain_sitelinks,
+            callouts=domain_callouts,
+            structured_snippets=domain_snippets,
             estimated_cpc_range=(cpc_min, cpc_max),
             generated_at=datetime.now(UTC),
         )
