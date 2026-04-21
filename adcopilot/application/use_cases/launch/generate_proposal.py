@@ -22,10 +22,11 @@ from adcopilot.application.ports.launch_repositories import (
     CampaignProposalRepo,
 )
 from adcopilot.domain.exceptions import LLMError
+from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
 from adcopilot.domain.launch.entities import CampaignBrief, CampaignProposal, LaunchStatus
 from adcopilot.domain.launch.templates import build_proposal_from_template
 from adcopilot.domain.launch.validator import validate_proposal
-from adcopilot.infrastructure.llm.campaign_generator import CampaignGenerator
+from adcopilot.infrastructure.llm.campaign_generator import BrandCampaignResponse, CampaignGenerator
 
 logger = structlog.get_logger(__name__)
 
@@ -162,8 +163,18 @@ class GenerateCampaignProposalUseCase:
             extensions = None
             logger.warning("extensions_generation_failed", brief_id=brief.id)
 
+        # Stage 2b — brand campaign (MID/GROWTH only)
+        brand: BrandCampaignResponse | None = None
+        _tier = classify_budget_tier(brief.monthly_budget_pln)
+        if _tier in (BudgetTier.MID, BudgetTier.GROWTH):
+            try:
+                brand = await self._generator.generate_brand_campaign(brief, structure.campaign_name)
+            except Exception:
+                brand = None
+                logger.warning("brand_campaign_generation_failed", brief_id=brief.id)
+
         # Assemble and validate
-        proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions)
+        proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions, brand)
         errors = validate_proposal(proposal, brief)
 
         if not errors:

@@ -60,6 +60,14 @@ def format_proposal_summary(proposal: CampaignProposal) -> str:
         f"💵 Est. CPC: {cpc_min:.2f}-{cpc_max:.2f} PLN",
     ]
 
+    if proposal.brand_campaign_name:
+        brand_budget_pln = proposal.brand_daily_budget_micros / _MICROS_PER_PLN
+        lines += [
+            "",
+            f"🏷️ *Brand campaign: {proposal.brand_campaign_name}*",
+            f"   Budget: {brand_budget_pln:,.2f} PLN/day · {len(proposal.brand_keywords)} brand keywords · MAXIMIZE_CLICKS",
+        ]
+
     # Example ad from the first ad group
     if proposal.ad_groups and proposal.ad_groups[0].ads:
         example_ad = proposal.ad_groups[0].ads[0]

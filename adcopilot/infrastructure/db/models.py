@@ -684,6 +684,11 @@ class LaunchProposalModel(Base):
     estimated_cpc_min_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     estimated_cpc_max_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Brand campaign fields (null for MICRO tier)
+    brand_campaign_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    brand_keywords: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=None)
+    brand_daily_budget_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    brand_ad: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
