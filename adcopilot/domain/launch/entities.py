@@ -263,3 +263,39 @@ class CampaignBrief:
 
     campaign_resource_name: str | None = None
     """Google Ads campaign resource name, set after the campaign is created (PAUSED state)."""
+
+
+# ---------------------------------------------------------------------------
+# Remarketing campaign proposal (Display, for GROWTH tier)
+# ---------------------------------------------------------------------------
+
+RemarketingProposalId = NewType("RemarketingProposalId", str)
+
+
+@dataclass(frozen=True)
+class RemarketingCampaignProposal:
+    """A Display Remarketing campaign proposal generated for GROWTH-tier accounts.
+
+    Separate from ``CampaignProposal`` because Display campaigns use audience
+    targeting (user lists) rather than keywords, and Responsive Display Ads
+    instead of RSAs.
+    """
+
+    id: RemarketingProposalId
+    brief_id: CampaignBriefId
+    campaign_name: str
+    daily_budget_micros: int
+    """15% of the original Search campaign's daily budget."""
+
+    user_list_ids: list[int]
+    """Remarketing list IDs to target (≥1,000 members each)."""
+
+    bidding_strategy: str = "MAXIMIZE_CONVERSIONS"
+    """Display remarketing converts well — start with MAXIMIZE_CONVERSIONS."""
+
+    generated_at: datetime = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.generated_at is None:
+            from datetime import timezone
+            object.__setattr__(self, "generated_at", datetime.now(tz=timezone.utc))
