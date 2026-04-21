@@ -898,6 +898,8 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
             ext_rns: list[str] = []
             ag_rns: list[str] = []
             audience_rns: list[str] = []
+            brand_campaign_rn: str = ""
+            brand_budget_rn: str = ""
 
             try:
                 campaign_rn, budget_rn = await writer.create_campaign(
@@ -956,6 +958,14 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
                     proposal.structured_snippets,
                 )
 
+                # Create brand campaign for MID/GROWTH tiers
+                if proposal.brand_campaign_name:
+                    brand_campaign_rn, brand_budget_rn = await writer.create_brand_campaign(
+                        account.customer_id,
+                        credentials.refresh_token,
+                        proposal,
+                    )
+
                 # Persist campaign resource name + update status
                 updated_brief = dataclasses.replace(
                     brief,
@@ -970,7 +980,7 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
                     brief_id=brief_id,
                 )
                 # Rollback everything created so far
-                if campaign_rn or ag_rns or kw_rns or ad_rns or neg_rns or ext_rns or audience_rns:
+                if campaign_rn or ag_rns or kw_rns or ad_rns or neg_rns or ext_rns or audience_rns or brand_campaign_rn:
                     resources = CreatedCampaignResources(
                         campaign_resource_name=campaign_rn or "",
                         budget_resource_name=budget_rn if "budget_rn" in dir() else "",
@@ -980,6 +990,8 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
                         negative_resource_names=neg_rns,
                         extension_resource_names=ext_rns,
                         audience_resource_names=audience_rns,
+                        brand_campaign_resource_name=brand_campaign_rn,
+                        brand_budget_resource_name=brand_budget_rn,
                     )
                     try:
                         await writer.delete_draft_campaign(

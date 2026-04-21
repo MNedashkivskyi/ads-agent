@@ -190,6 +190,23 @@ class CampaignProposal:
 
     generated_at: datetime
 
+    # Brand campaign fields — None/empty for MICRO tier
+    brand_campaign_name: str | None = None
+    """Separate Brand Search campaign name, e.g. 'MyBrand | Brand Search'."""
+
+    brand_keywords: list[KeywordProposal] = None  # type: ignore[assignment]
+    """Exact-match brand keywords (business name + variations). Empty for MICRO."""
+
+    brand_daily_budget_micros: int = 0
+    """Brand campaign daily budget (~10% of main). 0 for MICRO tier."""
+
+    brand_ad: AdProposal | None = None
+    """Single RSA for the brand ad group. None for MICRO tier."""
+
+    def __post_init__(self) -> None:
+        if self.brand_keywords is None:
+            object.__setattr__(self, "brand_keywords", [])
+
 
 # ---------------------------------------------------------------------------
 # Root aggregate

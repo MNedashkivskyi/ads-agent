@@ -87,6 +87,27 @@ def _model_to_domain(
         for sn in (snippets or [])
     ]
 
+    # Reconstruct brand ad from JSONB if present
+    brand_ad: AdProposal | None = None
+    if proposal.brand_ad:
+        ba = proposal.brand_ad
+        brand_ad = AdProposal(
+            headlines=list(ba.get("headlines", [])),
+            descriptions=list(ba.get("descriptions", [])),
+            final_url=ba.get("final_url", "https://example.com"),
+            path_segments=(ba.get("path1", ""), ba.get("path2", "")),
+        )
+
+    brand_keywords: list[KeywordProposal] = []
+    for kw_dict in (proposal.brand_keywords or []):
+        brand_keywords.append(
+            KeywordProposal(
+                text=kw_dict["text"],
+                match_type=MatchType(kw_dict["match_type"]),
+                estimated_cpc_micros=kw_dict["estimated_cpc_micros"],
+            )
+        )
+
     return CampaignProposal(
         id=CampaignProposalId(str(proposal.id)),
         brief_id=CampaignBriefId(str(proposal.brief_id)),
@@ -104,6 +125,10 @@ def _model_to_domain(
             proposal.estimated_cpc_max_micros,
         ),
         generated_at=proposal.generated_at,
+        brand_campaign_name=proposal.brand_campaign_name,
+        brand_keywords=brand_keywords,
+        brand_daily_budget_micros=proposal.brand_daily_budget_micros or 0,
+        brand_ad=brand_ad,
     )
 
 
@@ -147,6 +172,26 @@ class SqlCampaignProposalRepository:
             await self._session.flush()
 
         # Insert proposal root
+        brand_ad_dict = None
+        if proposal.brand_ad:
+            ba = proposal.brand_ad
+            brand_ad_dict = {
+                "headlines": list(ba.headlines),
+                "descriptions": list(ba.descriptions),
+                "final_url": ba.final_url,
+                "path1": ba.path_segments[0],
+                "path2": ba.path_segments[1],
+            }
+
+        brand_kw_list = [
+            {
+                "text": kw.text,
+                "match_type": kw.match_type.value,
+                "estimated_cpc_micros": kw.estimated_cpc_micros,
+            }
+            for kw in (proposal.brand_keywords or [])
+        ] or None
+
         pm = LaunchProposalModel(
             id=proposal_id,
             brief_id=uuid.UUID(proposal.brief_id),
@@ -158,6 +203,10 @@ class SqlCampaignProposalRepository:
             estimated_cpc_min_micros=proposal.estimated_cpc_range[0],
             estimated_cpc_max_micros=proposal.estimated_cpc_range[1],
             generated_at=proposal.generated_at,
+            brand_campaign_name=proposal.brand_campaign_name,
+            brand_keywords=brand_kw_list,
+            brand_daily_budget_micros=proposal.brand_daily_budget_micros,
+            brand_ad=brand_ad_dict,
         )
         self._session.add(pm)
 

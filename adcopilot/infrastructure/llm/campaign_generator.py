@@ -121,6 +121,30 @@ class NegativeKeywordsResponse(BaseModel):
     keywords: list[str] = Field(default_factory=list)
 
 
+class BrandKeywordItem(BaseModel):
+    """A single brand keyword (exact match)."""
+
+    text: str
+    estimated_cpc_pln: float = Field(default=0.5)
+
+
+class BrandAdItem(BaseModel):
+    """Brand RSA — simple, name-focused copy."""
+
+    headlines: list[str] = Field(min_length=3, max_length=5)
+    descriptions: list[str] = Field(min_length=2, max_length=2)
+    path1: str = Field(default="")
+    path2: str = Field(default="")
+
+
+class BrandCampaignResponse(BaseModel):
+    """Stage 2b output — brand campaign skeleton for MID/GROWTH tiers."""
+
+    brand_campaign_name: str
+    brand_keywords: list[BrandKeywordItem] = Field(min_length=2, max_length=5)
+    brand_ad: BrandAdItem
+
+
 class SitelinkItem(BaseModel):
     """One sitelink in the extensions response."""
 
@@ -227,6 +251,28 @@ Include: standard brand-safety negatives, vertical-specific negatives, and any
 user-specified exclusions.  Use plain text only (no match-type syntax).
 Respond ONLY with valid JSON — no markdown, no prose:
 { "keywords": ["<string>", "…"] }"""
+
+_BRAND_SYSTEM = """\
+You are a Google Ads campaign architect specialising in brand campaigns.
+Generate a separate Brand Search campaign for the business.
+Use ONLY exact-match brand keywords (business name + common variations/misspellings).
+Brand ads should be simple, trust-building copy mentioning the brand name.
+STRICT character limits: headline ≤30 chars, description ≤90 chars, path ≤15 chars.
+Brand campaign name must end with '| Brand Search'.
+Respond ONLY with valid JSON — no markdown, no prose:
+{
+  "brand_campaign_name": "<business name> | Brand Search",
+  "brand_keywords": [
+    { "text": "<brand name>", "estimated_cpc_pln": <float> }
+  ],
+  "brand_ad": {
+    "headlines": ["<≤30 chars>", "…"],
+    "descriptions": ["<≤90 chars>", "<≤90 chars>"],
+    "path1": "<≤15 chars>",
+    "path2": "<≤15 chars>"
+  }
+}
+Produce 2–5 brand keywords and exactly 3–5 headlines."""
 
 _EXTENSIONS_SYSTEM = """\
 You are a Google Ads extensions specialist.
@@ -429,6 +475,22 @@ class CampaignGenerator:
             _EXTENSIONS_SYSTEM, user, "extensions", ExtensionsResponse, max_tokens=800
         )
 
+    async def generate_brand_campaign(
+        self,
+        brief: CampaignBrief,
+        main_campaign_name: str,
+    ) -> BrandCampaignResponse:
+        """Stage 2b — generate brand campaign skeleton for MID/GROWTH tiers."""
+        user = (
+            f"Business: {brief.business_description}\n"
+            f"Main campaign name: {main_campaign_name}\n"
+            f"Language: {brief.language}\n"
+            f"Primary action: {brief.primary_action}"
+        )
+        return await self._call_and_parse(
+            _BRAND_SYSTEM, user, "brand", BrandCampaignResponse, max_tokens=600
+        )
+
     # ------------------------------------------------------------------
     # Domain-object assembly
     # ------------------------------------------------------------------
@@ -440,6 +502,7 @@ class CampaignGenerator:
         ad_copies: list[AdGroupCopyResponse],
         negatives: NegativeKeywordsResponse,
         extensions: ExtensionsResponse | None = None,
+        brand: BrandCampaignResponse | None = None,
     ) -> CampaignProposal:
         """Combine pipeline outputs into a ``CampaignProposal`` domain object."""
         daily_budget_micros = int(
@@ -508,6 +571,30 @@ class CampaignGenerator:
                     )
                 ]
 
+        # Brand campaign fields
+        brand_campaign_name: str | None = None
+        brand_keywords: list[KeywordProposal] = []
+        brand_daily_budget_micros: int = 0
+        brand_ad: AdProposal | None = None
+
+        if brand is not None:
+            brand_daily_budget_micros = max(1, int(daily_budget_micros * 0.1))
+            brand_keywords = [
+                KeywordProposal(
+                    text=kw.text,
+                    match_type=MatchType.EXACT,
+                    estimated_cpc_micros=max(1, int(kw.estimated_cpc_pln * 1_000_000)),
+                )
+                for kw in brand.brand_keywords
+            ]
+            brand_campaign_name = brand.brand_campaign_name
+            brand_ad = AdProposal(
+                headlines=brand.brand_ad.headlines,
+                descriptions=brand.brand_ad.descriptions,
+                final_url=_extract_url(brief),
+                path_segments=(brand.brand_ad.path1[:15], brand.brand_ad.path2[:15]),
+            )
+
         return CampaignProposal(
             id=CampaignProposalId(str(uuid.uuid4())),
             brief_id=brief.id,
@@ -522,6 +609,10 @@ class CampaignGenerator:
             structured_snippets=domain_snippets,
             estimated_cpc_range=(cpc_min, cpc_max),
             generated_at=datetime.now(UTC),
+            brand_campaign_name=brand_campaign_name,
+            brand_keywords=brand_keywords,
+            brand_daily_budget_micros=brand_daily_budget_micros,
+            brand_ad=brand_ad,
         )
 
     # ------------------------------------------------------------------

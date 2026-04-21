@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from adcopilot.domain.launch.bidding_resolver import resolve_bidding_strategy
-from adcopilot.domain.launch.budget_tier import classify_budget_tier
+from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -492,6 +492,37 @@ def build_proposal_from_template(
     all_cpcs = [kw.estimated_cpc_micros for ag in ad_groups for kw in ag.keywords]
     negatives = list(tmpl.negatives) + brief.exclusions
 
+    # Brand campaign for MID/GROWTH tiers
+    brand_campaign_name: str | None = None
+    brand_keywords: list[KeywordProposal] = []
+    brand_daily_budget_micros: int = 0
+    brand_ad: AdProposal | None = None
+
+    if tier in (BudgetTier.MID, BudgetTier.GROWTH):
+        # Derive a simple brand name from business description (first 2 words)
+        words = brief.business_description.split()
+        brand_name = " ".join(words[:2]) if len(words) >= 2 else words[0] if words else "Brand"
+        brand_campaign_name = f"{brand_name} | Brand Search"
+        brand_keywords = [
+            KeywordProposal(
+                text=brand_name,
+                match_type=MatchType.EXACT,
+                estimated_cpc_micros=300_000,
+            ),
+            KeywordProposal(
+                text=f"{brand_name} opinie",
+                match_type=MatchType.EXACT,
+                estimated_cpc_micros=200_000,
+            ),
+        ]
+        brand_daily_budget_micros = max(1, int(daily_budget_micros * 0.1))
+        brand_ad = AdProposal(
+            headlines=[f"{brand_name[:25]}", "Oficjalna strona", "Sprawdź ofertę"],
+            descriptions=[f"Odwiedź oficjalną stronę {brand_name[:20]}.", "Skontaktuj się z nami już dziś."],
+            final_url="https://example.com",
+            path_segments=(brand_name.replace(" ", "")[:15], ""),
+        )
+
     return CampaignProposal(
         id=CampaignProposalId(str(uuid.uuid4())),
         brief_id=brief.id,
@@ -509,4 +540,8 @@ def build_proposal_from_template(
             max(all_cpcs) if all_cpcs else 2_000_000,
         ),
         generated_at=datetime.now(UTC),
+        brand_campaign_name=brand_campaign_name,
+        brand_keywords=brand_keywords,
+        brand_daily_budget_micros=brand_daily_budget_micros,
+        brand_ad=brand_ad,
     )

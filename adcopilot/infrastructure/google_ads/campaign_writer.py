@@ -549,6 +549,114 @@ class CampaignWriter:
             raise _wrap_exc("create_extensions", exc) from exc
 
     # ------------------------------------------------------------------
+    # Step 1b — Brand Search campaign (MID/GROWTH only)
+    # ------------------------------------------------------------------
+
+    async def create_brand_campaign(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        proposal: "CampaignProposal",
+    ) -> tuple[str, str]:
+        """Create a separate Brand Search campaign (MAXIMIZE_CLICKS, exact-match brand keywords).
+
+        Returns (campaign_resource_name, budget_resource_name).
+        """
+        if not proposal.brand_campaign_name or not proposal.brand_keywords:
+            return "", ""
+        try:
+            client = self._build_client(refresh_token)
+            cid = self._cid(customer_id)
+
+            # Budget
+            budget_service = client.get_service("CampaignBudgetService")
+            budget_op = client.get_type("CampaignBudgetOperation")
+            budget = budget_op.create
+            budget.name = f"{proposal.brand_campaign_name} Budget"
+            budget.amount_micros = proposal.brand_daily_budget_micros
+            budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
+            budget_response = budget_service.mutate_campaign_budgets(
+                customer_id=cid, operations=[budget_op]
+            )
+            budget_rn: str = budget_response.results[0].resource_name
+
+            # Campaign (always MAXIMIZE_CLICKS — brand traffic is cheap and high-intent)
+            campaign_service = client.get_service("CampaignService")
+            campaign_op = client.get_type("CampaignOperation")
+            campaign = campaign_op.create
+            campaign.name = proposal.brand_campaign_name
+            campaign.status = client.enums.CampaignStatusEnum.PAUSED
+            campaign.campaign_budget = budget_rn
+            campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
+            campaign.target_spend.CopyFrom(type(campaign.target_spend)())
+            campaign_response = campaign_service.mutate_campaigns(
+                customer_id=cid, operations=[campaign_op]
+            )
+            campaign_rn: str = campaign_response.results[0].resource_name
+
+            # Ad group
+            ag_service = client.get_service("AdGroupService")
+            ag_op = client.get_type("AdGroupOperation")
+            ag = ag_op.create
+            ag.name = "Brand Keywords"
+            ag.campaign = campaign_rn
+            ag.status = client.enums.AdGroupStatusEnum.ENABLED
+            ag_response = ag_service.mutate_ad_groups(customer_id=cid, operations=[ag_op])
+            ag_rn: str = ag_response.results[0].resource_name
+
+            # Keywords (exact match)
+            agc_service = client.get_service("AdGroupCriterionService")
+            kw_ops: list[Any] = []
+            for kw in proposal.brand_keywords:
+                op = client.get_type("AdGroupCriterionOperation")
+                criterion = op.create
+                criterion.ad_group = ag_rn
+                criterion.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
+                criterion.keyword.text = kw.text
+                criterion.keyword.match_type = client.enums.KeywordMatchTypeEnum.EXACT
+                kw_ops.append(op)
+            agc_service.mutate_ad_group_criteria(customer_id=cid, operations=kw_ops)
+
+            # Brand ad (if present)
+            if proposal.brand_ad:
+                ad_service = client.get_service("AdGroupAdService")
+                ad_op = client.get_type("AdGroupAdOperation")
+                ad = ad_op.create
+                ad.ad_group = ag_rn
+                ad.status = client.enums.AdGroupAdStatusEnum.ENABLED
+                rsa = ad.ad.responsive_search_ad
+                for h in proposal.brand_ad.headlines[:15]:
+                    asset = client.get_type("AdTextAsset")
+                    asset.text = h[:30]
+                    rsa.headlines.append(asset)
+                for d in proposal.brand_ad.descriptions[:4]:
+                    asset = client.get_type("AdTextAsset")
+                    asset.text = d[:90]
+                    rsa.descriptions.append(asset)
+                ad.ad.final_urls.append(proposal.brand_ad.final_url)
+                ad_service.mutate_ad_group_ads(customer_id=cid, operations=[ad_op])
+
+            logger.info(
+                "brand_campaign_created",
+                customer_id=customer_id,
+                campaign_rn=campaign_rn,
+            )
+            await self._log(
+                "BRAND_CAMPAIGN_CREATE",
+                {
+                    "campaign_resource_name": campaign_rn,
+                    "budget_resource_name": budget_rn,
+                    "brand_campaign_name": proposal.brand_campaign_name,
+                },
+            )
+            return campaign_rn, budget_rn
+
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_exc("create_brand_campaign", exc) from exc
+
+    # ------------------------------------------------------------------
     # Step 2.5 — Observation-mode audience signals
     # ------------------------------------------------------------------
 
@@ -776,6 +884,24 @@ class CampaignWriter:
                     budget_service.mutate_campaign_budgets(customer_id=cid, operations=[op])
                 except Exception as exc:
                     errors.append(f"budget: {exc}")
+
+            # Brand campaign + budget
+            if resources.brand_campaign_resource_name:
+                try:
+                    campaign_service = client.get_service("CampaignService")
+                    op = client.get_type("CampaignOperation")
+                    op.remove = resources.brand_campaign_resource_name
+                    campaign_service.mutate_campaigns(customer_id=cid, operations=[op])
+                except Exception as exc:
+                    errors.append(f"brand_campaign: {exc}")
+            if resources.brand_budget_resource_name:
+                try:
+                    budget_service = client.get_service("CampaignBudgetService")
+                    op = client.get_type("CampaignBudgetOperation")
+                    op.remove = resources.brand_budget_resource_name
+                    budget_service.mutate_campaign_budgets(customer_id=cid, operations=[op])
+                except Exception as exc:
+                    errors.append(f"brand_budget: {exc}")
 
             if errors:
                 logger.error(

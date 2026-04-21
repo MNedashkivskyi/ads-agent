@@ -32,6 +32,8 @@ class CreatedCampaignResources:
     negative_resource_names: list[str]
     extension_resource_names: list[str] = None  # type: ignore[assignment]
     audience_resource_names: list[str] = None  # type: ignore[assignment]
+    brand_campaign_resource_name: str = ""
+    brand_budget_resource_name: str = ""
 
     def __post_init__(self) -> None:
         if self.extension_resource_names is None:
