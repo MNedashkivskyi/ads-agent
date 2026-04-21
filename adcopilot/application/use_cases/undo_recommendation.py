@@ -222,6 +222,31 @@ class UndoRecommendationUseCase:
                 )
             return {"campaign_asset_resource_names": ca_rns, "action": "extensions_removed"}
 
+        if kind == RecommendationKind.REALLOCATE_BUDGET:
+            from_campaign_id = int(payload["from_campaign_id"])
+            to_campaign_id = int(payload["to_campaign_id"])
+            old_donor = int(payload["old_donor_budget_micros"])
+            old_receiver = int(payload["old_receiver_budget_micros"])
+            await self._mutations.update_campaign_budget(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                campaign_id=from_campaign_id,
+                new_budget_micros=old_donor,
+            )
+            await self._mutations.update_campaign_budget(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                campaign_id=to_campaign_id,
+                new_budget_micros=old_receiver,
+            )
+            return {
+                "from_campaign_id": from_campaign_id,
+                "to_campaign_id": to_campaign_id,
+                "restored_donor_budget_micros": old_donor,
+                "restored_receiver_budget_micros": old_receiver,
+                "action": "budget_reallocation_undone",
+            }
+
         if kind == RecommendationKind.AD_SCHEDULE_ADJUSTMENT:
             campaign_id = int(payload["campaign_id"])
             hour_of_day = int(payload["hour_of_day"])
