@@ -548,6 +548,62 @@ class GoogleAdsMutationsAdapter:
         except Exception as exc:
             raise _wrap_mutation_exc("remove_device_bid_modifier", exc) from exc
 
+    async def exclude_geo_location(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        location_id: int,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            campaign_criterion_service = client.get_service("CampaignCriterionService")
+            op = client.get_type("CampaignCriterionOperation")
+            criterion = op.create
+            criterion.campaign = client.get_service("CampaignService").campaign_path(cid, campaign_id)
+            criterion.negative = True
+            criterion.location.geo_target_constant = f"geoTargetConstants/{location_id}"
+            campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=[op])
+            logger.info("geo excluded", customer_id=customer_id, campaign_id=campaign_id, location_id=location_id)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("exclude_geo_location", exc) from exc
+
+    async def remove_geo_exclusion(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        location_id: int,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            campaign_criterion_service = client.get_service("CampaignCriterionService")
+            ga_service = client.get_service("GoogleAdsService")
+            location_rn = f"geoTargetConstants/{location_id}"
+            query = (
+                f"SELECT campaign_criterion.resource_name FROM campaign_criterion "
+                f"WHERE campaign_criterion.campaign = 'customers/{cid}/campaigns/{campaign_id}' "
+                f"AND campaign_criterion.negative = TRUE "
+                f"AND campaign_criterion.location.geo_target_constant = '{location_rn}'"
+            )
+            response = ga_service.search(customer_id=cid, query=query)
+            ops = []
+            for row in response:
+                op = client.get_type("CampaignCriterionOperation")
+                op.remove = row.campaign_criterion.resource_name
+                ops.append(op)
+            if ops:
+                campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
+            logger.info("geo exclusion removed", customer_id=customer_id, campaign_id=campaign_id, location_id=location_id)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("remove_geo_exclusion", exc) from exc
+
     async def remove_campaign_assets(
         self,
         refresh_token: str,
