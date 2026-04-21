@@ -27,6 +27,17 @@ from adcopilot.domain.snapshot import (
 
 
 @dataclass
+class LandingPageData:
+    """Scraped content from a landing page URL (for Rule 45)."""
+
+    url: str
+    reachable: bool
+    page_title: str | None = None
+    h1_text: str | None = None
+    body_text_sample: str | None = None
+
+
+@dataclass
 class HistoricalStats:
     """Aggregated stats for a look-back window (default 30 days)."""
 
@@ -70,6 +81,9 @@ class DetectionContext:
     # Per-sitelink daily performance over a 30-day window for Module 7 rule 44.
     # Empty when no sitelink asset data exists.
     sitelink_performance: list[SitelinkPerformanceSnapshot] = field(default_factory=list)
+    # Pre-fetched landing page content for Module 8 rule 45.
+    # Keys are final_url strings; missing URL = rule skips that ad.
+    landing_page_results: dict[str, "LandingPageData"] = field(default_factory=dict)
 
 
 class DetectionRule(Protocol):

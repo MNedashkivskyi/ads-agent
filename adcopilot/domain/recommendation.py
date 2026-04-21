@@ -67,6 +67,8 @@ class RecommendationKind(Enum):
     ADD_CALLOUTS = "ADD_CALLOUTS"
     ADD_STRUCTURED_SNIPPETS = "ADD_STRUCTURED_SNIPPETS"
     REFRESH_SITELINK = "REFRESH_SITELINK"
+    # Module 8 — Landing page quality
+    LANDING_PAGE_KEYWORD_MISMATCH = "LANDING_PAGE_KEYWORD_MISMATCH"
 
 
 class RecommendationSeverity(Enum):
@@ -130,6 +132,8 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         RecommendationKind.SET_CONVERSION_VALUE,
         # Module 7 — extension issues (ADD_SITELINKS/CALLOUTS/STRUCTURED_SNIPPETS are now executable)
         RecommendationKind.REFRESH_SITELINK,
+        # Module 8 — landing page quality (informational, no Google Ads mutation)
+        RecommendationKind.LANDING_PAGE_KEYWORD_MISMATCH,
     }
 )
 

@@ -7,7 +7,7 @@ from datetime import date, timedelta
 import sentry_sdk
 import structlog
 
-from adcopilot.application.detection.base import DetectionContext, HistoricalStats
+from adcopilot.application.detection.base import DetectionContext, HistoricalStats, LandingPageData
 from adcopilot.application.detection.engine import RuleEngine
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.repositories import GoogleAdsAccountRepository
@@ -105,6 +105,9 @@ class RunDetectionUseCase:
             days=30,
         )
 
+        # 3e. Pre-fetch landing pages for Rule 45 (best-effort, non-blocking)
+        landing_page_results = await _fetch_landing_pages(snapshot.ads)
+
         # 5. Build context
         ctx = DetectionContext(
             account=account,
@@ -128,6 +131,7 @@ class RunDetectionUseCase:
             conversion_actions=conversion_actions,
             campaign_extensions=campaign_extensions,
             sitelink_performance=sitelink_performance,
+            landing_page_results=landing_page_results,
         )
 
         # 6. Run rule engine
@@ -214,3 +218,45 @@ async def _load_prev_snapshots(
         return prev_campaigns, prev_ad_groups, prev_keywords, prev_ads
     except Exception:
         return [], [], [], []
+
+
+async def _fetch_landing_pages(
+    ads: list,
+) -> dict[str, LandingPageData]:
+    """Fetch landing page content for all unique final_urls in *ads*.
+
+    Best-effort: any URL that times out or errors is simply omitted from the
+    result dict so Rule 45 skips it rather than blocking detection.
+    """
+    import json as _json
+
+    from adcopilot.infrastructure.landing_page.checker import LandingPageChecker
+
+    urls: set[str] = set()
+    for ad in ads:
+        try:
+            final_urls = _json.loads(ad.final_urls_json or "[]")
+            if final_urls:
+                urls.add(final_urls[0])
+        except Exception:
+            continue
+
+    if not urls:
+        return {}
+
+    checker = LandingPageChecker()
+    results: dict[str, LandingPageData] = {}
+    for url in urls:
+        try:
+            r = await checker.check(url)
+            results[url] = LandingPageData(
+                url=url,
+                reachable=r.reachable,
+                page_title=r.page_title,
+                h1_text=r.h1_text,
+                body_text_sample=r.body_text_sample,
+            )
+        except Exception:
+            logger.warning("landing_page_prefetch_failed", url=url)
+
+    return results
