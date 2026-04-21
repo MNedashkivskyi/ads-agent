@@ -414,19 +414,50 @@ _TEMPLATES: dict[str, _Template] = {
 # ---------------------------------------------------------------------------
 
 _VERTICAL_KEYWORDS: dict[str, list[str]] = {
-    "salon": ["salon", "hair", "beauty", "spa", "nail", "makeup", "hairdress", "barber"],
+    "salon": [
+        # English
+        "salon", "hair", "beauty", "spa", "nail", "makeup", "hairdress", "barber",
+        # Polish
+        "fryzjer", "kosmetyczka", "paznokcie", "makijaż", "uroda", "barber",
+    ],
     "ecommerce": [
+        # English
         "shop", "store", "buy", "sell", "product", "online shop",
         "ecommerce", "e-commerce", "delivery", "order online",
+        # Polish
+        "sklep internetowy", "sklep online", "e-sklep", "wysyłka", "dostawa",
     ],
     "restaurant": [
+        # English
         "restaurant", "cafe", "food", "eat", "meal", "pizza",
         "bar", "bistro", "diner", "takeaway", "delivery food",
+        # Polish
+        "restauracja", "kawiarnia", "pizzeria", "bistro", "catering", "jedzenie",
     ],
-    "legal": ["lawyer", "legal", "attorney", "law firm", "solicitor", "barrister", "court"],
+    "legal": [
+        # English
+        "lawyer", "legal", "attorney", "law firm", "solicitor", "barrister", "court",
+        # Polish
+        "kancelaria", "adwokat", "radca prawny", "prawnik", "notariusz",
+    ],
     "medical": [
+        # English
         "doctor", "medical", "clinic", "dentist", "health", "hospital",
         "physician", "nurse", "therapy", "treatment",
+        # Polish
+        "gabinet", "lekarz", "dentysta", "klinika", "przychodnia", "stomatolog", "fizjoterapia",
+    ],
+    "nieruchomości": [
+        "nieruchomości", "biuro nieruchomości", "mieszkania", "wynajem", "sprzedaż mieszkań",
+        "real estate", "property",
+    ],
+    "edukacja": [
+        "szkoła", "kurs", "korepetycje", "nauka", "szkolenie", "akademia",
+        "school", "course", "education", "tutoring",
+    ],
+    "usługi domowe": [
+        "hydraulik", "elektryk", "sprzątanie", "remont", "malowanie", "przeprowadzki",
+        "plumber", "electrician", "cleaning", "renovation",
     ],
 }
 
