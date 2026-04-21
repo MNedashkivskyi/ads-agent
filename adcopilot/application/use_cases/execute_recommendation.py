@@ -36,6 +36,7 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
     from adcopilot.application.executors.reallocate_budget import ReallocateBudgetExecutor
     from adcopilot.application.executors.relax_target_cpa import RelaxTargetCpaExecutor
     from adcopilot.application.executors.remove_negative_conflict import RemoveNegativeConflictExecutor
+    from adcopilot.application.executors.remove_redundant_match_type import RemoveRedundantMatchTypeExecutor
     from adcopilot.application.executors.geo_exclusion import GeoExclusionExecutor
     from adcopilot.application.executors.add_sitelinks import AddSitelinksExecutor
     from adcopilot.application.executors.add_structured_snippets import AddStructuredSnippetsExecutor
@@ -55,6 +56,7 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
         ReallocateBudgetExecutor(),
         RelaxTargetCpaExecutor(),
         RemoveNegativeConflictExecutor(),
+        RemoveRedundantMatchTypeExecutor(),
         GeoExclusionExecutor(),
         PauseAdExecutor(),
         AddNegativeKeywordExecutor(),
