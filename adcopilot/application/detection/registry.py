@@ -96,6 +96,7 @@ from adcopilot.application.detection.rules.rule_43_add_structured_snippets impor
     AddStructuredSnippetsRule,
 )
 from adcopilot.application.detection.rules.rule_44_refresh_sitelink import RefreshSitelinkRule
+from adcopilot.application.detection.rules.rule_45_landing_page_keyword_mismatch import LandingPageKeywordMismatchRule
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -158,5 +159,7 @@ def build_rule_engine(
         AddCalloutsRule(),
         AddStructuredSnippetsRule(),
         RefreshSitelinkRule(),
+        # Module 8 — Landing page quality
+        LandingPageKeywordMismatchRule(),
     ]
     return RuleEngine(rules=rules, rec_repo=rec_repo, snooze_repo=snooze_repo)
