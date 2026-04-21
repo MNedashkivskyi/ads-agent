@@ -122,3 +122,18 @@ class GoogleAdsMutationsPort(Protocol):
     ) -> None:
         """Remove CampaignAsset links (undo for extension executors)."""
         ...
+
+    async def set_device_bid_modifier(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        bid_modifier: float,
+    ) -> None: ...
+
+    async def remove_device_bid_modifier(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+    ) -> None: ...

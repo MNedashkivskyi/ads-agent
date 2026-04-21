@@ -494,6 +494,60 @@ class GoogleAdsMutationsAdapter:
         except Exception as exc:
             raise _wrap_mutation_exc("create_campaign_structured_snippets", exc) from exc
 
+    async def set_device_bid_modifier(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        bid_modifier: float,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            campaign_criterion_service = client.get_service("CampaignCriterionService")
+            op = client.get_type("CampaignCriterionOperation")
+            criterion = op.create
+            criterion.campaign = client.get_service("CampaignService").campaign_path(cid, campaign_id)
+            criterion.device.type_ = client.enums.DeviceEnum.MOBILE
+            criterion.bid_modifier = bid_modifier
+            campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=[op])
+            logger.info("device bid modifier set", customer_id=customer_id, campaign_id=campaign_id, bid_modifier=bid_modifier)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("set_device_bid_modifier", exc) from exc
+
+    async def remove_device_bid_modifier(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            campaign_criterion_service = client.get_service("CampaignCriterionService")
+            ga_service = client.get_service("GoogleAdsService")
+            query = (
+                f"SELECT campaign_criterion.resource_name FROM campaign_criterion "
+                f"WHERE campaign_criterion.campaign = 'customers/{cid}/campaigns/{campaign_id}' "
+                f"AND campaign_criterion.type = 'DEVICE' "
+                f"AND campaign_criterion.device.type = 'MOBILE'"
+            )
+            response = ga_service.search(customer_id=cid, query=query)
+            ops = []
+            for row in response:
+                op = client.get_type("CampaignCriterionOperation")
+                op.remove = row.campaign_criterion.resource_name
+                ops.append(op)
+            if ops:
+                campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
+            logger.info("device bid modifier removed", customer_id=customer_id, campaign_id=campaign_id)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("remove_device_bid_modifier", exc) from exc
+
     async def remove_campaign_assets(
         self,
         refresh_token: str,
