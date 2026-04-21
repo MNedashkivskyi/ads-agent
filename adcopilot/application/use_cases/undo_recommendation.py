@@ -222,6 +222,17 @@ class UndoRecommendationUseCase:
                 )
             return {"campaign_asset_resource_names": ca_rns, "action": "extensions_removed"}
 
+        if kind == RecommendationKind.AD_SCHEDULE_ADJUSTMENT:
+            campaign_id = int(payload["campaign_id"])
+            hour_of_day = int(payload["hour_of_day"])
+            await self._mutations.remove_ad_schedule_criterion(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                hour_of_day=hour_of_day,
+            )
+            return {"campaign_id": campaign_id, "hour_of_day": hour_of_day, "action": "ad_schedule_removed"}
+
         if kind == RecommendationKind.GEO_EXCLUSION:
             campaign_id = int(payload["campaign_id"])
             location_id = int(payload["location_id"])

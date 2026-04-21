@@ -153,3 +153,20 @@ class GoogleAdsMutationsPort(Protocol):
         campaign_id: int,
         location_id: int,
     ) -> None: ...
+
+    async def set_ad_schedule_bid_modifier(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        hour_of_day: int,
+        bid_modifier: float,
+    ) -> None: ...
+
+    async def remove_ad_schedule_criterion(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        hour_of_day: int,
+    ) -> None: ...

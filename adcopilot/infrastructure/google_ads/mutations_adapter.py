@@ -548,6 +548,70 @@ class GoogleAdsMutationsAdapter:
         except Exception as exc:
             raise _wrap_mutation_exc("remove_device_bid_modifier", exc) from exc
 
+    async def set_ad_schedule_bid_modifier(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        hour_of_day: int,
+        bid_modifier: float,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            campaign_criterion_service = client.get_service("CampaignCriterionService")
+            # Create criteria for all 7 days for the given hour
+            ops = []
+            for day in range(2, 9):  # MONDAY=2 through SUNDAY=8
+                op = client.get_type("CampaignCriterionOperation")
+                criterion = op.create
+                criterion.campaign = client.get_service("CampaignService").campaign_path(cid, campaign_id)
+                criterion.ad_schedule.day_of_week = day
+                criterion.ad_schedule.start_hour = hour_of_day
+                criterion.ad_schedule.end_hour = (hour_of_day + 1) % 24
+                criterion.ad_schedule.start_minute = client.enums.MinuteOfHourEnum.ZERO
+                criterion.ad_schedule.end_minute = client.enums.MinuteOfHourEnum.ZERO
+                criterion.bid_modifier = bid_modifier
+                ops.append(op)
+            campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
+            logger.info("ad schedule set", customer_id=customer_id, campaign_id=campaign_id, hour=hour_of_day)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("set_ad_schedule_bid_modifier", exc) from exc
+
+    async def remove_ad_schedule_criterion(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        hour_of_day: int,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            campaign_criterion_service = client.get_service("CampaignCriterionService")
+            ga_service = client.get_service("GoogleAdsService")
+            query = (
+                f"SELECT campaign_criterion.resource_name FROM campaign_criterion "
+                f"WHERE campaign_criterion.campaign = 'customers/{cid}/campaigns/{campaign_id}' "
+                f"AND campaign_criterion.type = 'AD_SCHEDULE' "
+                f"AND campaign_criterion.ad_schedule.start_hour = {hour_of_day}"
+            )
+            response = ga_service.search(customer_id=cid, query=query)
+            ops = []
+            for row in response:
+                op = client.get_type("CampaignCriterionOperation")
+                op.remove = row.campaign_criterion.resource_name
+                ops.append(op)
+            if ops:
+                campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
+            logger.info("ad schedule removed", customer_id=customer_id, campaign_id=campaign_id, hour=hour_of_day)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("remove_ad_schedule_criterion", exc) from exc
+
     async def exclude_geo_location(
         self,
         refresh_token: str,
