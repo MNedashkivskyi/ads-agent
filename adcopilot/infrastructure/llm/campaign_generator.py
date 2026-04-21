@@ -435,6 +435,9 @@ class CampaignGenerator:
             bidding_strategy=structure.bidding_strategy,
             ad_groups=ad_groups,
             negative_keywords=negatives.keywords,
+            sitelinks=[],
+            callouts=[],
+            structured_snippets=[],
             estimated_cpc_range=(cpc_min, cpc_max),
             generated_at=datetime.now(UTC),
         )

@@ -96,6 +96,9 @@ def _proposal(
         bidding_strategy=bidding,
         ad_groups=ad_groups,
         negative_keywords=negatives,
+        sitelinks=[],
+        callouts=[],
+        structured_snippets=[],
         estimated_cpc_range=(800_000, 1_500_000),
         generated_at=datetime.now(UTC),
     )

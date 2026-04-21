@@ -501,6 +501,9 @@ def build_proposal_from_template(
         bidding_strategy=bidding_strategy,
         ad_groups=ad_groups,
         negative_keywords=negatives,
+        sitelinks=[],
+        callouts=[],
+        structured_snippets=[],
         estimated_cpc_range=(
             min(all_cpcs) if all_cpcs else 500_000,
             max(all_cpcs) if all_cpcs else 2_000_000,
