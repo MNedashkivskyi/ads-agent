@@ -100,6 +100,15 @@ class LandingPageCheckResult:
     error_message: str | None = None
     """Human-readable error when ``reachable`` is ``False``."""
 
+    page_title: str | None = None
+    """Extracted ``<title>`` text — used for keyword relevance analysis."""
+
+    h1_text: str | None = None
+    """Text of the first ``<h1>`` element."""
+
+    body_text_sample: str | None = None
+    """First 2 000 characters of visible body text."""
+
 
 @dataclass
 class ValidationContext:
@@ -500,6 +509,80 @@ def _rule_landing_page(
 
 
 # ---------------------------------------------------------------------------
+# Rule 6b — Landing page keyword relevance
+# ---------------------------------------------------------------------------
+
+_MIN_KEYWORD_OVERLAP = 0.30  # 30% of keyword tokens must appear in page content
+
+
+def _tokenize(text: str) -> set[str]:
+    """Lower-case word tokens, stripping punctuation."""
+    return {w.lower() for w in re.findall(r"[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+", text) if len(w) > 2}
+
+
+def _rule_landing_page_relevance(
+    proposal: CampaignProposal,
+    brief: CampaignBrief,
+    ctx: ValidationContext,
+) -> list[str]:
+    """Rule 6b: top keyword tokens must appear in the landing page content.
+
+    Only runs when the landing page check has page_title / body_text_sample populated.
+    Fires as a warning (not blocker) when page content is unavailable.
+    """
+    errors: list[str] = []
+
+    # Collect top-5 keywords by estimated CPC (highest CPC = highest intent)
+    all_keywords: list[str] = []
+    for ag in proposal.ad_groups:
+        sorted_kws = sorted(ag.keywords, key=lambda k: k.estimated_cpc_micros, reverse=True)
+        all_keywords.extend(kw.text for kw in sorted_kws[:5])
+    top_keywords = all_keywords[:5]
+
+    if not top_keywords:
+        return errors
+
+    kw_tokens: set[str] = set()
+    for kw in top_keywords:
+        kw_tokens |= _tokenize(kw)
+
+    if not kw_tokens:
+        return errors
+
+    # Check each unique final URL
+    urls: set[str] = set()
+    for ag in proposal.ad_groups:
+        for ad in ag.ads:
+            if ad.final_url:
+                urls.add(ad.final_url)
+
+    for url in sorted(urls):
+        result = ctx.landing_page_results.get(url)
+        if result is None:
+            continue  # already warned in _rule_landing_page
+
+        # Build page content corpus
+        page_parts = filter(None, [result.page_title, result.h1_text, result.body_text_sample])
+        page_text = " ".join(page_parts)
+        if not page_text:
+            continue  # no content extracted — skip, don't fail
+
+        page_tokens = _tokenize(page_text)
+        matched = kw_tokens & page_tokens
+        overlap = len(matched) / len(kw_tokens) if kw_tokens else 1.0
+
+        if overlap < _MIN_KEYWORD_OVERLAP:
+            missing = sorted(kw_tokens - page_tokens)[:5]
+            errors.append(
+                f"Rule 6b (Relevance): URL '{url}' does not mention key terms: "
+                f"{', '.join(missing)}. "
+                "Add these to your page title, headings, or body to improve Quality Score."
+            )
+
+    return errors
+
+
+# ---------------------------------------------------------------------------
 # Rule 7 — Bidding strategy
 # ---------------------------------------------------------------------------
 
@@ -623,6 +706,7 @@ _RULES = [
     ("negatives", _rule_negatives),
     ("ad_copy", _rule_ad_copy),
     ("landing_page", _rule_landing_page),
+    ("landing_page_relevance", _rule_landing_page_relevance),
     ("bidding", _rule_bidding),
     ("geographic", _rule_geographic),
 ]
