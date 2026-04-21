@@ -193,8 +193,19 @@ def _parse_model(raw: str, model_cls: type[_T], stage: str) -> _T:  # noqa: UP04
 # ---------------------------------------------------------------------------
 
 _VERTICAL_SYSTEM = """\
-You are an expert Google Ads consultant.
-Analyse the business description and classify the vertical.
+You are an expert Google Ads consultant specialising in the Polish market.
+Analyse the business description (which may be in Polish or English) and classify the vertical.
+
+Polish vertical names and their English equivalents:
+- salon / fryzjer / kosmetyczka / uroda → "salon"
+- restauracja / kawiarnia / pizzeria / catering → "restaurant"
+- kancelaria / prawnik / adwokat / radca prawny → "legal"
+- lekarz / gabinet / dentysta / klinika / przychodnia → "medical"
+- sklep internetowy / e-sklep / wysyłka → "ecommerce"
+- nieruchomości / biuro nieruchomości / wynajem → "nieruchomości"
+- szkoła / kurs / korepetycje / szkolenie → "edukacja"
+- hydraulik / elektryk / sprzątanie / remont → "usługi domowe"
+
 Respond ONLY with a valid JSON object — no markdown, no prose:
 {
   "vertical": "<string>",
