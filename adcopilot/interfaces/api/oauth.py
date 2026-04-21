@@ -138,6 +138,24 @@ async def oauth_google_callback(
     if not refresh_token:
         raise HTTPException(status_code=400, detail="No refresh_token in Google response")
 
+    acc_repo = SqlGoogleAdsAccountRepository(session)
+    creds_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
+
+    # Enforce per-plan account limits before calling the Google Ads API
+    _PLAN_ACCOUNT_LIMITS: dict[str, int] = {
+        "starter": 1,
+        "growth": 3,
+        "pro": 10,
+    }
+    existing_accounts = await acc_repo.list_for_user(UserId(user_id))
+    account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
+    slots_remaining = account_limit - len(existing_accounts)
+    if slots_remaining <= 0:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Account limit reached for {user.plan.value} plan ({account_limit} max). Upgrade to add more accounts.",
+        )
+
     # List accessible Google Ads customer IDs.
     # list_accessible_customers returns resource names like "customers/1234567890".
     # Extract the plain numeric ID from each resource name.
@@ -186,24 +204,6 @@ async def oauth_google_callback(
         )
         google_ads_api_error = f"{type(exc).__name__}: {exc}"
         customer_ids = []
-
-    acc_repo = SqlGoogleAdsAccountRepository(session)
-    creds_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
-
-    # Enforce per-plan account limits
-    _PLAN_ACCOUNT_LIMITS: dict[str, int] = {
-        "starter": 1,
-        "growth": 3,
-        "pro": 10,
-    }
-    existing_accounts = await acc_repo.list_for_user(UserId(user_id))
-    account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
-    slots_remaining = account_limit - len(existing_accounts)
-    if slots_remaining <= 0:
-        raise HTTPException(
-            status_code=402,
-            detail=f"Account limit reached for {user.plan.value} plan ({account_limit} max). Upgrade to add more accounts.",
-        )
 
     linked_ids: list[str] = []
     for customer_id in customer_ids[:slots_remaining]:

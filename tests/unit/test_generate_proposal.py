@@ -403,7 +403,7 @@ async def test_salon_golden_proposal() -> None:
     # Structure
     assert "Salon" in proposal.campaign_name or "Hair" in proposal.campaign_name
     assert len(proposal.ad_groups) == 2
-    assert proposal.bidding_strategy == "MAXIMIZE_CONVERSIONS"
+    assert proposal.bidding_strategy == "MAXIMIZE_CLICKS"
 
     # Budget: 1000 PLN / 30 * 1_000_000 ≈ 33_333_333 micros
     expected_daily = int(Decimal("1000") / 30 * 1_000_000)
