@@ -819,6 +819,71 @@ class LaunchStructuredSnippetModel(Base):
 
 
 # ---------------------------------------------------------------------------
+# Performance tracking models
+# ---------------------------------------------------------------------------
+
+
+class PerformanceBaselineModel(Base):
+    __tablename__ = "recommendation_performance_baselines"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    recommendation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("recommendations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    entity_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    baseline_date: Mapped[date] = mapped_column(Date, nullable=False)
+    cost_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    clicks: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    impressions: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    conversions: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    conv_value: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    cpa_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    ctr: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class PerformanceComparisonModel(Base):
+    __tablename__ = "recommendation_performance_comparisons"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    recommendation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("recommendations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    baseline_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("recommendation_performance_baselines.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    comparison_window_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    current_cost_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    current_clicks: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    current_impressions: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    current_conversions: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    current_cpa_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    delta_cpa_pct: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    delta_conversions_pct: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    delta_ctr_pct: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    verdict: Mapped[str] = mapped_column(String(20), nullable=False)
+    compared_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint("recommendation_id", "comparison_window_days", name="uq_comparison_rec_window"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Anomaly alert model
 # ---------------------------------------------------------------------------
 
