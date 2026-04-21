@@ -900,6 +900,7 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
             audience_rns: list[str] = []
             brand_campaign_rn: str = ""
             brand_budget_rn: str = ""
+            schedule_rns: list[str] = []
 
             try:
                 campaign_rn, budget_rn = await writer.create_campaign(
@@ -930,9 +931,20 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
                 # Add observation-mode audience signals for MID/GROWTH tiers
                 from adcopilot.domain.launch.audience_signals import get_audience_signals
                 from adcopilot.domain.launch.budget_tier import classify_budget_tier
+                from adcopilot.domain.launch.schedule_rules import get_ad_schedule
                 from adcopilot.domain.launch.templates import detect_vertical_from_description
                 _tier = classify_budget_tier(brief.monthly_budget_pln)
                 _vertical = detect_vertical_from_description(brief.business_description)
+
+                # Apply ad schedule (dayparting) based on vertical and tier
+                _schedule = get_ad_schedule(_vertical, _tier)
+                if _schedule:
+                    schedule_rns = await writer.create_ad_schedule(
+                        account.customer_id,
+                        credentials.refresh_token,
+                        campaign_rn,
+                        _schedule,
+                    )
                 _audience_signals = get_audience_signals(_vertical, _tier)
                 if _audience_signals:
                     audience_rns = await writer.create_audience_signals(
@@ -980,7 +992,7 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
                     brief_id=brief_id,
                 )
                 # Rollback everything created so far
-                if campaign_rn or ag_rns or kw_rns or ad_rns or neg_rns or ext_rns or audience_rns or brand_campaign_rn:
+                if campaign_rn or ag_rns or kw_rns or ad_rns or neg_rns or ext_rns or audience_rns or brand_campaign_rn or schedule_rns:
                     resources = CreatedCampaignResources(
                         campaign_resource_name=campaign_rn or "",
                         budget_resource_name=budget_rn if "budget_rn" in dir() else "",
@@ -992,6 +1004,7 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
                         audience_resource_names=audience_rns,
                         brand_campaign_resource_name=brand_campaign_rn,
                         brand_budget_resource_name=brand_budget_rn,
+                        schedule_resource_names=schedule_rns,
                     )
                     try:
                         await writer.delete_draft_campaign(

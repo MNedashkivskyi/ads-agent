@@ -33,6 +33,7 @@ from adcopilot.domain.audit_log import AuditLog, AuditLogId
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
 from adcopilot.domain.launch.audience_signals import AudienceSignal
+from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -549,6 +550,76 @@ class CampaignWriter:
             raise _wrap_exc("create_extensions", exc) from exc
 
     # ------------------------------------------------------------------
+    # Step 1.5 — Ad schedule (dayparting)
+    # ------------------------------------------------------------------
+
+    async def create_ad_schedule(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        campaign_resource_name: str,
+        schedule: list[AdScheduleEntry],
+    ) -> list[str]:
+        """Create CampaignCriterion ad schedule entries; return resource names."""
+        if not schedule:
+            return []
+        try:
+            client = self._build_client(refresh_token)
+            cid = self._cid(customer_id)
+            cc_service = client.get_service("CampaignCriterionService")
+
+            _DAY_MAP = {
+                "MONDAY": client.enums.DayOfWeekEnum.MONDAY,
+                "TUESDAY": client.enums.DayOfWeekEnum.TUESDAY,
+                "WEDNESDAY": client.enums.DayOfWeekEnum.WEDNESDAY,
+                "THURSDAY": client.enums.DayOfWeekEnum.THURSDAY,
+                "FRIDAY": client.enums.DayOfWeekEnum.FRIDAY,
+                "SATURDAY": client.enums.DayOfWeekEnum.SATURDAY,
+                "SUNDAY": client.enums.DayOfWeekEnum.SUNDAY,
+            }
+            _MINUTE_MAP = {0: 0, 15: 15, 30: 30, 45: 45}
+
+            ops: list[Any] = []
+            for entry in schedule:
+                op = client.get_type("CampaignCriterionOperation")
+                criterion = op.create
+                criterion.campaign = campaign_resource_name
+                criterion.negative = False
+                sched = criterion.ad_schedule
+                sched.day_of_week = _DAY_MAP[entry.day_of_week]
+                sched.start_hour = entry.start_hour
+                sched.start_minute = _MINUTE_MAP.get(entry.start_minute, 0)
+                sched.end_hour = entry.end_hour
+                sched.end_minute = _MINUTE_MAP.get(entry.end_minute, 0)
+                ops.append(op)
+
+            response = cc_service.mutate_campaign_criteria(
+                customer_id=cid, operations=ops
+            )
+            resource_names = [r.resource_name for r in response.results]
+
+            logger.info(
+                "ad_schedule_created",
+                customer_id=customer_id,
+                campaign_rn=campaign_resource_name,
+                entries=len(schedule),
+            )
+            await self._log(
+                "AD_SCHEDULE_CREATE",
+                {
+                    "campaign_resource_name": campaign_resource_name,
+                    "schedule_entries": len(schedule),
+                    "criterion_resource_names": resource_names,
+                },
+            )
+            return resource_names
+
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_exc("create_ad_schedule", exc) from exc
+
+    # ------------------------------------------------------------------
     # Step 1b — Brand Search campaign (MID/GROWTH only)
     # ------------------------------------------------------------------
 
@@ -851,6 +922,19 @@ class CampaignWriter:
                     ca_service.mutate_campaign_assets(customer_id=cid, operations=ops)
                 except Exception as exc:
                     errors.append(f"extensions: {exc}")
+
+            # Ad schedule criteria (CampaignCriterion)
+            if resources.schedule_resource_names:
+                try:
+                    cc_service = client.get_service("CampaignCriterionService")
+                    ops = []
+                    for rn in resources.schedule_resource_names:
+                        op = client.get_type("CampaignCriterionOperation")
+                        op.remove = rn
+                        ops.append(op)
+                    cc_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
+                except Exception as exc:
+                    errors.append(f"schedule: {exc}")
 
             # Negative keywords
             if resources.negative_resource_names:
