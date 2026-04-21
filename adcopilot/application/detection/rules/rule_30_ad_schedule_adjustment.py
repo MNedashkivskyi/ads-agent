@@ -12,6 +12,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.domain.polish_market.calendar import is_polish_holiday
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -37,6 +38,9 @@ class AdScheduleAdjustmentRule:
         convs: dict[tuple[int, int], float] = defaultdict(float)
 
         for row in ctx.hour_performance:
+            # Skip Polish public holidays — low performance on holidays is expected
+            if hasattr(row, "date") and row.date is not None and is_polish_holiday(row.date):
+                continue
             key = (row.campaign_id, row.hour_of_day)
             cost[key] += row.cost_micros
             convs[key] += row.conversions
