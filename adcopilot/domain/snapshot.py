@@ -249,3 +249,19 @@ class SitelinkPerformanceSnapshot:
     asset_id: int
     impressions: int
     clicks: int
+
+
+@dataclass(frozen=True)
+class RemarketingListInfo:
+    """Basic info about a Google Ads user list (remarketing audience).
+
+    Used by Task 6.1/6.2 to check tag status and RLSA eligibility.
+    """
+
+    list_id: int
+    name: str
+    member_count: int
+    """Approximate number of users in the list; -1 if still under threshold."""
+
+    status: str
+    """OPEN, CLOSED, or UNKNOWN."""
