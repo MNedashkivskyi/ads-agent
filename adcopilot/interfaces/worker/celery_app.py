@@ -53,6 +53,12 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.run_anomaly_detection_task",
                     "schedule": crontab(minute=5),
                 },
+                "weekly-bidding-check": {
+                    # Monday 4:00 AM UTC — after the nightly snapshot so the
+                    # latest 30-day conversion data is available.
+                    "task": "adcopilot.interfaces.worker.tasks.check_bidding_upgrade_task",
+                    "schedule": crontab(hour=4, minute=0, day_of_week="monday"),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},
