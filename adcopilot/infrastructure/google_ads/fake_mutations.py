@@ -158,3 +158,76 @@ class FakeGoogleAdsMutations:
                 "bidding_strategy": bidding_strategy,
             }
         )
+
+    async def create_campaign_sitelinks(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        sitelinks: list[dict[str, str]],
+    ) -> list[str]:
+        rns = [f"customers/{customer_id}/campaignAssets/{i}" for i in range(len(sitelinks))]
+        self.calls.append(
+            {
+                "method": "create_campaign_sitelinks",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "sitelinks": sitelinks,
+                "rns": rns,
+            }
+        )
+        return rns
+
+    async def create_campaign_callouts(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        callout_texts: list[str],
+    ) -> list[str]:
+        rns = [f"customers/{customer_id}/campaignAssets/{i}" for i in range(len(callout_texts))]
+        self.calls.append(
+            {
+                "method": "create_campaign_callouts",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "callout_texts": callout_texts,
+                "rns": rns,
+            }
+        )
+        return rns
+
+    async def create_campaign_structured_snippets(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        header: str,
+        values: list[str],
+    ) -> list[str]:
+        rns = [f"customers/{customer_id}/campaignAssets/0"]
+        self.calls.append(
+            {
+                "method": "create_campaign_structured_snippets",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "header": header,
+                "values": values,
+                "rns": rns,
+            }
+        )
+        return rns
+
+    async def remove_campaign_assets(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_asset_resource_names: list[str],
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "remove_campaign_assets",
+                "customer_id": customer_id,
+                "campaign_asset_resource_names": campaign_asset_resource_names,
+            }
+        )

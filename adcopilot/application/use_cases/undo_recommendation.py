@@ -208,4 +208,18 @@ class UndoRecommendationUseCase:
                 "action": "budget_restored",
             }
 
+        if kind in (
+            RecommendationKind.ADD_SITELINKS,
+            RecommendationKind.ADD_CALLOUTS,
+            RecommendationKind.ADD_STRUCTURED_SNIPPETS,
+        ):
+            ca_rns: list[str] = list(payload.get("campaign_asset_resource_names", []))
+            if ca_rns:
+                await self._mutations.remove_campaign_assets(
+                    refresh_token=refresh_token,
+                    customer_id=customer_id,
+                    campaign_asset_resource_names=ca_rns,
+                )
+            return {"campaign_asset_resource_names": ca_rns, "action": "extensions_removed"}
+
         raise ValueError(f"No undo logic for {kind.value}")

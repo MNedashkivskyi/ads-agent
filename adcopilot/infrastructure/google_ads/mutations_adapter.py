@@ -372,3 +372,146 @@ class GoogleAdsMutationsAdapter:
             raise
         except Exception as exc:
             raise _wrap_mutation_exc("set_campaign_bidding_strategy", exc) from exc
+
+    async def create_campaign_sitelinks(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        sitelinks: list[dict[str, str]],
+    ) -> list[str]:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            asset_service = client.get_service("AssetService")
+            campaign_asset_service = client.get_service("CampaignAssetService")
+            campaign_rn = client.get_service("CampaignService").campaign_path(cid, campaign_id)
+
+            asset_ops = []
+            for sl in sitelinks:
+                op = client.get_type("AssetOperation")
+                a = op.create
+                a.sitelink_asset.link_text = sl.get("link_text", "")
+                a.sitelink_asset.description1 = sl.get("description1", "")
+                a.sitelink_asset.description2 = sl.get("description2", "")
+                a.final_urls.append(sl.get("final_url", "https://example.com"))
+                asset_ops.append(op)
+
+            asset_rns = [r.resource_name for r in asset_service.mutate_assets(customer_id=cid, operations=asset_ops).results]
+
+            ca_ops = []
+            for asset_rn in asset_rns:
+                op = client.get_type("CampaignAssetOperation")
+                ca = op.create
+                ca.campaign = campaign_rn
+                ca.asset = asset_rn
+                ca.field_type = client.enums.AssetFieldTypeEnum.SITELINK
+                ca_ops.append(op)
+
+            ca_rns = [r.resource_name for r in campaign_asset_service.mutate_campaign_assets(customer_id=cid, operations=ca_ops).results]
+            logger.info("sitelinks created", customer_id=customer_id, count=len(ca_rns))
+            return ca_rns
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("create_campaign_sitelinks", exc) from exc
+
+    async def create_campaign_callouts(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        callout_texts: list[str],
+    ) -> list[str]:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            asset_service = client.get_service("AssetService")
+            campaign_asset_service = client.get_service("CampaignAssetService")
+            campaign_rn = client.get_service("CampaignService").campaign_path(cid, campaign_id)
+
+            asset_ops = []
+            for text in callout_texts:
+                op = client.get_type("AssetOperation")
+                op.create.callout_asset.callout_text = text
+                asset_ops.append(op)
+
+            asset_rns = [r.resource_name for r in asset_service.mutate_assets(customer_id=cid, operations=asset_ops).results]
+
+            ca_ops = []
+            for asset_rn in asset_rns:
+                op = client.get_type("CampaignAssetOperation")
+                ca = op.create
+                ca.campaign = campaign_rn
+                ca.asset = asset_rn
+                ca.field_type = client.enums.AssetFieldTypeEnum.CALLOUT
+                ca_ops.append(op)
+
+            ca_rns = [r.resource_name for r in campaign_asset_service.mutate_campaign_assets(customer_id=cid, operations=ca_ops).results]
+            logger.info("callouts created", customer_id=customer_id, count=len(ca_rns))
+            return ca_rns
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("create_campaign_callouts", exc) from exc
+
+    async def create_campaign_structured_snippets(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        header: str,
+        values: list[str],
+    ) -> list[str]:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            asset_service = client.get_service("AssetService")
+            campaign_asset_service = client.get_service("CampaignAssetService")
+            campaign_rn = client.get_service("CampaignService").campaign_path(cid, campaign_id)
+
+            op = client.get_type("AssetOperation")
+            a = op.create
+            a.structured_snippet_asset.header = header
+            for v in values:
+                a.structured_snippet_asset.values.append(v)
+            asset_rns = [r.resource_name for r in asset_service.mutate_assets(customer_id=cid, operations=[op]).results]
+
+            ca_ops = []
+            for asset_rn in asset_rns:
+                op2 = client.get_type("CampaignAssetOperation")
+                ca = op2.create
+                ca.campaign = campaign_rn
+                ca.asset = asset_rn
+                ca.field_type = client.enums.AssetFieldTypeEnum.STRUCTURED_SNIPPET
+                ca_ops.append(op2)
+
+            ca_rns = [r.resource_name for r in campaign_asset_service.mutate_campaign_assets(customer_id=cid, operations=ca_ops).results]
+            logger.info("structured snippets created", customer_id=customer_id, count=len(ca_rns))
+            return ca_rns
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("create_campaign_structured_snippets", exc) from exc
+
+    async def remove_campaign_assets(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_asset_resource_names: list[str],
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            campaign_asset_service = client.get_service("CampaignAssetService")
+            ops = []
+            for rn in campaign_asset_resource_names:
+                op = client.get_type("CampaignAssetOperation")
+                op.remove = rn
+                ops.append(op)
+            campaign_asset_service.mutate_campaign_assets(customer_id=cid, operations=ops)
+            logger.info("campaign assets removed", customer_id=customer_id, count=len(ops))
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("remove_campaign_assets", exc) from exc
