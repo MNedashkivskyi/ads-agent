@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -96,3 +96,16 @@ class SqlRecommendationRepository:
         m = result.scalar_one_or_none()
         if m:
             m.explanation = explanation
+
+    async def list_executed_in_date_range(
+        self, start: date, end: date
+    ) -> list[Recommendation]:
+        from sqlalchemy import func as sqlfunc
+        result = await self._session.execute(
+            select(RecommendationModel).where(
+                RecommendationModel.status == RecommendationStatus.EXECUTED.value,
+                sqlfunc.date(RecommendationModel.updated_at) >= start,
+                sqlfunc.date(RecommendationModel.updated_at) <= end,
+            )
+        )
+        return [_model_to_domain(m) for m in result.scalars().all()]

@@ -1935,3 +1935,76 @@ def check_remarketing_campaign_eligibility_task() -> dict[str, object]:
         }
 
     return asyncio.run(_run())  # type: ignore[return-value]
+
+
+@celery_app.task(
+    max_retries=3,
+    default_retry_delay=300,
+    autoretry_for=(Exception,),
+    name="adcopilot.interfaces.worker.tasks.compare_recommendation_performance_task",
+)
+def compare_recommendation_performance_task() -> dict[str, object]:
+    """Daily task: compare executed recommendations against 7-day and 14-day baselines."""
+    import asyncio
+    from adcopilot.config import get_settings
+
+    settings = get_settings()
+
+    async def _run() -> dict[str, object]:
+        from datetime import UTC, datetime
+
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+        from adcopilot.application.use_cases.compare_recommendation_performance import (
+            CompareRecommendationPerformanceUseCase,
+        )
+        from adcopilot.infrastructure.db.repositories.performance_baseline_repository import (
+            SqlPerformanceBaselineRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.performance_comparison_repository import (
+            SqlPerformanceComparisonRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+            SqlRecommendationRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.snapshot_repository import (
+            SqlSnapshotRepository,
+        )
+
+        engine = create_async_engine(settings.DATABASE_URL)
+        try:
+            async with AsyncSession(engine) as session:
+                rec_repo = SqlRecommendationRepository(session)
+                baseline_repo = SqlPerformanceBaselineRepository(session)
+                comparison_repo = SqlPerformanceComparisonRepository(session)
+                snapshot_repo = SqlSnapshotRepository(session)
+
+                async def _fetch_snapshot(account_id: str, entity_type: str, entity_id: int) -> dict | None:
+                    from datetime import date
+                    today = date.today()
+                    from adcopilot.domain.entities import AccountId
+                    campaigns = await snapshot_repo.get_campaigns(AccountId(account_id), today)
+                    if entity_type == "campaign":
+                        for c in campaigns:
+                            if c.campaign_id == entity_id:
+                                return {
+                                    "cost_micros": c.cost_micros,
+                                    "clicks": c.clicks,
+                                    "impressions": c.impressions,
+                                    "conversions": c.conversions,
+                                }
+                    return None
+
+                use_case = CompareRecommendationPerformanceUseCase(
+                    rec_repo=rec_repo,
+                    baseline_repo=baseline_repo,
+                    comparison_repo=comparison_repo,
+                    snapshot_fetcher=_fetch_snapshot,
+                )
+                result = await use_case.run(now=datetime.now(UTC))
+                await session.commit()
+                return result
+        finally:
+            await engine.dispose()
+
+    return asyncio.run(_run())  # type: ignore[return-value]
