@@ -21,6 +21,7 @@ from adcopilot.application.ports.launch_repositories import (
     CampaignBriefRepo,
     CampaignProposalRepo,
 )
+from adcopilot.application.detection.validation import LandingPageCheckResult as DetectionLPResult, ValidationContext
 from adcopilot.domain.exceptions import LLMError
 from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
 from adcopilot.domain.launch.entities import CampaignBrief, CampaignProposal, LaunchStatus
@@ -173,9 +174,13 @@ class GenerateCampaignProposalUseCase:
                 brand = None
                 logger.warning("brand_campaign_generation_failed", brief_id=brief.id)
 
-        # Assemble and validate
+        # Assemble
         proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions, brand)
-        errors = validate_proposal(proposal, brief)
+
+        # Build validation context with landing page check
+        lp_ctx = await self._build_validation_context(proposal)
+        errors_result = validate_proposal(proposal, brief, lp_ctx)
+        errors = errors_result.errors
 
         if not errors:
             return proposal
@@ -215,7 +220,8 @@ class GenerateCampaignProposalUseCase:
                 ad_copies.append(copy)
 
         proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions)
-        errors2 = validate_proposal(proposal, brief)
+        errors2_result = validate_proposal(proposal, brief, lp_ctx)
+        errors2 = errors2_result.errors
 
         if errors2:
             raise LLMError(
@@ -224,3 +230,34 @@ class GenerateCampaignProposalUseCase:
             )
 
         return proposal
+
+    async def _build_validation_context(self, proposal: CampaignProposal) -> ValidationContext:
+        """Probe landing page URLs and build a ValidationContext with the results."""
+        from adcopilot.infrastructure.landing_page.checker import LandingPageChecker, LandingPageCheckResult as InfraLPResult
+
+        urls: set[str] = set()
+        for ag in proposal.ad_groups:
+            for ad in ag.ads:
+                if ad.final_url:
+                    urls.add(ad.final_url)
+
+        lp_results: dict[str, DetectionLPResult] = {}
+        checker = LandingPageChecker()
+        for url in urls:
+            try:
+                infra_result: InfraLPResult = await checker.check(url)
+                lp_results[url] = DetectionLPResult(
+                    url=url,
+                    reachable=infra_result.reachable,
+                    https=infra_result.https,
+                    load_time_seconds=infra_result.load_time_seconds,
+                    language_detected=infra_result.language_detected,
+                    error_message=infra_result.error_message,
+                    page_title=infra_result.page_title,
+                    h1_text=infra_result.h1_text,
+                    body_text_sample=infra_result.body_text_sample,
+                )
+            except Exception:
+                logger.warning("landing_page_check_failed_skipping", url=url)
+
+        return ValidationContext(landing_page_results=lp_results)
