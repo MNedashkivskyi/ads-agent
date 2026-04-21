@@ -1067,6 +1067,20 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
                     parse_mode="Markdown",
                 )
 
+            # Send remarketing tag guide for GROWTH-tier accounts
+            try:
+                from adcopilot.domain.launch.budget_tier import classify_budget_tier, BudgetTier as _BT
+                from adcopilot.infrastructure.telegram.remarketing_guide import get_remarketing_guide
+                _brief_tier = classify_budget_tier(brief.monthly_budget_pln)
+                if _brief_tier == _BT.GROWTH:
+                    await bot.send_message(
+                        chat_id=telegram_chat_id,
+                        text=get_remarketing_guide(),
+                        parse_mode="MarkdownV2",
+                    )
+            except Exception:
+                logger.warning("remarketing_guide_send_failed", brief_id=brief_id)
+
             _tracking_warning = (
                 "\n\n⚠️ No conversion tracking detected\\. Your campaign will start with "
                 "MAXIMIZE\\_CLICKS bidding\\. Set up tracking above — once active, "

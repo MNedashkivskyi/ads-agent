@@ -134,3 +134,10 @@ class GoogleAdsQueriesAdapter:
         return await queries.query_sitelink_performance(
             refresh_token, customer_id, snapshot_date, self._settings
         )
+
+    async def query_remarketing_lists(
+        self, refresh_token: str, customer_id: str
+    ) -> list:
+        return await queries.query_remarketing_lists(
+            refresh_token, customer_id, self._settings
+        )

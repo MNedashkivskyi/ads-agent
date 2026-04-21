@@ -23,6 +23,7 @@ from adcopilot.domain.snapshot import (
     HourPerformanceSnapshot,
     KeywordSnapshot,
     NegativeKeywordSnapshot,
+    RemarketingListInfo,
     SearchTermSnapshot,
     SitelinkPerformanceSnapshot,
     SnapshotId,
@@ -886,6 +887,50 @@ async def query_audience_performance(
                         clicks=m.clicks,
                         cost_micros=m.cost_micros,
                         conversions=m.conversions,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
+async def query_remarketing_lists(
+    refresh_token: str,
+    customer_id: str,
+    settings: Settings,
+) -> list[RemarketingListInfo]:
+    """Fetch user list (remarketing audience) info for an account.
+
+    Returns all OPEN lists — used to check tag status and RLSA eligibility.
+    member_count is -1 when the list is under the minimum size threshold.
+    """
+    cid = customer_id.replace("-", "")
+    query = """
+        SELECT
+            user_list.id,
+            user_list.name,
+            user_list.membership_status,
+            user_list.size_for_search
+        FROM user_list
+        WHERE user_list.membership_status = 'OPEN'
+        ORDER BY user_list.id
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[RemarketingListInfo] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                ul = row.user_list
+                results.append(
+                    RemarketingListInfo(
+                        list_id=ul.id,
+                        name=ul.name,
+                        member_count=ul.size_for_search if ul.size_for_search >= 0 else -1,
+                        status=ul.membership_status.name,
                     )
                 )
         return results

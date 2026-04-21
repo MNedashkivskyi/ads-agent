@@ -15,6 +15,7 @@ from adcopilot.domain.snapshot import (
     HourPerformanceSnapshot,
     KeywordSnapshot,
     NegativeKeywordSnapshot,
+    RemarketingListInfo,
     SearchTermSnapshot,
     SitelinkPerformanceSnapshot,
 )
@@ -90,3 +91,7 @@ class GoogleAdsClientPort(Protocol):
     async def query_sitelink_performance(
         self, refresh_token: str, customer_id: str, snapshot_date: date
     ) -> list[SitelinkPerformanceSnapshot]: ...
+
+    async def query_remarketing_lists(
+        self, refresh_token: str, customer_id: str
+    ) -> list[RemarketingListInfo]: ...
