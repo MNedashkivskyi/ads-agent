@@ -32,6 +32,7 @@ from adcopilot.config import Settings
 from adcopilot.domain.audit_log import AuditLog, AuditLogId
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
+from adcopilot.domain.launch.audience_signals import AudienceSignal
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -548,6 +549,71 @@ class CampaignWriter:
             raise _wrap_exc("create_extensions", exc) from exc
 
     # ------------------------------------------------------------------
+    # Step 2.5 — Observation-mode audience signals
+    # ------------------------------------------------------------------
+
+    async def create_audience_signals(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        ad_group_resource_names: list[str],
+        audience_signals: list[AudienceSignal],
+    ) -> list[str]:
+        """Add in-market/affinity audiences in OBSERVATION mode to ad groups.
+
+        Observation mode does not restrict reach — it layers audience data so
+        Smart Bidding can learn which segments convert best.
+        Returns AdGroupCriterion resource names for rollback.
+        """
+        if not ad_group_resource_names or not audience_signals:
+            return []
+        try:
+            client = self._build_client(refresh_token)
+            cid = self._cid(customer_id)
+            agc_service = client.get_service("AdGroupCriterionService")
+
+            ops: list[Any] = []
+            for ag_rn in ad_group_resource_names:
+                for signal in audience_signals:
+                    op = client.get_type("AdGroupCriterionOperation")
+                    criterion = op.create
+                    criterion.ad_group = ag_rn
+                    criterion.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
+                    # Observation mode — does not restrict targeting
+                    criterion.negative = False
+                    criterion.bid_modifier = 1.0
+                    criterion.user_interest.user_interest_category = (
+                        f"userinterests/{signal.segment_id}"
+                    )
+                    ops.append(op)
+
+            response = agc_service.mutate_ad_group_criteria(
+                customer_id=cid, operations=ops
+            )
+            resource_names = [r.resource_name for r in response.results]
+
+            logger.info(
+                "audience_signals_created",
+                customer_id=customer_id,
+                ad_groups=len(ad_group_resource_names),
+                signals=len(audience_signals),
+            )
+            await self._log(
+                "AUDIENCE_SIGNALS_CREATE",
+                {
+                    "ad_group_resource_names": ad_group_resource_names,
+                    "audience_segment_ids": [s.segment_id for s in audience_signals],
+                    "criterion_resource_names": resource_names,
+                },
+            )
+            return resource_names
+
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_exc("create_audience_signals", exc) from exc
+
+    # ------------------------------------------------------------------
     # Enable (second confirmation)
     # ------------------------------------------------------------------
 
@@ -651,6 +717,19 @@ class CampaignWriter:
                     ag_service.mutate_ad_groups(customer_id=cid, operations=ops)
                 except Exception as exc:
                     errors.append(f"ad_groups: {exc}")
+
+            # Audience criteria (AdGroupCriterion)
+            if resources.audience_resource_names:
+                try:
+                    agc_service = client.get_service("AdGroupCriterionService")
+                    ops = []
+                    for rn in resources.audience_resource_names:
+                        op = client.get_type("AdGroupCriterionOperation")
+                        op.remove = rn
+                        ops.append(op)
+                    agc_service.mutate_ad_group_criteria(customer_id=cid, operations=ops)
+                except Exception as exc:
+                    errors.append(f"audiences: {exc}")
 
             # Extension assets (CampaignAsset links)
             if resources.extension_resource_names:

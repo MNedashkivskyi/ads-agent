@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
+from adcopilot.domain.launch.audience_signals import AudienceSignal
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -30,10 +31,13 @@ class CreatedCampaignResources:
     ad_resource_names: list[str]
     negative_resource_names: list[str]
     extension_resource_names: list[str] = None  # type: ignore[assignment]
+    audience_resource_names: list[str] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         if self.extension_resource_names is None:
             object.__setattr__(self, "extension_resource_names", [])
+        if self.audience_resource_names is None:
+            object.__setattr__(self, "audience_resource_names", [])
 
 
 class CampaignWriterPort(Protocol):
@@ -101,6 +105,16 @@ class CampaignWriterPort(Protocol):
         snippets: list[StructuredSnippetProposal],
     ) -> list[str]:
         """Create campaign-level extension assets; return resource_names."""
+        ...
+
+    async def create_audience_signals(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        ad_group_resource_names: list[str],
+        audience_signals: list[AudienceSignal],
+    ) -> list[str]:
+        """Add observation-mode audience criteria to ad groups; return resource_names."""
         ...
 
     async def enable_campaign(
