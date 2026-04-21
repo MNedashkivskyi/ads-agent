@@ -40,8 +40,11 @@ __all__ = [
     "LaunchAdGroupModel",
     "LaunchAdModel",
     "LaunchBriefModel",
+    "LaunchCalloutModel",
     "LaunchKeywordModel",
     "LaunchProposalModel",
+    "LaunchSitelinkModel",
+    "LaunchStructuredSnippetModel",
     "NegativeKeywordSnapshotModel",
     "OAuthCredentialsModel",
     "RecommendationModel",
@@ -747,6 +750,64 @@ class LaunchAdModel(Base):
     final_url: Mapped[str] = mapped_column(Text, nullable=False)
     path1: Mapped[str] = mapped_column(String(15), nullable=False, server_default="")
     path2: Mapped[str] = mapped_column(String(15), nullable=False, server_default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class LaunchSitelinkModel(Base):
+    """Persists a ``SitelinkProposal`` belonging to a ``LaunchProposalModel``."""
+
+    __tablename__ = "launch_sitelinks"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("launch_proposals.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    link_text: Mapped[str] = mapped_column(String(25), nullable=False)
+    description1: Mapped[str] = mapped_column(String(35), nullable=False)
+    description2: Mapped[str] = mapped_column(String(35), nullable=False)
+    final_url: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class LaunchCalloutModel(Base):
+    """Persists a ``CalloutProposal`` belonging to a ``LaunchProposalModel``."""
+
+    __tablename__ = "launch_callouts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("launch_proposals.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    text: Mapped[str] = mapped_column(String(25), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class LaunchStructuredSnippetModel(Base):
+    """Persists a ``StructuredSnippetProposal`` belonging to a ``LaunchProposalModel``."""
+
+    __tablename__ = "launch_structured_snippets"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    proposal_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("launch_proposals.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    header: Mapped[str] = mapped_column(String(100), nullable=False)
+    values: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

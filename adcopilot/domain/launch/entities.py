@@ -112,6 +112,46 @@ class AdGroupProposal:
     ads: list[AdProposal]
 
 
+# ---------------------------------------------------------------------------
+# Extension value objects
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SitelinkProposal:
+    """A proposed sitelink extension."""
+
+    link_text: str
+    """≤25 characters."""
+
+    description1: str
+    """≤35 characters."""
+
+    description2: str
+    """≤35 characters."""
+
+    final_url: str
+
+
+@dataclass(frozen=True)
+class CalloutProposal:
+    """A proposed callout extension."""
+
+    text: str
+    """≤25 characters."""
+
+
+@dataclass(frozen=True)
+class StructuredSnippetProposal:
+    """A proposed structured snippet extension."""
+
+    header: str
+    """e.g. "Services", "Types", "Brands"."""
+
+    values: list[str]
+    """3–10 values, each ≤25 characters."""
+
+
 @dataclass(frozen=True)
 class CampaignProposal:
     """The full campaign structure proposed by the AI for a given brief.
@@ -135,6 +175,15 @@ class CampaignProposal:
     ad_groups: list[AdGroupProposal]
     negative_keywords: list[str]
     """Campaign-level negative keywords (broad match by default)."""
+
+    sitelinks: list[SitelinkProposal]
+    """2–4 sitelink extensions."""
+
+    callouts: list[CalloutProposal]
+    """4–8 callout extensions."""
+
+    structured_snippets: list[StructuredSnippetProposal]
+    """1–2 structured snippet extensions."""
 
     estimated_cpc_range: tuple[int, int]
     """(min_micros, max_micros) estimated cost-per-click range across all keywords."""

@@ -10,17 +10,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
+    CalloutProposal,
     CampaignBriefId,
     CampaignProposal,
     CampaignProposalId,
     KeywordProposal,
     MatchType,
+    SitelinkProposal,
+    StructuredSnippetProposal,
 )
 from adcopilot.infrastructure.db.models import (
     LaunchAdGroupModel,
     LaunchAdModel,
+    LaunchCalloutModel,
     LaunchKeywordModel,
     LaunchProposalModel,
+    LaunchSitelinkModel,
+    LaunchStructuredSnippetModel,
 )
 
 # ---------------------------------------------------------------------------
@@ -33,6 +39,9 @@ def _model_to_domain(
     ad_groups: list[LaunchAdGroupModel],
     keywords_by_group: dict[uuid.UUID, list[LaunchKeywordModel]],
     ads_by_group: dict[uuid.UUID, list[LaunchAdModel]],
+    sitelinks: list[LaunchSitelinkModel] | None = None,
+    callouts: list[LaunchCalloutModel] | None = None,
+    snippets: list[LaunchStructuredSnippetModel] | None = None,
 ) -> CampaignProposal:
     domain_ad_groups: list[AdGroupProposal] = []
 
@@ -63,6 +72,21 @@ def _model_to_domain(
             AdGroupProposal(name=ag.name, keywords=domain_kws, ads=domain_ads)
         )
 
+    domain_sitelinks = [
+        SitelinkProposal(
+            link_text=sl.link_text,
+            description1=sl.description1,
+            description2=sl.description2,
+            final_url=sl.final_url,
+        )
+        for sl in (sitelinks or [])
+    ]
+    domain_callouts = [CalloutProposal(text=co.text) for co in (callouts or [])]
+    domain_snippets = [
+        StructuredSnippetProposal(header=sn.header, values=list(sn.values))
+        for sn in (snippets or [])
+    ]
+
     return CampaignProposal(
         id=CampaignProposalId(str(proposal.id)),
         brief_id=CampaignBriefId(str(proposal.brief_id)),
@@ -72,6 +96,9 @@ def _model_to_domain(
         bidding_strategy=proposal.bidding_strategy,
         ad_groups=domain_ad_groups,
         negative_keywords=list(proposal.negative_keywords),
+        sitelinks=domain_sitelinks,
+        callouts=domain_callouts,
+        structured_snippets=domain_snippets,
         estimated_cpc_range=(
             proposal.estimated_cpc_min_micros,
             proposal.estimated_cpc_max_micros,
@@ -169,6 +196,38 @@ class SqlCampaignProposalRepository:
                     )
                 )
 
+        # Insert extension children
+        for sl in proposal.sitelinks:
+            self._session.add(
+                LaunchSitelinkModel(
+                    id=uuid.uuid4(),
+                    proposal_id=proposal_id,
+                    link_text=sl.link_text,
+                    description1=sl.description1,
+                    description2=sl.description2,
+                    final_url=sl.final_url,
+                )
+            )
+
+        for co in proposal.callouts:
+            self._session.add(
+                LaunchCalloutModel(
+                    id=uuid.uuid4(),
+                    proposal_id=proposal_id,
+                    text=co.text,
+                )
+            )
+
+        for sn in proposal.structured_snippets:
+            self._session.add(
+                LaunchStructuredSnippetModel(
+                    id=uuid.uuid4(),
+                    proposal_id=proposal_id,
+                    header=sn.header,
+                    values=list(sn.values),
+                )
+            )
+
         await self._session.flush()
         return proposal
 
@@ -207,4 +266,22 @@ class SqlCampaignProposalRepository:
         for ad in ads:
             ads_by_group.setdefault(ad.ad_group_id, []).append(ad)
 
-        return _model_to_domain(proposal, ad_groups, kws_by_group, ads_by_group)
+        # Extensions
+        sl_result = await self._session.execute(
+            select(LaunchSitelinkModel).where(LaunchSitelinkModel.proposal_id == proposal.id)
+        )
+        sitelinks = list(sl_result.scalars().all())
+
+        co_result = await self._session.execute(
+            select(LaunchCalloutModel).where(LaunchCalloutModel.proposal_id == proposal.id)
+        )
+        callouts = list(co_result.scalars().all())
+
+        sn_result = await self._session.execute(
+            select(LaunchStructuredSnippetModel).where(
+                LaunchStructuredSnippetModel.proposal_id == proposal.id
+            )
+        )
+        snippets = list(sn_result.scalars().all())
+
+        return _model_to_domain(proposal, ad_groups, kws_by_group, ads_by_group, sitelinks, callouts, snippets)

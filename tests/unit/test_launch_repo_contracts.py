@@ -153,6 +153,9 @@ def _proposal(
         bidding_strategy="TARGET_CPA",
         ad_groups=[ag],
         negative_keywords=["free"],
+        sitelinks=[],
+        callouts=[],
+        structured_snippets=[],
         estimated_cpc_range=(800_000, 1_500_000),
         generated_at=generated_at,
     )

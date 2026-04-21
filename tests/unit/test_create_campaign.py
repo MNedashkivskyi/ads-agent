@@ -293,6 +293,9 @@ def _make_proposal(brief: CampaignBrief) -> CampaignProposal:
         bidding_strategy="MAXIMIZE_CONVERSIONS",
         ad_groups=[ag1, ag2],
         negative_keywords=["free haircut", "diy hair"],
+        sitelinks=[],
+        callouts=[],
+        structured_snippets=[],
         estimated_cpc_range=(1_000_000, 2_500_000),
         generated_at=datetime.now(UTC),
     )
@@ -524,6 +527,9 @@ class TestCreateCampaignEmptyNegatives:
             bidding_strategy="MAXIMIZE_CONVERSIONS",
             ad_groups=[ag1],
             negative_keywords=[],  # empty
+            sitelinks=[],
+            callouts=[],
+            structured_snippets=[],
             estimated_cpc_range=(1_000_000, 2_000_000),
             generated_at=datetime.now(UTC),
         )

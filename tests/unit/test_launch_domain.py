@@ -79,6 +79,9 @@ def make_proposal(**kwargs: object) -> CampaignProposal:
         "bidding_strategy": "TARGET_CPA",
         "ad_groups": [make_ad_group()],
         "negative_keywords": ["free", "cheap"],
+        "sitelinks": [],
+        "callouts": [],
+        "structured_snippets": [],
         "estimated_cpc_range": (800_000, 2_000_000),
         "generated_at": _NOW,
     }

@@ -111,6 +111,9 @@ def _make_test_proposal() -> CampaignProposal:
         bidding_strategy="MAXIMIZE_CONVERSIONS",
         ad_groups=[ag1],
         negative_keywords=["free", "cheap"],
+        sitelinks=[],
+        callouts=[],
+        structured_snippets=[],
         estimated_cpc_range=(500_000, 2_000_000),
         generated_at=datetime.now(UTC),
     )
