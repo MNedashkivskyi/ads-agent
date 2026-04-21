@@ -31,6 +31,7 @@ _EXECUTORS: dict[RecommendationKind, RecommendationExecutor] | None = None
 def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
     from adcopilot.application.executors.add_callouts import AddCalloutsExecutor
     from adcopilot.application.executors.add_negative_keyword import AddNegativeKeywordExecutor
+    from adcopilot.application.executors.device_bid_adjustment import DeviceBidAdjustmentExecutor
     from adcopilot.application.executors.add_sitelinks import AddSitelinksExecutor
     from adcopilot.application.executors.add_structured_snippets import AddStructuredSnippetsExecutor
     from adcopilot.application.executors.adjust_bidding_strategy import (
@@ -44,6 +45,7 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
 
     execs: list[RecommendationExecutor] = [
         PauseKeywordExecutor(),
+        DeviceBidAdjustmentExecutor(),
         PauseAdExecutor(),
         AddNegativeKeywordExecutor(),
         IncreaseBudgetExecutor(),

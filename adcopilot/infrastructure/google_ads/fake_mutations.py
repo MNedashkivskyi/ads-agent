@@ -231,3 +231,33 @@ class FakeGoogleAdsMutations:
                 "campaign_asset_resource_names": campaign_asset_resource_names,
             }
         )
+
+    async def set_device_bid_modifier(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        bid_modifier: float,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "set_device_bid_modifier",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "bid_modifier": bid_modifier,
+            }
+        )
+
+    async def remove_device_bid_modifier(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "remove_device_bid_modifier",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+            }
+        )
