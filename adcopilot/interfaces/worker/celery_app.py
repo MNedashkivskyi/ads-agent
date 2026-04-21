@@ -59,6 +59,11 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.check_bidding_upgrade_task",
                     "schedule": crontab(hour=4, minute=0, day_of_week="monday"),
                 },
+                "weekly-rlsa-check": {
+                    # Tuesday 5:00 AM UTC — check RLSA eligibility for GROWTH accounts.
+                    "task": "adcopilot.interfaces.worker.tasks.check_rlsa_eligibility_task",
+                    "schedule": crontab(hour=5, minute=0, day_of_week="tuesday"),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},

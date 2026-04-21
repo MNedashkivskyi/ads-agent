@@ -1770,3 +1770,80 @@ def check_bidding_upgrade_task() -> dict[str, object]:
         }
 
     return asyncio.run(_run())  # type: ignore[return-value]
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.check_rlsa_eligibility_task")  # type: ignore[untyped-decorator]
+def check_rlsa_eligibility_task() -> dict[str, object]:
+    """Weekly task: add RLSA observation audiences to GROWTH-tier accounts with eligible lists."""
+    import asyncio
+
+    from adcopilot.config import get_settings
+
+    settings = get_settings()
+
+    async def _run() -> dict[str, object]:
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+        from adcopilot.application.use_cases.add_rlsa_audiences import AddRlsaAudiencesUseCase
+        from adcopilot.domain.entities import AccountId
+        from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
+        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+            SqlGoogleAdsAccountRepository,
+        )
+        from adcopilot.infrastructure.google_ads.campaign_writer import CampaignWriter
+        from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+
+        engine = create_async_engine(settings.DATABASE_URL)
+        total_added = 0
+        accounts_checked = 0
+        accounts_errored = 0
+        try:
+            async with AsyncSession(engine) as session:
+                account_repo = SqlGoogleAdsAccountRepository(session)
+                accounts = await account_repo.list_active()
+
+            queries_adapter = GoogleAdsQueriesAdapter(settings)
+            writer = CampaignWriter(settings)
+
+            for account in accounts:
+                try:
+                    # Only run for GROWTH-tier accounts
+                    from decimal import Decimal
+                    budget = getattr(account, "monthly_budget_pln", None)
+                    if budget is None:
+                        continue
+                    if classify_budget_tier(Decimal(str(budget))) != BudgetTier.GROWTH:
+                        continue
+
+                    use_case = AddRlsaAudiencesUseCase(
+                        queries_adapter=queries_adapter,
+                        campaign_writer=writer,
+                    )
+                    added = await use_case.execute(
+                        account_id=AccountId(str(account.id)),
+                        refresh_token=account.refresh_token,
+                        customer_id=str(account.google_ads_customer_id),
+                    )
+                    total_added += added
+                    accounts_checked += 1
+                except Exception:
+                    logger.exception(
+                        "rlsa_eligibility_check.failed", account_id=str(account.id)
+                    )
+                    accounts_errored += 1
+        finally:
+            await engine.dispose()
+
+        logger.info(
+            "rlsa_eligibility_check.summary",
+            accounts_checked=accounts_checked,
+            accounts_errored=accounts_errored,
+            criteria_created=total_added,
+        )
+        return {
+            "accounts_checked": accounts_checked,
+            "accounts_errored": accounts_errored,
+            "criteria_created": total_added,
+        }
+
+    return asyncio.run(_run())  # type: ignore[return-value]
