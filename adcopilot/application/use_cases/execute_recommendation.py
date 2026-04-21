@@ -80,6 +80,7 @@ class ExecuteRecommendationUseCase:
         credentials_repo: OAuthCredentialsRepository,
         mutations: GoogleAdsMutationsPort,
         executors: dict[RecommendationKind, RecommendationExecutor] | None = None,
+        baseline_repo: Any | None = None,
     ) -> None:
         self._rec_repo = rec_repo
         self._audit_log_repo = audit_log_repo
@@ -87,6 +88,7 @@ class ExecuteRecommendationUseCase:
         self._credentials_repo = credentials_repo
         self._mutations = mutations
         self._executors = executors if executors is not None else _default_executors()
+        self._baseline_repo = baseline_repo
 
     async def execute(self, rec_id: RecommendationId) -> dict[str, Any]:
         with sentry_sdk.start_transaction(
@@ -137,6 +139,13 @@ class ExecuteRecommendationUseCase:
 
         await self._rec_repo.update_status(rec_id, RecommendationStatus.EXECUTED)
 
+        # Best-effort: capture pre-execution performance baseline from evidence
+        if self._baseline_repo is not None:
+            try:
+                await self._capture_baseline(rec, result)
+            except Exception:
+                logger.warning("baseline capture failed (best-effort)", rec_id=rec_id)
+
         log = AuditLog.create_execute(
             recommendation_id=rec_id,
             account_id=rec.account_id,
@@ -153,3 +162,35 @@ class ExecuteRecommendationUseCase:
             account_id=rec.account_id,
         )
         return result
+
+    async def _capture_baseline(self, rec: Any, execution_result: dict[str, Any]) -> None:
+        from adcopilot.domain.performance_tracking import PerformanceBaseline
+
+        evidence = rec.evidence or {}
+        entity_id = int(
+            execution_result.get("campaign_id")
+            or execution_result.get("ad_group_id")
+            or evidence.get("campaign_id", 0)
+            or 0
+        )
+        if not entity_id:
+            return
+
+        entity_type = "campaign"
+        if "ad_group_id" in execution_result and "campaign_id" not in execution_result:
+            entity_type = "ad_group"
+
+        baseline = PerformanceBaseline.create(
+            recommendation_id=rec.id,
+            account_id=rec.account_id,
+            entity_type=entity_type,  # type: ignore[arg-type]
+            entity_id=entity_id,
+            baseline_date=datetime.now(UTC).date(),
+            cost_micros=int(evidence.get("cost_micros", 0)),
+            clicks=int(evidence.get("clicks", 0)),
+            impressions=int(evidence.get("impressions", 0)),
+            conversions=float(evidence.get("conversions", 0.0)),
+            conv_value=float(evidence.get("conv_value", 0.0)),
+            captured_at=datetime.now(UTC),
+        )
+        await self._baseline_repo.save(baseline)
