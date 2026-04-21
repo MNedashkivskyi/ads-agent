@@ -140,7 +140,10 @@ class TestDeduplication:
             kind=RecommendationKind.ADJUST_BIDDING_STRATEGY,
             severity=RecommendationSeverity.HIGH,
             status=RecommendationStatus.PENDING,
+            target={"campaign_id": 42},
             payload={"campaign_id": 42, "suggested_strategy": "MAXIMIZE_CONVERSIONS"},
+            estimated_monthly_savings_micros=0,
+            evidence={},
             created_at=datetime.now(UTC),
         )
         uc, rec_repo = _make_use_case([campaign], pending_recs=[existing_rec])
