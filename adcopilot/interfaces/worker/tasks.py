@@ -888,6 +888,7 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
             ad_rns: list[str] = []
             kw_rns: list[str] = []
             neg_rns: list[str] = []
+            ext_rns: list[str] = []
             ag_rns: list[str] = []
 
             try:
@@ -923,6 +924,15 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
                     proposal.negative_keywords,
                 )
 
+                ext_rns = await writer.create_extensions(
+                    account.customer_id,
+                    credentials.refresh_token,
+                    campaign_rn,
+                    proposal.sitelinks,
+                    proposal.callouts,
+                    proposal.structured_snippets,
+                )
+
                 # Persist campaign resource name + update status
                 updated_brief = dataclasses.replace(
                     brief,
@@ -937,7 +947,7 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
                     brief_id=brief_id,
                 )
                 # Rollback everything created so far
-                if campaign_rn or ag_rns or kw_rns or ad_rns or neg_rns:
+                if campaign_rn or ag_rns or kw_rns or ad_rns or neg_rns or ext_rns:
                     resources = CreatedCampaignResources(
                         campaign_resource_name=campaign_rn or "",
                         budget_resource_name=budget_rn if "budget_rn" in dir() else "",
@@ -945,6 +955,7 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
                         keyword_resource_names=kw_rns,
                         ad_resource_names=ad_rns,
                         negative_resource_names=neg_rns,
+                        extension_resource_names=ext_rns,
                     )
                     try:
                         await writer.delete_draft_campaign(

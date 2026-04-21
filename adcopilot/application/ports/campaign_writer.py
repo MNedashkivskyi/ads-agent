@@ -8,8 +8,11 @@ from typing import Protocol
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
+    CalloutProposal,
     CampaignProposal,
     KeywordProposal,
+    SitelinkProposal,
+    StructuredSnippetProposal,
 )
 
 
@@ -26,6 +29,11 @@ class CreatedCampaignResources:
     keyword_resource_names: list[str]
     ad_resource_names: list[str]
     negative_resource_names: list[str]
+    extension_resource_names: list[str] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.extension_resource_names is None:
+            object.__setattr__(self, "extension_resource_names", [])
 
 
 class CampaignWriterPort(Protocol):
@@ -81,6 +89,18 @@ class CampaignWriterPort(Protocol):
         negatives: list[str],
     ) -> list[str]:
         """Create campaign-level negative keywords; return resource_names."""
+        ...
+
+    async def create_extensions(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        campaign_resource_name: str,
+        sitelinks: list[SitelinkProposal],
+        callouts: list[CalloutProposal],
+        snippets: list[StructuredSnippetProposal],
+    ) -> list[str]:
+        """Create campaign-level extension assets; return resource_names."""
         ...
 
     async def enable_campaign(
