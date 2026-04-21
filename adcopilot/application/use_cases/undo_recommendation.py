@@ -222,6 +222,17 @@ class UndoRecommendationUseCase:
                 )
             return {"campaign_asset_resource_names": ca_rns, "action": "extensions_removed"}
 
+        if kind == RecommendationKind.RELAX_TARGET_CPA:
+            campaign_id = int(payload["campaign_id"])
+            original_cpa = int(payload["original_target_cpa_micros"])
+            await self._mutations.set_target_cpa(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                target_cpa_micros=original_cpa,
+            )
+            return {"campaign_id": campaign_id, "restored_target_cpa_micros": original_cpa, "action": "target_cpa_restored"}
+
         if kind == RecommendationKind.REALLOCATE_BUDGET:
             from_campaign_id = int(payload["from_campaign_id"])
             to_campaign_id = int(payload["to_campaign_id"])

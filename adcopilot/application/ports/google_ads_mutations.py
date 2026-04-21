@@ -170,3 +170,11 @@ class GoogleAdsMutationsPort(Protocol):
         campaign_id: int,
         hour_of_day: int,
     ) -> None: ...
+
+    async def set_target_cpa(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        target_cpa_micros: int,
+    ) -> None: ...
