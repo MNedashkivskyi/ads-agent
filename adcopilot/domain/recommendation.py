@@ -128,10 +128,7 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         RecommendationKind.UPGRADE_CONVERSION_ACTION,
         RecommendationKind.DEDUPLICATE_CONVERSIONS,
         RecommendationKind.SET_CONVERSION_VALUE,
-        # Module 7 — extension issues (informational)
-        RecommendationKind.ADD_SITELINKS,
-        RecommendationKind.ADD_CALLOUTS,
-        RecommendationKind.ADD_STRUCTURED_SNIPPETS,
+        # Module 7 — extension issues (ADD_SITELINKS/CALLOUTS/STRUCTURED_SNIPPETS are now executable)
         RecommendationKind.REFRESH_SITELINK,
     }
 )

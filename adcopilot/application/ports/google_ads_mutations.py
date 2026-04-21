@@ -82,3 +82,43 @@ class GoogleAdsMutationsPort(Protocol):
         campaign_id: int,
         bidding_strategy: str,
     ) -> None: ...
+
+    async def create_campaign_sitelinks(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        sitelinks: list[dict[str, str]],
+    ) -> list[str]:
+        """Create sitelink assets and link to campaign. Return CampaignAsset resource names."""
+        ...
+
+    async def create_campaign_callouts(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        callout_texts: list[str],
+    ) -> list[str]:
+        """Create callout assets and link to campaign. Return CampaignAsset resource names."""
+        ...
+
+    async def create_campaign_structured_snippets(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        header: str,
+        values: list[str],
+    ) -> list[str]:
+        """Create structured snippet asset and link to campaign. Return CampaignAsset resource names."""
+        ...
+
+    async def remove_campaign_assets(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_asset_resource_names: list[str],
+    ) -> None:
+        """Remove CampaignAsset links (undo for extension executors)."""
+        ...
