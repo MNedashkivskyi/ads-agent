@@ -44,6 +44,10 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from adcopilot.domain.launch.entities import CampaignBrief, CampaignProposal
+from adcopilot.domain.polish_market.negative_keywords import (
+    POLISH_STANDARD_NEGATIVES,
+    VERTICAL_NEGATIVES_PL,
+)
 
 # ---------------------------------------------------------------------------
 # Public result type
@@ -283,24 +287,24 @@ def _rule_keyword_count(
 # Standard Adept negative list that every campaign must contain at least one
 # term from each category (checked as substring matches, case-insensitive).
 # Structured as (category_label, list_of_acceptable_terms).
-_STANDARD_NEGATIVE_CATEGORIES: list[tuple[str, list[str]]] = [
-    ("free/darmowy", ["free", "darmow", "za darmo", "gratis", "koszt"]),
-    ("job/praca", ["job", "praca", "career", "kariera", "hiring", "zatrudni", "rekrutac"]),
-    ("DIY", ["diy", "sam/a ", "zrób sam", "własnoręcznie", "do it yourself"]),
-    ("tutorial/how-to", [
-        "tutorial", "poradnik", "how to", "jak zrob", "jak napraw", "how do i",
-        "step by step", "guide", "instrukcja",
-    ]),
-]
+_STANDARD_NEGATIVE_CATEGORIES: list[tuple[str, list[str]]] = POLISH_STANDARD_NEGATIVES
 
 # Vertical-specific standard negatives (at least one term per vertical block
 # must appear in the proposal's negative keyword list).
 _VERTICAL_NEGATIVES: dict[str, list[str]] = {
-    "salon": ["wig", "extension", "product", "youtube"],
-    "ecommerce": ["second hand", "used ", "crack", "pirat"],
-    "restaurant": ["recipe", "jak ugoto", "how to cook", "cooking class"],
-    "legal": ["diy legal", "legal form", "law school", "paralegal"],
-    "medical": ["home remedy", "self-diagnos", "medical school"],
+    # English detection keys → Polish term lists
+    "salon": VERTICAL_NEGATIVES_PL["salon"],
+    "ecommerce": VERTICAL_NEGATIVES_PL["ecommerce"],
+    "restaurant": VERTICAL_NEGATIVES_PL["restauracja"],
+    "legal": VERTICAL_NEGATIVES_PL["prawnik"],
+    "medical": VERTICAL_NEGATIVES_PL["lekarz"],
+    # Polish vertical keys
+    "restauracja": VERTICAL_NEGATIVES_PL["restauracja"],
+    "prawnik": VERTICAL_NEGATIVES_PL["prawnik"],
+    "lekarz": VERTICAL_NEGATIVES_PL["lekarz"],
+    "nieruchomości": VERTICAL_NEGATIVES_PL["nieruchomości"],
+    "edukacja": VERTICAL_NEGATIVES_PL["edukacja"],
+    "usługi domowe": VERTICAL_NEGATIVES_PL["usługi domowe"],
 }
 
 

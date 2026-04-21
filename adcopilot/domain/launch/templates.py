@@ -125,6 +125,8 @@ _TEMPLATES: dict[str, _Template] = {
         negatives=(
             "wigs", "hair extensions amazon", "diy hair color",
             "hair products", "youtube", "free", "tutorial",
+            # Polish
+            "peruka", "za darmo", "praca", "jak zrobić", "instrukcja", "tiktok",
         ),
     ),
     "ecommerce": _Template(
@@ -181,7 +183,11 @@ _TEMPLATES: dict[str, _Template] = {
                 ),
             ),
         ),
-        negatives=("used", "second hand", "diy", "free", "stolen", "crack"),
+        negatives=(
+            "used", "second hand", "diy", "free", "stolen", "crack",
+            # Polish
+            "używane", "za darmo", "jak zrobić", "praca", "studia", "youtube",
+        ),
     ),
     "restaurant": _Template(
         vertical="restaurant",
@@ -237,7 +243,11 @@ _TEMPLATES: dict[str, _Template] = {
                 ),
             ),
         ),
-        negatives=("recipe", "how to cook", "cooking class", "free food", "food bank"),
+        negatives=(
+            "recipe", "how to cook", "cooking class", "free food", "food bank",
+            # Polish
+            "przepis", "jak ugotować", "za darmo", "praca kucharz", "studia", "youtube",
+        ),
     ),
     "legal": _Template(
         vertical="legal",
@@ -293,7 +303,11 @@ _TEMPLATES: dict[str, _Template] = {
                 ),
             ),
         ),
-        negatives=("diy legal", "free template", "legal form", "law school", "paralegal course"),
+        negatives=(
+            "diy legal", "free template", "legal form", "law school", "paralegal course",
+            # Polish
+            "wzory pism", "za darmo", "studia prawnicze", "jak napisać umowę", "praca prawnik", "youtube",
+        ),
     ),
     "medical": _Template(
         vertical="medical",
@@ -349,7 +363,11 @@ _TEMPLATES: dict[str, _Template] = {
                 ),
             ),
         ),
-        negatives=("home remedy", "self-diagnosis", "medical school", "free medicine", "drug"),
+        negatives=(
+            "home remedy", "self-diagnosis", "medical school", "free medicine", "drug",
+            # Polish
+            "domowe sposoby", "za darmo", "studia medyczne", "jak leczyć", "praca lekarz", "youtube",
+        ),
     ),
     "generic": _Template(
         vertical="generic",
@@ -405,7 +423,11 @@ _TEMPLATES: dict[str, _Template] = {
                 ),
             ),
         ),
-        negatives=("free", "diy", "tutorial", "youtube", "how to"),
+        negatives=(
+            "free", "diy", "tutorial", "youtube", "how to",
+            # Polish
+            "za darmo", "jak zrobić", "praca", "studia", "instrukcja", "tiktok",
+        ),
     ),
 }
 
