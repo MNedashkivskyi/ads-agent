@@ -484,8 +484,20 @@ _VERTICAL_KEYWORDS: dict[str, list[str]] = {
 }
 
 
+# Maps Polish vertical names to their canonical template key
+_POLISH_VERTICAL_ALIASES: dict[str, str] = {
+    "restauracja": "restaurant",
+    "prawnik": "legal",
+    "lekarz": "medical",
+}
+
+
 def detect_vertical_from_description(business_description: str) -> str:
-    """Return the best-matching vertical name for *business_description*."""
+    """Return the best-matching vertical name for *business_description*.
+
+    Checks both English and Polish keywords. Returns a canonical vertical key
+    (one of the _TEMPLATES keys or a Polish vertical name for new Polish verticals).
+    """
     desc = business_description.lower()
     scores: dict[str, int] = {v: 0 for v in _VERTICAL_KEYWORDS}
     for vertical, keywords in _VERTICAL_KEYWORDS.items():
@@ -493,7 +505,10 @@ def detect_vertical_from_description(business_description: str) -> str:
             if kw in desc:
                 scores[vertical] += 1
     best = max(scores, key=lambda v: scores[v])
-    return best if scores[best] > 0 else "generic"
+    if scores[best] == 0:
+        return "generic"
+    # Normalize Polish aliases to canonical template keys where applicable
+    return _POLISH_VERTICAL_ALIASES.get(best, best)
 
 
 # ---------------------------------------------------------------------------
