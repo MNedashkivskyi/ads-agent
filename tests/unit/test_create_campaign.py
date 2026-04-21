@@ -203,6 +203,29 @@ class FakeCampaignWriter:
         )
         return rns
 
+    async def create_extensions(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        campaign_resource_name: str,
+        sitelinks: list,
+        callouts: list,
+        snippets: list,
+    ) -> list[str]:
+        self._maybe_fail("create_extensions")
+        total = len(sitelinks) + len(callouts) + len(snippets)
+        rns = [self._next_rn("campaignAssets") for _ in range(total)]
+        self.calls.append(
+            {
+                "method": "create_extensions",
+                "customer_id": customer_id,
+                "campaign_rn": campaign_resource_name,
+                "count": total,
+                "rns": rns,
+            }
+        )
+        return rns
+
     async def enable_campaign(
         self,
         customer_id: str,

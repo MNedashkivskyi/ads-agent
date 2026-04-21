@@ -35,9 +35,12 @@ from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
+    CalloutProposal,
     CampaignProposal,
     KeywordProposal,
     MatchType,
+    SitelinkProposal,
+    StructuredSnippetProposal,
 )
 from adcopilot.domain.recommendation import RecommendationId
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
@@ -441,6 +444,109 @@ class CampaignWriter:
         except Exception as exc:
             raise _wrap_exc("create_negative_keywords", exc) from exc
 
+    async def create_extensions(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        campaign_resource_name: str,
+        sitelinks: list[SitelinkProposal],
+        callouts: list[CalloutProposal],
+        snippets: list[StructuredSnippetProposal],
+    ) -> list[str]:
+        """Create campaign-level sitelink, callout, and structured snippet assets.
+
+        Uses AssetService to create assets then CampaignAssetService to link them.
+        Returns a list of CampaignAsset resource names for rollback tracking.
+        """
+        if not sitelinks and not callouts and not snippets:
+            return []
+        try:
+            client = self._build_client(refresh_token)
+            cid = self._cid(customer_id)
+            asset_service = client.get_service("AssetService")
+            campaign_asset_service = client.get_service("CampaignAssetService")
+
+            asset_ops: list[Any] = []
+
+            # --- Sitelinks ---
+            for sl in sitelinks:
+                op = client.get_type("AssetOperation")
+                asset = op.create
+                asset.sitelink_asset.link_text = sl.link_text
+                asset.sitelink_asset.description1 = sl.description1
+                asset.sitelink_asset.description2 = sl.description2
+                asset.final_urls.append(sl.final_url)
+                asset_ops.append(op)
+
+            # --- Callouts ---
+            for co in callouts:
+                op = client.get_type("AssetOperation")
+                asset = op.create
+                asset.callout_asset.callout_text = co.text
+                asset_ops.append(op)
+
+            # --- Structured snippets ---
+            for sn in snippets:
+                op = client.get_type("AssetOperation")
+                asset = op.create
+                asset.structured_snippet_asset.header = sn.header
+                for v in sn.values:
+                    asset.structured_snippet_asset.values.append(v)
+                asset_ops.append(op)
+
+            asset_response = asset_service.mutate_assets(
+                customer_id=cid, operations=asset_ops
+            )
+            asset_rns = [r.resource_name for r in asset_response.results]
+
+            # Determine field types for linking
+            n_sitelinks = len(sitelinks)
+            n_callouts = len(callouts)
+            n_snippets = len(snippets)
+            field_types: list[Any] = (
+                [client.enums.AssetFieldTypeEnum.SITELINK] * n_sitelinks
+                + [client.enums.AssetFieldTypeEnum.CALLOUT] * n_callouts
+                + [client.enums.AssetFieldTypeEnum.STRUCTURED_SNIPPET] * n_snippets
+            )
+
+            # Link assets to campaign
+            ca_ops: list[Any] = []
+            for asset_rn, field_type in zip(asset_rns, field_types):
+                op = client.get_type("CampaignAssetOperation")
+                ca = op.create
+                ca.campaign = campaign_resource_name
+                ca.asset = asset_rn
+                ca.field_type = field_type
+                ca_ops.append(op)
+
+            ca_response = campaign_asset_service.mutate_campaign_assets(
+                customer_id=cid, operations=ca_ops
+            )
+            ca_rns = [r.resource_name for r in ca_response.results]
+
+            logger.info(
+                "extensions_created",
+                customer_id=customer_id,
+                campaign_rn=campaign_resource_name,
+                sitelinks=n_sitelinks,
+                callouts=n_callouts,
+                snippets=n_snippets,
+            )
+            await self._log(
+                "EXTENSIONS_CREATE",
+                {
+                    "campaign_resource_name": campaign_resource_name,
+                    "asset_resource_names": asset_rns,
+                    "campaign_asset_resource_names": ca_rns,
+                },
+            )
+            return ca_rns
+
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_exc("create_extensions", exc) from exc
+
     # ------------------------------------------------------------------
     # Enable (second confirmation)
     # ------------------------------------------------------------------
@@ -545,6 +651,19 @@ class CampaignWriter:
                     ag_service.mutate_ad_groups(customer_id=cid, operations=ops)
                 except Exception as exc:
                     errors.append(f"ad_groups: {exc}")
+
+            # Extension assets (CampaignAsset links)
+            if resources.extension_resource_names:
+                try:
+                    ca_service = client.get_service("CampaignAssetService")
+                    ops = []
+                    for rn in resources.extension_resource_names:
+                        op = client.get_type("CampaignAssetOperation")
+                        op.remove = rn
+                        ops.append(op)
+                    ca_service.mutate_campaign_assets(customer_id=cid, operations=ops)
+                except Exception as exc:
+                    errors.append(f"extensions: {exc}")
 
             # Negative keywords
             if resources.negative_resource_names:
