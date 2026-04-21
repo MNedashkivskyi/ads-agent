@@ -853,6 +853,9 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
 
     error_text: str | None = None
     campaign_rn: str | None = None
+    _saved_refresh_token: str | None = None
+    _saved_customer_id: str | None = None
+    _saved_primary_action: str | None = None
 
     try:
         async with AsyncSession(engine) as session, session.begin():
@@ -877,6 +880,10 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
             credentials = await credentials_repo.get(AccountId(account.id))
             if credentials is None:
                 return {"error": "credentials_not_found"}
+            _saved_refresh_token = credentials.refresh_token
+            _saved_customer_id = account.customer_id
+            _saved_primary_action = brief.primary_action
+
 
             writer = CampaignWriter(
                 settings=settings,
@@ -1005,17 +1012,56 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
                 ),
             )
         else:
+            # Check conversion tracking and send guide if missing
+            _has_tracking = False
+            _conversion_guide: str | None = None
+            try:
+                from datetime import date
+
+                from adcopilot.application.use_cases.launch.check_conversion_setup import (
+                    has_macro_conversion_tracking,
+                )
+                from adcopilot.infrastructure.telegram.conversion_guides import get_conversion_guide
+                from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+
+                _qsettings = get_settings()
+                _qa = GoogleAdsQueriesAdapter(_qsettings)
+                _conv_actions = await _qa.query_conversion_actions(
+                    _saved_refresh_token or "", _saved_customer_id or "", date.today()
+                )
+                _has_tracking = has_macro_conversion_tracking(_conv_actions)
+                if not _has_tracking:
+                    _conversion_guide = get_conversion_guide(_saved_primary_action or "")
+            except Exception:
+                logger.warning("conversion_tracking_check_failed", brief_id=brief_id)
+
+            if _conversion_guide:
+                await bot.send_message(
+                    chat_id=telegram_chat_id,
+                    text=_conversion_guide,
+                    parse_mode="Markdown",
+                )
+
+            _tracking_warning = (
+                "\n\n⚠️ No conversion tracking detected\\. Your campaign will start with "
+                "MAXIMIZE\\_CLICKS bidding\\. Set up tracking above — once active, "
+                "I'll automatically upgrade your bidding strategy\\."
+                if not _has_tracking
+                else ""
+            )
+
             keyboard = post_launch_keyboard(brief_id)
             await bot.send_message(
                 chat_id=telegram_chat_id,
                 text=(
-                    "✅ *Campaigns created and paused.*\n\n"
-                    "Your campaign is ready in Google Ads but not yet spending.\n\n"
+                    "✅ *Campaigns created and paused\\.*\n\n"
+                    "Your campaign is ready in Google Ads but not yet spending\\.\n\n"
                     "Tap *Enable and go live* when you're ready to start serving ads, "
-                    "or *Don't enable yet* to review it first."
+                    "or *Don't enable yet* to review it first\\."
+                    + _tracking_warning
                 ),
                 reply_markup=keyboard,
-                parse_mode="Markdown",
+                parse_mode="MarkdownV2",
             )
 
     return {"campaign_rn": campaign_rn}
