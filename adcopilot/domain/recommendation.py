@@ -119,7 +119,6 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         RecommendationKind.DAY_OF_WEEK_BID_ADJUSTMENT,
         RecommendationKind.ADD_AUDIENCE_SIGNALS,
         # Module 5 — budget/bidding insights (informational)
-        RecommendationKind.REALLOCATE_BUDGET,
         RecommendationKind.IMPROVE_QUALITY_SCORE,
         RecommendationKind.RELAX_TARGET_CPA,
         RecommendationKind.DIVERSIFY_CHANNELS,
