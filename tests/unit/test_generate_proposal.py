@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from unittest.mock import AsyncMock, patch
 
 from adcopilot.application.use_cases.launch.generate_proposal import (
     GenerateCampaignProposalUseCase,
@@ -35,6 +36,40 @@ from adcopilot.domain.launch.entities import (
 )
 from adcopilot.domain.launch.validator import validate_proposal
 from adcopilot.infrastructure.llm.campaign_generator import CampaignGenerator
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _mock_landing_page_checker():
+    """Prevent real HTTP calls in unit tests — return a minimal passing result."""
+    from adcopilot.infrastructure.landing_page.checker import LandingPageCheckResult
+
+    def _make_ok(url: str) -> LandingPageCheckResult:
+        return LandingPageCheckResult(
+            url=url,
+            reachable=True,
+            https=True,
+            load_time_seconds=0.5,
+            language_detected=None,
+            error_message=None,
+            page_title=None,
+            h1_text=None,
+            body_text_sample=None,
+        )
+
+    async def _check(url: str) -> LandingPageCheckResult:
+        return _make_ok(url)
+
+    with patch(
+        "adcopilot.infrastructure.landing_page.checker.LandingPageChecker",
+        autospec=True,
+    ) as MockChecker:
+        MockChecker.return_value.check = AsyncMock(side_effect=_check)
+        yield
+
 
 # ---------------------------------------------------------------------------
 # In-memory fakes
@@ -205,6 +240,8 @@ _SALON_NEGATIVES = json.dumps(
             "free haircut",
             "hair wigs",
             "hair products online",
+            "job",
+            "tutorial",
         ]
     }
 )
@@ -329,6 +366,9 @@ _ECOM_NEGATIVES = json.dumps(
             "diy dog food",
             "free pet food",
             "pet food amazon",
+            "job",
+            "tutorial",
+            "second hand",
         ]
     }
 )
