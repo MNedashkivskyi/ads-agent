@@ -13,6 +13,7 @@ import uuid
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.domain.polish_market.ad_copy_rules import POLISH_CTA_VERBS
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -37,7 +38,7 @@ _CTA_PATTERNS = re.compile(
     r"start|try|test|demo|request|"
     r"download|install|"
     r"save|earn|unlock|access|"
-    # Polish CTAs
+    # Polish CTAs (regex stems) — full phrases covered via POLISH_CTA_VERBS below
     r"kup|zam[oó]w|zarezerwuj|zapisz|do[łl][aą]cz|"
     r"zadzwo[nń]|skontaktuj|pobierz|wypróbuj|"
     r"sprawdź|dowiedz|odkryj|za[cs]zp[io]sz"
@@ -67,9 +68,11 @@ class MissingCtaRule:
             except (json.JSONDecodeError, TypeError):
                 continue
 
-            all_text = " ".join(headlines + descriptions)
+            all_text = " ".join(headlines + descriptions).lower()
             if _CTA_PATTERNS.search(all_text):
                 continue  # CTA found — no issue
+            if any(verb in all_text for verb in POLISH_CTA_VERBS):
+                continue
 
             target = {"ad_id": ad.ad_id, "ad_group_id": ad.ad_group_id}
             payload = {"ad_id": ad.ad_id, "ad_group_id": ad.ad_group_id}

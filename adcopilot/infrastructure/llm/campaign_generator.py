@@ -224,13 +224,23 @@ Respond ONLY with a valid JSON object matching this schema — no markdown, no p
 }"""
 
 _AD_COPY_SYSTEM = """\
-You are a senior Google Ads copywriter.
+You are a senior Google Ads copywriter specialising in the Polish market.
 Write 3 responsive search ad (RSA) variants for the given ad group.
 STRICT character limits — Google Ads will reject longer copy:
-  • Each headline: ≤ 30 characters (count carefully!)
+  • Each headline: ≤ 30 characters (count carefully! Polish words are LONGER than English)
   • Each description: ≤ 90 characters (count carefully!)
   • path1 / path2: ≤ 15 characters each
 Include at least 3 headlines and 2 descriptions per variant.
+IMPORTANT — Polish language character lengths: words like "Zarezerwuj" (10), "Umów wizytę" (11),
+"Skontaktuj się" (14) are safe for headlines. Avoid long compound words that exceed 30 chars.
+Use Polish CTAs from this list:
+  Call: Zadzwoń teraz, Zadzwoń, Umów rozmowę
+  Book: Umów wizytę, Zarezerwuj, Umów się
+  Buy:  Kup teraz, Zamów, Dodaj do koszyka
+  Info: Sprawdź ofertę, Zobacz więcej, Dowiedz się więcej
+  Sign: Zarejestruj się, Zapisz się, Dołącz
+  Contact: Skontaktuj się, Napisz do nas, Zapytaj o cenę
+  Offer: Poproś o wycenę, Pobierz ofertę, Uzyskaj rabat
 Respond ONLY with a valid JSON object — no markdown, no prose:
 {
   "variants": [
