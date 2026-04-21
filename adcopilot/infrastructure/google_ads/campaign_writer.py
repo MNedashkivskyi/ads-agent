@@ -793,6 +793,79 @@ class CampaignWriter:
             raise _wrap_exc("create_audience_signals", exc) from exc
 
     # ------------------------------------------------------------------
+    # Display Remarketing campaign creation
+    # ------------------------------------------------------------------
+
+    async def create_display_remarketing_campaign(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        proposal: "RemarketingCampaignProposal",
+    ) -> tuple[str, str]:
+        """Create a PAUSED Display Remarketing campaign + shared budget.
+
+        Returns (campaign_resource_name, budget_resource_name).
+        """
+        from adcopilot.domain.launch.entities import RemarketingCampaignProposal  # noqa: F401
+
+        try:
+            client = self._build_client(refresh_token)
+            cid = self._cid(customer_id)
+
+            # Create shared budget
+            budget_service = client.get_service("CampaignBudgetService")
+            budget_op = client.get_type("CampaignBudgetOperation")
+            budget = budget_op.create
+            budget.name = f"{proposal.campaign_name} Budget"
+            budget.amount_micros = proposal.daily_budget_micros
+            budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
+
+            budget_resp = budget_service.mutate_campaign_budgets(
+                customer_id=cid, operations=[budget_op]
+            )
+            budget_rn = budget_resp.results[0].resource_name
+
+            # Create Display campaign
+            campaign_service = client.get_service("CampaignService")
+            campaign_op = client.get_type("CampaignOperation")
+            campaign = campaign_op.create
+            campaign.name = proposal.campaign_name
+            campaign.advertising_channel_type = (
+                client.enums.AdvertisingChannelTypeEnum.DISPLAY
+            )
+            campaign.status = client.enums.CampaignStatusEnum.PAUSED
+            campaign.campaign_budget = budget_rn
+            campaign.bidding_strategy_type = (
+                client.enums.BiddingStrategyTypeEnum.MAXIMIZE_CONVERSIONS
+            )
+
+            campaign_resp = campaign_service.mutate_campaigns(
+                customer_id=cid, operations=[campaign_op]
+            )
+            campaign_rn = campaign_resp.results[0].resource_name
+
+            logger.info(
+                "display_remarketing_campaign_created",
+                customer_id=customer_id,
+                campaign_resource_name=campaign_rn,
+                budget_micros=proposal.daily_budget_micros,
+            )
+            await self._log(
+                "DISPLAY_REMARKETING_CAMPAIGN_CREATE",
+                {
+                    "campaign_resource_name": campaign_rn,
+                    "budget_resource_name": budget_rn,
+                    "daily_budget_micros": proposal.daily_budget_micros,
+                    "user_list_ids": proposal.user_list_ids,
+                },
+            )
+            return campaign_rn, budget_rn
+
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_exc("create_display_remarketing_campaign", exc) from exc
+
     # RLSA — add user-list observation audiences to existing Search campaigns
     # ------------------------------------------------------------------
 

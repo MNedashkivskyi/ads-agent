@@ -64,6 +64,11 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.check_rlsa_eligibility_task",
                     "schedule": crontab(hour=5, minute=0, day_of_week="tuesday"),
                 },
+                "monthly-remarketing-campaign-check": {
+                    # 1st of month 6:00 AM UTC — propose remarketing campaigns for eligible accounts.
+                    "task": "adcopilot.interfaces.worker.tasks.check_remarketing_campaign_eligibility_task",
+                    "schedule": crontab(hour=6, minute=0, day_of_month="1"),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},

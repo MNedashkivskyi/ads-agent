@@ -25,8 +25,8 @@ from adcopilot.application.detection.validation import LandingPageCheckResult as
 from adcopilot.domain.exceptions import LLMError
 from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
 from adcopilot.domain.launch.entities import CampaignBrief, CampaignProposal, LaunchStatus
+from adcopilot.application.detection.validation import validate_proposal
 from adcopilot.domain.launch.templates import build_proposal_from_template
-from adcopilot.domain.launch.validator import validate_proposal
 from adcopilot.infrastructure.llm.campaign_generator import BrandCampaignResponse, CampaignGenerator
 
 logger = structlog.get_logger(__name__)

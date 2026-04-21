@@ -1847,3 +1847,91 @@ def check_rlsa_eligibility_task() -> dict[str, object]:
         }
 
     return asyncio.run(_run())  # type: ignore[return-value]
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.check_remarketing_campaign_eligibility_task")  # type: ignore[untyped-decorator]
+def check_remarketing_campaign_eligibility_task() -> dict[str, object]:
+    """Monthly task: propose Display Remarketing campaigns for eligible GROWTH accounts."""
+    import asyncio
+
+    from adcopilot.config import get_settings
+
+    settings = get_settings()
+
+    async def _run() -> dict[str, object]:
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+        from adcopilot.application.use_cases.launch.propose_remarketing_campaign import (
+            ProposeRemarketingCampaignUseCase,
+        )
+        from adcopilot.domain.entities import AccountId
+        from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
+        from adcopilot.domain.launch.entities import CampaignBriefId
+        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+            SqlGoogleAdsAccountRepository,
+        )
+        from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+        from decimal import Decimal
+
+        engine = create_async_engine(settings.DATABASE_URL)
+        proposals_generated = 0
+        accounts_checked = 0
+        accounts_errored = 0
+        try:
+            async with AsyncSession(engine) as session:
+                account_repo = SqlGoogleAdsAccountRepository(session)
+                accounts = await account_repo.list_active()
+
+            queries_adapter = GoogleAdsQueriesAdapter(settings)
+
+            for account in accounts:
+                try:
+                    # Only GROWTH-tier accounts
+                    budget = getattr(account, "monthly_budget_pln", None)
+                    if budget is None:
+                        continue
+                    if classify_budget_tier(Decimal(str(budget))) != BudgetTier.GROWTH:
+                        continue
+
+                    # Estimate daily budget from monthly (proxy)
+                    daily_budget_micros = int(Decimal(str(budget)) / 30 * 1_000_000)
+
+                    use_case = ProposeRemarketingCampaignUseCase(queries_adapter=queries_adapter)
+                    proposal = await use_case.execute(
+                        account_id=AccountId(str(account.id)),
+                        brief_id=CampaignBriefId(""),
+                        refresh_token=account.refresh_token,
+                        customer_id=str(account.google_ads_customer_id),
+                        search_daily_budget_micros=daily_budget_micros,
+                    )
+                    if proposal is not None:
+                        proposals_generated += 1
+                        logger.info(
+                            "remarketing_proposal_generated_for_account",
+                            account_id=str(account.id),
+                            proposal_id=proposal.id,
+                            budget_micros=proposal.daily_budget_micros,
+                        )
+                        # TODO: send proposal via Telegram when chat_id is available on account model
+                    accounts_checked += 1
+                except Exception:
+                    logger.exception(
+                        "remarketing_eligibility_check.failed", account_id=str(account.id)
+                    )
+                    accounts_errored += 1
+        finally:
+            await engine.dispose()
+
+        logger.info(
+            "remarketing_eligibility_check.summary",
+            accounts_checked=accounts_checked,
+            accounts_errored=accounts_errored,
+            proposals_generated=proposals_generated,
+        )
+        return {
+            "accounts_checked": accounts_checked,
+            "accounts_errored": accounts_errored,
+            "proposals_generated": proposals_generated,
+        }
+
+    return asyncio.run(_run())  # type: ignore[return-value]
