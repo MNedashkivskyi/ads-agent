@@ -22,5 +22,12 @@ class GoogleAdsUnavailable(AdCopilotError):
     pass
 
 
+class GoogleAdsTokenNotApproved(AdCopilotError):
+    """Raised when the developer token is in test mode or pending approval.
+
+    Production access requires applying at Google Ads → Admin → API Center.
+    """
+
+
 class LLMError(AdCopilotError):
     """Raised when the LLM backend fails (rate limit, timeout, API error)."""
