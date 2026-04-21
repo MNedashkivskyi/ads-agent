@@ -327,3 +327,19 @@ class FakeGoogleAdsMutations:
                 "hour_of_day": hour_of_day,
             }
         )
+
+    async def set_target_cpa(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        target_cpa_micros: int,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "set_target_cpa",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "target_cpa_micros": target_cpa_micros,
+            }
+        )

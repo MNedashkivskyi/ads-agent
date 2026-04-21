@@ -120,7 +120,6 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         RecommendationKind.ADD_AUDIENCE_SIGNALS,
         # Module 5 — budget/bidding insights (informational)
         RecommendationKind.IMPROVE_QUALITY_SCORE,
-        RecommendationKind.RELAX_TARGET_CPA,
         RecommendationKind.DIVERSIFY_CHANNELS,
         # Module 6 — conversion tracking issues (informational)
         RecommendationKind.UPGRADE_CONVERSION_ACTION,

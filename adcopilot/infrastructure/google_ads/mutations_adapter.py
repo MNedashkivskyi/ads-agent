@@ -548,6 +548,30 @@ class GoogleAdsMutationsAdapter:
         except Exception as exc:
             raise _wrap_mutation_exc("remove_device_bid_modifier", exc) from exc
 
+    async def set_target_cpa(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        target_cpa_micros: int,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            campaign_service = client.get_service("CampaignService")
+            op = client.get_type("CampaignOperation")
+            campaign = op.update
+            campaign.resource_name = campaign_service.campaign_path(cid, campaign_id)
+            campaign.target_cpa.target_cpa_micros = target_cpa_micros
+            from google.protobuf import field_mask_pb2
+            op.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["target_cpa.target_cpa_micros"]))
+            campaign_service.mutate_campaigns(customer_id=cid, operations=[op])
+            logger.info("target CPA set", customer_id=customer_id, campaign_id=campaign_id, target_cpa_micros=target_cpa_micros)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("set_target_cpa", exc) from exc
+
     async def set_ad_schedule_bid_modifier(
         self,
         refresh_token: str,
