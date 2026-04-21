@@ -69,6 +69,11 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.check_remarketing_campaign_eligibility_task",
                     "schedule": crontab(hour=6, minute=0, day_of_month="1"),
                 },
+                "daily-performance-comparisons": {
+                    # 6:00 AM UTC daily — after nightly snapshot so current metrics are fresh.
+                    "task": "adcopilot.interfaces.worker.tasks.compare_recommendation_performance_task",
+                    "schedule": crontab(hour=6, minute=0),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},

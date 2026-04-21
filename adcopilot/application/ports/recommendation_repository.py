@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Protocol
 
 from adcopilot.domain.entities import AccountId
@@ -18,3 +19,7 @@ class RecommendationRepository(Protocol):
     async def update_status(self, rec_id: RecommendationId, status: RecommendationStatus) -> None: ...
 
     async def update_explanation(self, rec_id: RecommendationId, explanation: str) -> None: ...
+
+    async def list_executed_in_date_range(
+        self, start: date, end: date
+    ) -> list[Recommendation]: ...
