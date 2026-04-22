@@ -48,6 +48,7 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
     from adcopilot.application.executors.increase_budget import IncreaseBudgetExecutor
     from adcopilot.application.executors.pause_ad import PauseAdExecutor
     from adcopilot.application.executors.pause_keyword import PauseKeywordExecutor
+    from adcopilot.application.executors.promote_search_term import PromoteSearchTermExecutor
 
     execs: list[RecommendationExecutor] = [
         PauseKeywordExecutor(),
@@ -67,6 +68,7 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
         AddSitelinksExecutor(),
         AddCalloutsExecutor(),
         AddStructuredSnippetsExecutor(),
+        PromoteSearchTermExecutor(),
     ]
     return {e.kind: e for e in execs}
 

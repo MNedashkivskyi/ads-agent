@@ -196,3 +196,24 @@ class GoogleAdsMutationsPort(Protocol):
         keyword_text: str,
         match_type: str,
     ) -> None: ...
+
+    async def add_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> int:
+        """Add a keyword to an ad group; returns the new criterion_id."""
+        ...
+
+    async def pause_ad_group_keyword_by_text(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None: ...
+

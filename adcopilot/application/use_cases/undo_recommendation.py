@@ -324,4 +324,21 @@ class UndoRecommendationUseCase:
             )
             return {"campaign_id": campaign_id, "action": "device_bid_modifier_removed"}
 
+        if kind == RecommendationKind.PROMOTE_SEARCH_TERM:
+            ad_group_id = int(payload["suggested_ad_group_id"])
+            search_term: str = payload["search_term"]
+            match_type: str = payload.get("suggested_match_type", "EXACT")
+            await self._mutations.pause_ad_group_keyword_by_text(
+                refresh_token=refresh_token,
+                customer_id=customer_id,
+                ad_group_id=ad_group_id,
+                keyword_text=search_term,
+                match_type=match_type,
+            )
+            return {
+                "ad_group_id": ad_group_id,
+                "search_term": search_term,
+                "action": "promoted_keyword_paused",
+            }
+
         raise ValueError(f"No undo logic for {kind.value}")
