@@ -203,6 +203,12 @@ class CampaignProposal:
     brand_ad: AdProposal | None = None
     """Single RSA for the brand ad group. None for MICRO tier."""
 
+    seasonal_multiplier: float = 1.0
+    """Polish market seasonal demand multiplier applied to the daily budget."""
+
+    seasonal_vertical: str | None = None
+    """Vertical used to look up the seasonal multiplier (e.g. 'salon')."""
+
     def __post_init__(self) -> None:
         if self.brand_keywords is None:
             object.__setattr__(self, "brand_keywords", [])

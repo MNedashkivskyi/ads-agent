@@ -15,6 +15,9 @@ Token budget: ≤ 60 000 input + 20 000 output tokens across all LLM calls
 
 from __future__ import annotations
 
+import dataclasses
+from datetime import UTC, datetime
+
 import structlog
 
 from adcopilot.application.ports.launch_repositories import (
@@ -30,6 +33,34 @@ from adcopilot.domain.launch.templates import build_proposal_from_template
 from adcopilot.infrastructure.llm.campaign_generator import BrandCampaignResponse, CampaignGenerator
 
 logger = structlog.get_logger(__name__)
+
+
+def _apply_seasonal_multiplier(
+    proposal: "CampaignProposal",
+    vertical: str,
+) -> "tuple[CampaignProposal, float]":
+    """Adjust proposal's daily_budget_micros by the Polish market seasonal multiplier.
+
+    Returns (updated_proposal, multiplier). Defaults to 1.0 on any error.
+    """
+    try:
+        from adcopilot.domain.polish_market.seasonality import get_seasonal_multiplier
+        month = datetime.now(tz=UTC).month
+        multiplier = get_seasonal_multiplier(vertical, month)
+    except Exception:
+        return proposal, 1.0
+
+    if multiplier == 1.0:
+        return proposal, 1.0
+
+    adjusted_budget = int(proposal.daily_budget_micros * multiplier)
+    updated = dataclasses.replace(
+        proposal,
+        daily_budget_micros=adjusted_budget,
+        seasonal_multiplier=multiplier,
+        seasonal_vertical=vertical,
+    )
+    return updated, multiplier
 
 
 class GenerateCampaignProposalUseCase:
@@ -177,6 +208,17 @@ class GenerateCampaignProposalUseCase:
         # Assemble
         proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions, brand)
 
+        # Apply seasonal multiplier to daily budget
+        proposal, seasonal_multiplier = _apply_seasonal_multiplier(proposal, vertical.vertical)
+        if seasonal_multiplier != 1.0:
+            logger.info(
+                "seasonal_multiplier_applied",
+                brief_id=brief.id,
+                vertical=vertical.vertical,
+                month=datetime.now(tz=UTC).month,
+                multiplier=seasonal_multiplier,
+            )
+
         # Build validation context with landing page check
         lp_ctx = await self._build_validation_context(proposal)
         errors_result = validate_proposal(proposal, brief, lp_ctx)
@@ -220,6 +262,7 @@ class GenerateCampaignProposalUseCase:
                 ad_copies.append(copy)
 
         proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions)
+        proposal, _ = _apply_seasonal_multiplier(proposal, vertical.vertical)
         errors2_result = validate_proposal(proposal, brief, lp_ctx)
         errors2 = errors2_result.errors
 

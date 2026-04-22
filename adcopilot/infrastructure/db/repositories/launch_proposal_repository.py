@@ -129,6 +129,8 @@ def _model_to_domain(
         brand_keywords=brand_keywords,
         brand_daily_budget_micros=proposal.brand_daily_budget_micros or 0,
         brand_ad=brand_ad,
+        seasonal_multiplier=getattr(proposal, "seasonal_multiplier", 1.0) or 1.0,
+        seasonal_vertical=getattr(proposal, "seasonal_vertical", None),
     )
 
 
@@ -207,6 +209,8 @@ class SqlCampaignProposalRepository:
             brand_keywords=brand_kw_list,
             brand_daily_budget_micros=proposal.brand_daily_budget_micros,
             brand_ad=brand_ad_dict,
+            seasonal_multiplier=proposal.seasonal_multiplier,
+            seasonal_vertical=proposal.seasonal_vertical,
         )
         self._session.add(pm)
 

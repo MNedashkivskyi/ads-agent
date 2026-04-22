@@ -471,6 +471,8 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " i wydaje tylko {donor_budget_utilisation:.0%} budżetu."
             " Przeniesienie budżetu z gorzej działającej kampanii do lepszej poprawi"
             " łączny zwrot z inwestycji konta."
+            " Sezonowy mnożnik dla tej branży wynosi {seasonal_multiplier}×"
+            " (wyższe wartości oznaczają szczyt sezonu, niższe — poza sezonem)."
             " Wytłumacz jak zmienić budżety kampanii, po polsku."
         ),
         "en": (
@@ -480,6 +482,8 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " spends {donor_budget_utilisation:.0%} of its budget."
             " Moving budget from the under-performer to the top performer will improve"
             " the account's overall return."
+            " The seasonal demand multiplier for this vertical is {seasonal_multiplier}×"
+            " (above 1.0 = peak season, below 1.0 = off season)."
             " Explain how to reallocate campaign budgets in plain English."
         ),
     },
