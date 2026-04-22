@@ -69,6 +69,8 @@ class RecommendationKind(Enum):
     REFRESH_SITELINK = "REFRESH_SITELINK"
     # Module 8 — Landing page quality
     LANDING_PAGE_KEYWORD_MISMATCH = "LANDING_PAGE_KEYWORD_MISMATCH"
+    # Module 9 — Search term mining
+    PROMOTE_SEARCH_TERM = "PROMOTE_SEARCH_TERM"
 
 
 class RecommendationSeverity(Enum):
