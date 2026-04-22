@@ -60,6 +60,18 @@ def format_proposal_summary(proposal: CampaignProposal) -> str:
         f"💵 Est. CPC: {cpc_min:.2f}-{cpc_max:.2f} PLN",
     ]
 
+    if proposal.compliance_warnings:
+        lines.append("")
+        lines.append("⚠️ *Uwagi dotyczące zgodności reklamy:*")
+        for w in proposal.compliance_warnings:
+            severity = w.get("severity", "")
+            message = w.get("message", "")
+            suggestion = w.get("suggestion", "")
+            line = f"- [{severity}] {message}"
+            if suggestion:
+                line += f". Sugestia: _{suggestion}_"
+            lines.append(line)
+
     if proposal.seasonal_multiplier != 1.0:
         if proposal.seasonal_multiplier > 1.0:
             lines.append(

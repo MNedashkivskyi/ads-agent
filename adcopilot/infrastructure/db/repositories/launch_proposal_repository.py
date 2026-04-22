@@ -131,6 +131,7 @@ def _model_to_domain(
         brand_ad=brand_ad,
         seasonal_multiplier=getattr(proposal, "seasonal_multiplier", 1.0) or 1.0,
         seasonal_vertical=getattr(proposal, "seasonal_vertical", None),
+        compliance_warnings=list(getattr(proposal, "compliance_warnings", None) or []),
     )
 
 
@@ -211,6 +212,7 @@ class SqlCampaignProposalRepository:
             brand_ad=brand_ad_dict,
             seasonal_multiplier=proposal.seasonal_multiplier,
             seasonal_vertical=proposal.seasonal_vertical,
+            compliance_warnings=proposal.compliance_warnings or None,
         )
         self._session.add(pm)
 

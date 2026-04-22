@@ -63,6 +63,31 @@ def _apply_seasonal_multiplier(
     return updated, multiplier
 
 
+def _run_compliance_validators(
+    proposal: "CampaignProposal",
+    vertical: str,
+) -> "CampaignProposal":
+    """Run Polish advertising compliance validators and attach warnings to proposal."""
+    try:
+        from adcopilot.domain.polish_market.compliance_validators import validate_ad_copy
+        all_headlines: list[str] = []
+        all_descriptions: list[str] = []
+        for ag in proposal.ad_groups:
+            for ad in ag.ads:
+                all_headlines.extend(ad.headlines)
+                all_descriptions.extend(ad.descriptions)
+        warnings = validate_ad_copy(all_headlines, all_descriptions, vertical)
+        if warnings:
+            serialised = [
+                {"severity": w.severity, "message": w.message, "suggestion": w.suggestion}
+                for w in warnings
+            ]
+            return dataclasses.replace(proposal, compliance_warnings=serialised)
+    except Exception:
+        pass
+    return proposal
+
+
 def _apply_purchasing_power(
     proposal: "CampaignProposal",
     location: str,
@@ -240,6 +265,9 @@ class GenerateCampaignProposalUseCase:
         # Apply voivodeship purchasing power adjustment
         proposal = _apply_purchasing_power(proposal, brief.location)
 
+        # Run Polish advertising compliance validators
+        proposal = _run_compliance_validators(proposal, vertical.vertical)
+
         # Build validation context with landing page check
         lp_ctx = await self._build_validation_context(proposal)
         errors_result = validate_proposal(proposal, brief, lp_ctx)
@@ -285,6 +313,7 @@ class GenerateCampaignProposalUseCase:
         proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions)
         proposal, _ = _apply_seasonal_multiplier(proposal, vertical.vertical)
         proposal = _apply_purchasing_power(proposal, brief.location)
+        proposal = _run_compliance_validators(proposal, vertical.vertical)
         errors2_result = validate_proposal(proposal, brief, lp_ctx)
         errors2 = errors2_result.errors
 
