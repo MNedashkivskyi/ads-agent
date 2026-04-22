@@ -98,6 +98,7 @@ from adcopilot.application.detection.rules.rule_43_add_structured_snippets impor
 from adcopilot.application.detection.rules.rule_44_refresh_sitelink import RefreshSitelinkRule
 from adcopilot.application.detection.rules.rule_45_landing_page_keyword_mismatch import LandingPageKeywordMismatchRule
 from adcopilot.application.detection.rules.rule_46_promote_search_term import PromoteSearchTermRule
+from adcopilot.application.detection.rules.rule_48_above_vertical_benchmark import AboveVerticalBenchmarkRule
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -164,5 +165,7 @@ def build_rule_engine(
         LandingPageKeywordMismatchRule(),
         # Module 9 — Search term mining
         PromoteSearchTermRule(),
+        # Module 10 — Benchmarking
+        AboveVerticalBenchmarkRule(),
     ]
     return RuleEngine(rules=rules, rec_repo=rec_repo, snooze_repo=snooze_repo)

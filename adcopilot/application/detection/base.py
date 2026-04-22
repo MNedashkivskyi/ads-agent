@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Protocol
 
+from adcopilot.domain.benchmarking import VerticalBenchmarkSnapshot
 from adcopilot.domain.entities import GoogleAdsAccount
 from adcopilot.domain.recommendation import Recommendation, RecommendationKind
 from adcopilot.domain.snapshot import (
@@ -84,6 +85,9 @@ class DetectionContext:
     # Pre-fetched landing page content for Module 8 rule 45.
     # Keys are final_url strings; missing URL = rule skips that ad.
     landing_page_results: dict[str, "LandingPageData"] = field(default_factory=dict)
+    # Latest vertical benchmark snapshot for Module 10 rule 48.
+    # None when no benchmark exists yet for this account's vertical × city_tier.
+    vertical_benchmark: "VerticalBenchmarkSnapshot | None" = field(default=None)
 
 
 class DetectionRule(Protocol):
