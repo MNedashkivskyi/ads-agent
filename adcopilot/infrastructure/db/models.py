@@ -53,6 +53,7 @@ __all__ = [
     "SitelinkPerformanceSnapshotModel",
     "SnapshotRunModel",
     "UserModel",
+    "VerticalBenchmarkSnapshotModel",
 ]
 
 
@@ -913,4 +914,33 @@ class AlertModel(Base):
     message: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
+    )
+
+
+class VerticalBenchmarkSnapshotModel(Base):
+    """Anonymized performance aggregates per vertical × city_tier × week.
+
+    Only stored when cohort has ≥5 accounts (privacy requirement).
+    """
+
+    __tablename__ = "vertical_benchmark_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    vertical: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    city_tier: Mapped[int] = mapped_column(Integer, nullable=False)
+    snapshot_week: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    account_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    avg_cpa_micros: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    median_cpa_micros: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    p25_cpa_micros: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    p75_cpa_micros: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    avg_ctr: Mapped[float] = mapped_column(Float, nullable=False)
+    avg_conversion_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    avg_monthly_spend_micros: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_vbs_vertical_tier_week", "vertical", "city_tier", "snapshot_week"),
     )

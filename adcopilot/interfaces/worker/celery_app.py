@@ -79,6 +79,11 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.send_weekly_performance_report_task",
                     "schedule": crontab(hour=10, minute=0, day_of_week="friday"),
                 },
+                "weekly-benchmark-aggregation": {
+                    # Wednesday 5:00 AM UTC — after Tuesday snapshots settle.
+                    "task": "adcopilot.interfaces.worker.tasks.aggregate_benchmarks_task",
+                    "schedule": crontab(hour=5, minute=0, day_of_week="wednesday"),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},
