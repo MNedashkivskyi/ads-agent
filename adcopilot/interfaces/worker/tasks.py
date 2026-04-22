@@ -2086,3 +2086,43 @@ def classify_account_vertical_task(account_id: str) -> dict[str, object]:
             await engine.dispose()
 
     return _asyncio.run(_run())
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.aggregate_benchmarks_task",
+)
+def aggregate_benchmarks_task() -> dict[str, object]:
+    """Aggregate anonymized performance benchmarks across accounts (weekly)."""
+    import asyncio as _asyncio
+
+    async def _run() -> dict[str, object]:
+        from adcopilot.application.use_cases.aggregate_benchmarks import (
+            AggregateBenchmarksUseCase,
+        )
+        from adcopilot.config import Settings
+        from adcopilot.infrastructure.db.engine import build_async_engine
+        from adcopilot.infrastructure.db.repositories.benchmark_repository import (
+            SqlBenchmarkRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.account_summary_provider import (
+            SqlAccountSummaryProvider,
+        )
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        settings = Settings()
+        engine = build_async_engine(settings)
+        try:
+            async with AsyncSession(engine) as session:
+                repo = SqlBenchmarkRepository(session)
+                provider = SqlAccountSummaryProvider(session)
+                uc = AggregateBenchmarksUseCase(
+                    account_summary_provider=provider,
+                    benchmark_repo=repo,
+                )
+                result = await uc.run()
+                await session.commit()
+                return result
+        finally:
+            await engine.dispose()
+
+    return _asyncio.run(_run())
