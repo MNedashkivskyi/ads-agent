@@ -266,6 +266,65 @@ class CampaignBrief:
 
 
 # ---------------------------------------------------------------------------
+# Performance Max campaign proposal (e-commerce with Merchant Center feed)
+# ---------------------------------------------------------------------------
+
+PMaxProposalId = NewType("PMaxProposalId", str)
+
+
+@dataclass(frozen=True)
+class AssetGroupProposal:
+    """A Performance Max asset group (the PMax equivalent of an ad group)."""
+
+    name: str
+    headlines: list[str]
+    """3–15 headlines for the asset group."""
+
+    descriptions: list[str]
+    """2–4 descriptions for the asset group."""
+
+    final_url: str
+    images_placeholder: list[str] = None  # type: ignore[assignment]
+    """Placeholder paths for image assets — populated by the creative team."""
+
+    def __post_init__(self) -> None:
+        if self.images_placeholder is None:
+            object.__setattr__(self, "images_placeholder", [])
+
+
+@dataclass(frozen=True)
+class PMaxCampaignProposal:
+    """A Performance Max campaign proposal for e-commerce accounts with a Merchant Center feed.
+
+    Uses broad audience signals and listing group filters (all products initially)
+    rather than keywords.
+    """
+
+    id: PMaxProposalId
+    brief_id: CampaignBriefId
+    campaign_name: str
+    daily_budget_micros: int
+    merchant_center_feed_id: int
+    """Linked Merchant Center account/feed ID."""
+
+    asset_groups: list[AssetGroupProposal]
+    """At least one asset group is required by the Google Ads API."""
+
+    audience_signals: list[str] = None  # type: ignore[assignment]
+    """In-market segment resource names as audience signals (best-effort)."""
+
+    bidding_strategy: str = "MAXIMIZE_CONVERSIONS"
+    generated_at: datetime = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.audience_signals is None:
+            object.__setattr__(self, "audience_signals", [])
+        if self.generated_at is None:
+            from datetime import timezone
+            object.__setattr__(self, "generated_at", datetime.now(tz=timezone.utc))
+
+
+# ---------------------------------------------------------------------------
 # Remarketing campaign proposal (Display, for GROWTH tier)
 # ---------------------------------------------------------------------------
 

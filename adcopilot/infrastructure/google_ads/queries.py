@@ -938,3 +938,45 @@ async def query_remarketing_lists(
         raise
     except Exception as exc:
         raise _wrap_exc(exc) from exc
+
+
+async def query_merchant_center_feed(
+    refresh_token: str,
+    customer_id: str,
+    settings: Settings,
+) -> list[dict[str, object]]:
+    """Return a list of linked Merchant Center feeds for the account.
+
+    Each dict contains: ``feed_id`` (int), ``name`` (str), ``status`` (str).
+    Returns an empty list when no Merchant Center feed is linked.
+
+    Uses the ``MerchantCenterLink`` resource which is available without
+    special permissions — just the regular Google Ads API access.
+    """
+    query = """
+        SELECT
+            merchant_center_link.id,
+            merchant_center_link.merchant_center_account_name,
+            merchant_center_link.status
+        FROM merchant_center_link
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[dict[str, object]] = []
+        stream = service.search_stream(customer_id=customer_id, query=query)
+        for batch in stream:
+            for row in batch.results:
+                link = row.merchant_center_link
+                results.append(
+                    {
+                        "feed_id": link.id,
+                        "name": link.merchant_center_account_name or "",
+                        "status": link.status.name if hasattr(link.status, "name") else str(link.status),
+                    }
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc

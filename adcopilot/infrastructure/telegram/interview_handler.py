@@ -444,13 +444,85 @@ async def interview_callback_handler(
                 brief_id_str = data.split(":", 1)[1]
                 brief = await repo.get(CampaignBriefId(brief_id_str))
                 if brief and brief.user_id == user_id:
-                    updated = dataclasses.replace(brief, status=LaunchStatus.GENERATING)
-                    await repo.save(updated)
-                    await query.edit_message_text(
-                        "⏳ Generating your campaign proposal…\n\n"
-                        "I'll notify you when it's ready! This usually takes 30–60 seconds."
-                    )
-                    generate_brief_id = brief_id_str
+                    # --- PMax eligibility check (best-effort, e-commerce only) ---
+                    try:
+                        from adcopilot.application.use_cases.detect_pmax_eligibility import (
+                            DetectPMaxEligibilityUseCase,
+                        )
+                        from adcopilot.domain.launch.templates import detect_vertical_from_description
+                        from adcopilot.infrastructure.db.models import (
+                            GoogleAdsAccountModel,
+                            OAuthCredentialsModel,
+                        )
+                        import uuid as _uuid
+                        from sqlalchemy import select as _select
+
+                        _acct_q = await session.execute(
+                            _select(GoogleAdsAccountModel).where(
+                                GoogleAdsAccountModel.id == _uuid.UUID(str(brief.account_id))
+                            )
+                        )
+                        _acct = _acct_q.scalar_one_or_none()
+                        _creds_q = await session.execute(
+                            _select(OAuthCredentialsModel).where(
+                                OAuthCredentialsModel.account_id == _uuid.UUID(str(brief.account_id))
+                            )
+                        )
+                        _creds = _creds_q.scalar_one_or_none()
+                        if _acct and _creds:
+                            _vertical = (
+                                _acct.vertical
+                                or detect_vertical_from_description(brief.business_description or "")
+                            )
+
+                            class _FeedProvider:
+                                async def query_merchant_center_feed(
+                                    self, refresh_token: str, customer_id: str
+                                ) -> list:
+                                    from adcopilot.infrastructure.google_ads.queries import (
+                                        query_merchant_center_feed,
+                                    )
+                                    return await query_merchant_center_feed(
+                                        refresh_token, customer_id, settings
+                                    )
+
+                            _pmax_uc = DetectPMaxEligibilityUseCase(feed_provider=_FeedProvider())
+                            _pmax_result = await _pmax_uc.run(
+                                vertical=_vertical,
+                                refresh_token=_creds.refresh_token,
+                                customer_id=_acct.customer_id,
+                            )
+                            if _pmax_result.eligible:
+                                feed_name = _pmax_result.feeds[0].get("name") or "your product feed"
+                                await query.edit_message_text(
+                                    f"🛒 I see you have a product feed ({feed_name}) linked to your account!\n\n"
+                                    "Would you like a **Performance Max** campaign? "
+                                    "(recommended for e-commerce — uses your product catalog)\n\n"
+                                    "Performance Max campaigns automatically show your products across "
+                                    "Google Search, Shopping, Display, YouTube and Maps.\n\n"
+                                    "⚡ Generating your PMax campaign proposal now…"
+                                )
+                                generate_brief_id = brief_id_str
+                                logger.info(
+                                    "PMax campaign generation dispatched",
+                                    brief_id=brief_id_str,
+                                    feed=feed_name,
+                                )
+                                updated = dataclasses.replace(brief, status=LaunchStatus.GENERATING)
+                                await repo.save(updated)
+                                # Skip to the standard generation flow below (same task)
+                    except Exception as _pmax_err:
+                        logger.debug("PMax eligibility check skipped", error=str(_pmax_err))
+                    # --- end PMax check ---
+
+                    if not generate_brief_id:
+                        updated = dataclasses.replace(brief, status=LaunchStatus.GENERATING)
+                        await repo.save(updated)
+                        await query.edit_message_text(
+                            "⏳ Generating your campaign proposal…\n\n"
+                            "I'll notify you when it's ready! This usually takes 30–60 seconds."
+                        )
+                        generate_brief_id = brief_id_str
                     logger.info("campaign generation dispatched", brief_id=brief_id_str)
 
             # ── iv_fix:{brief_id} ─────────────────────────────────────────────
