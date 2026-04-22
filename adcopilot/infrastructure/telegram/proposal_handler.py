@@ -43,21 +43,21 @@ _MICROS_PER_PLN = 1_000_000
 
 def format_proposal_summary(proposal: CampaignProposal) -> str:
     """Format a ≤15-line proposal summary suitable for a Telegram message."""
-    daily_budget_pln = proposal.daily_budget_micros / _MICROS_PER_PLN
+    from adcopilot.domain.polish_market.currency import format_pln_micros, format_pln
     total_kws = sum(len(ag.keywords) for ag in proposal.ad_groups)
     total_ads = sum(len(ag.ads) for ag in proposal.ad_groups)
-    cpc_min = proposal.estimated_cpc_range[0] / _MICROS_PER_PLN
-    cpc_max = proposal.estimated_cpc_range[1] / _MICROS_PER_PLN
+    cpc_min_pln = proposal.estimated_cpc_range[0] / _MICROS_PER_PLN
+    cpc_max_pln = proposal.estimated_cpc_range[1] / _MICROS_PER_PLN
 
     lines = [
         f"🎯 *Campaign Proposal: {proposal.campaign_name}*",
         "",
-        f"💰 Daily budget: {daily_budget_pln:,.2f} PLN",
+        f"💰 Dzienny budżet: {format_pln_micros(proposal.daily_budget_micros)}",
         f"📍 Targeting: {proposal.location_targeting}",
         f"📈 Bidding: {proposal.bidding_strategy}",
         f"📊 Structure: {len(proposal.ad_groups)} ad groups · {total_kws} keywords · {total_ads} ads",
         f"🚫 Negative keywords: {len(proposal.negative_keywords)}",
-        f"💵 Est. CPC: {cpc_min:.2f}-{cpc_max:.2f} PLN",
+        f"💵 Est. CPC: {format_pln(cpc_min_pln)}–{format_pln(cpc_max_pln)}",
     ]
 
     if proposal.compliance_warnings:
@@ -85,11 +85,11 @@ def format_proposal_summary(proposal: CampaignProposal) -> str:
             )
 
     if proposal.brand_campaign_name:
-        brand_budget_pln = proposal.brand_daily_budget_micros / _MICROS_PER_PLN
+        brand_budget_formatted = format_pln_micros(proposal.brand_daily_budget_micros)
         lines += [
             "",
             f"🏷️ *Brand campaign: {proposal.brand_campaign_name}*",
-            f"   Budget: {brand_budget_pln:,.2f} PLN/day · {len(proposal.brand_keywords)} brand keywords · MAXIMIZE_CLICKS",
+            f"   Budget: {brand_budget_formatted}/dzień · {len(proposal.brand_keywords)} brand keywords · MAXIMIZE_CLICKS",
         ]
 
     # Example ad from the first ad group

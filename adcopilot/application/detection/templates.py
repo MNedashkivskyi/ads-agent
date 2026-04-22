@@ -716,10 +716,12 @@ def format_micros_as_currency(micros: int, currency: str = "EUR") -> str:
     Examples:
         10_500_000 -> '€10.50'
         1_000_000_000 -> '€1000.00'
+        PLN: 1_234_560_000 -> '1 234,56 zł'
     """
-    symbols = {"EUR": "€", "USD": "$", "GBP": "£", "PLN": "zł"}
+    if currency == "PLN":
+        from adcopilot.domain.polish_market.currency import format_pln_micros
+        return format_pln_micros(micros)
+    symbols = {"EUR": "€", "USD": "$", "GBP": "£"}
     symbol = symbols.get(currency, currency + " ")
     value = micros / 1_000_000
-    if currency == "PLN":
-        return f"{value:.2f} {symbol}"
     return f"{symbol}{value:.2f}"
