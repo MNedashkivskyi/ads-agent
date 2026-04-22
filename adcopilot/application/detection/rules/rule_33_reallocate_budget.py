@@ -15,6 +15,7 @@ import uuid
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.domain.polish_market.seasonality import get_seasonal_multiplier
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -48,6 +49,26 @@ class ReallocateBudgetRule:
         if len(enabled) < 2:
             return []
 
+        # Seasonal adjustment: if the account's vertical is in a high-demand month,
+        # raise the under-utilisation threshold so normal seasonal overspend isn't
+        # flagged as a candidate donor.
+        seasonal_mult = 1.0
+        seasonal_vertical: str | None = None
+        if ctx.vertical_benchmark is not None:
+            seasonal_vertical = ctx.vertical_benchmark.vertical
+            try:
+                seasonal_mult = get_seasonal_multiplier(
+                    seasonal_vertical, datetime.now(tz=UTC).month
+                )
+            except Exception:
+                seasonal_mult = 1.0
+
+        # In high-demand periods, allow campaigns to spend more before being
+        # considered underspenders (donor threshold scaled by seasonal multiplier).
+        effective_low_threshold = min(
+            _BUDGET_UTILISATION_LOW * seasonal_mult, _BUDGET_UTILISATION_HIGH
+        )
+
         # Split into high-performers (constrained) and low-performers (underspending).
         # The minimum spend threshold only applies to the high-ROAS receiver — we want
         # to confirm it is genuinely active before recommending more budget.
@@ -62,7 +83,7 @@ class ReallocateBudgetRule:
                 and c.cost_micros >= _MIN_SPEND_MICROS
             ):
                 high.append(c)
-            elif roas < _MAX_ROAS_LOW and util < _BUDGET_UTILISATION_LOW:
+            elif roas < _MAX_ROAS_LOW and util < effective_low_threshold:
                 low.append(c)
 
         if not high or not low:
@@ -98,6 +119,8 @@ class ReallocateBudgetRule:
                         "donor_budget_utilisation": round(_utilisation(donor), 2),
                         "donor_cost_micros": donor.cost_micros,
                         "donor_budget_micros": donor.budget_micros,
+                        "seasonal_multiplier": round(seasonal_mult, 2),
+                        "seasonal_vertical": seasonal_vertical or "",
                     },
                     estimated_monthly_savings_micros=0,
                     created_at=datetime.now(tz=UTC),

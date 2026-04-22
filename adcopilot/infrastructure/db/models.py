@@ -696,6 +696,8 @@ class LaunchProposalModel(Base):
     brand_keywords: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=None)
     brand_daily_budget_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     brand_ad: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=None)
+    seasonal_multiplier: Mapped[float] = mapped_column(nullable=False, default=1.0)
+    seasonal_vertical: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

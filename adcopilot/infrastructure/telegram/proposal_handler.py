@@ -60,6 +60,18 @@ def format_proposal_summary(proposal: CampaignProposal) -> str:
         f"💵 Est. CPC: {cpc_min:.2f}-{cpc_max:.2f} PLN",
     ]
 
+    if proposal.seasonal_multiplier != 1.0:
+        if proposal.seasonal_multiplier > 1.0:
+            lines.append(
+                f"📅 Sezon szczytowy dla tej branży (mnożnik {proposal.seasonal_multiplier:.2f}×) — "
+                "budżet może wyczerpać się szybciej niż zwykle."
+            )
+        else:
+            lines.append(
+                f"📅 Niski sezon dla tej branży (mnożnik {proposal.seasonal_multiplier:.2f}×) — "
+                "możesz uzyskać lepszą wartość za budżet."
+            )
+
     if proposal.brand_campaign_name:
         brand_budget_pln = proposal.brand_daily_budget_micros / _MICROS_PER_PLN
         lines += [
