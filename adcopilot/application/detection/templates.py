@@ -667,6 +667,24 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " Explain how to refresh or replace this sitelink in plain English."
         ),
     },
+    RecommendationKind.PROMOTE_SEARCH_TERM: {
+        "pl": (
+            "Fraza wyszukiwania \"{search_term}\" wygenerowała {conversions:.0f} konwersji"
+            " przy CPA {cpa_pln:.2f} zł (średnia konta: {avg_cpa_pln:.2f} zł),"
+            " ale nie jest jeszcze dodana jako słowo kluczowe."
+            " Dodanie jej jako dopasowanie ścisłe [exact] w grupie reklam {ad_group_id}"
+            " pozwoli precyzyjnie zarządzać stawkami i tekstami reklam."
+            " Wytłumacz korzyści z promowania tej frazy, po polsku."
+        ),
+        "en": (
+            "Search term \"{search_term}\" generated {conversions:.0f} conversions"
+            " at a CPA of {cpa_pln:.2f} PLN (account average: {avg_cpa_pln:.2f} PLN)"
+            " but is not yet added as a keyword."
+            " Adding it as an exact-match keyword in ad group {ad_group_id}"
+            " will let you control bids and ad copy for this high-value query."
+            " Explain the benefit of promoting this search term in plain English."
+        ),
+    },
 }
 
 
