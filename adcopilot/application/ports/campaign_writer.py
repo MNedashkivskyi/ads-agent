@@ -13,6 +13,7 @@ from adcopilot.domain.launch.entities import (
     CalloutProposal,
     CampaignProposal,
     KeywordProposal,
+    PMaxCampaignProposal,
     SitelinkProposal,
     StructuredSnippetProposal,
 )
@@ -174,4 +175,47 @@ class CampaignWriterPort(Protocol):
 
         Partial campaigns must never be left in the customer's account.
         """
+        ...
+
+
+@dataclass(frozen=True)
+class CreatedPMaxResources:
+    """All resource names created during a PMax campaign-creation run."""
+
+    campaign_resource_name: str
+    budget_resource_name: str
+    asset_group_resource_names: list[str]
+
+    def __post_init__(self) -> None:
+        pass  # no optional fields
+
+
+class PMaxCampaignWriterPort(Protocol):
+    """Write operations for creating a Performance Max campaign."""
+
+    async def create_pmax_campaign(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        proposal: PMaxCampaignProposal,
+    ) -> CreatedPMaxResources:
+        """Create a PMax campaign (PAUSED) with asset groups; return created resources."""
+        ...
+
+    async def enable_pmax_campaign(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        campaign_resource_name: str,
+    ) -> None:
+        """Enable a previously created PMax campaign."""
+        ...
+
+    async def delete_draft_pmax_campaign(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        resources: CreatedPMaxResources,
+    ) -> None:
+        """Roll back all PMax resources on failure."""
         ...
