@@ -47,11 +47,15 @@ def get_ad_schedule(vertical: str, tier: BudgetTier) -> list[AdScheduleEntry]:
     """Return ad schedule entries for a vertical and budget tier.
 
     Ecommerce: no schedule (24/7).
+    MICRO tier: always Mon-Fri 7:00-19:00 to limit overnight spend.
     B2B verticals: Mon-Fri 7:00-19:00.
     Local verticals: all 7 days 7:00-22:00.
     """
     if vertical in ("ecommerce",):
         return []
+
+    if tier == BudgetTier.MICRO:
+        return _weekday_schedule(7, 19)
 
     if vertical in _B2B_VERTICALS:
         return _weekday_schedule(7, 19)
@@ -59,5 +63,5 @@ def get_ad_schedule(vertical: str, tier: BudgetTier) -> list[AdScheduleEntry]:
     if vertical in _LOCAL_VERTICALS:
         return _allday_schedule(7, 22)
 
-    # Default (covers MICRO tier and unknown verticals)
+    # Default
     return _weekday_schedule(7, 19)
