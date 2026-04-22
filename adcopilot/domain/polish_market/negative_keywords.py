@@ -5,11 +5,12 @@ from __future__ import annotations
 # Standard negative categories — each campaign must cover all of these.
 # Format: (category_label, list_of_acceptable_terms)
 POLISH_STANDARD_NEGATIVES: list[tuple[str, list[str]]] = [
-    ("darmowy", ["darmowy", "za darmo", "bezpłatnie", "gratis", "darmowe", "free"]),
-    ("praca", ["praca", "oferty pracy", "zarobki", "kariera", "rekrutacja", "stanowisko", "job", "hiring"]),
-    ("diy", ["jak zrobić", "samodzielnie", "poradnik", "krok po kroku", "instrukcja", "zrób sam", "diy"]),
+    ("darmowy", ["darmowy", "za darmo", "bezpłatnie", "gratis", "darmowe", "free", "za darmo pdf"]),
+    ("praca", ["praca", "oferty pracy", "zarobki", "kariera", "rekrutacja", "stanowisko", "job", "hiring", "ile zarabia"]),
+    ("diy", ["jak zrobić", "samodzielnie", "poradnik", "krok po kroku", "instrukcja", "zrób sam", "diy", "jak samemu"]),
     ("edukacja", ["kurs", "szkolenie", "studia", "uczelnia", "egzamin", "tutorial", "how to"]),
     ("forum/media", ["youtube", "tiktok", "forum", "blog", "opinia", "recenzja", "review"]),
+    ("pobieranie", ["do pobrania", "filmik", "filmiki", "szablon", "wzór", "referat", "prezentacja"]),
 ]
 
 # Vertical-specific Polish negative keyword lists.
@@ -18,30 +19,40 @@ VERTICAL_NEGATIVES_PL: dict[str, list[str]] = {
         "peruka", "przedłużanie włosów", "farba do włosów sklep",
         "youtube", "tiktok", "diy koloryzacja", "domowe farbowanie",
         "szampon tanio", "odżywka sklep",
+        "w domu", "domowy", "przepis na",
+        "kurs online",
     ],
     "prawnik": [
         "prawo karne studia", "aplikacja radcowska", "egzamin adwokacki",
         "wzory pism", "darmowe porady", "wzór umowy", "formularz sądowy",
         "studia prawnicze", "paralegalne",
+        "praktyki", "praktyki studenckie", "aplikacja prawnicza",
+        "kodeks",
+        "kurs online",
     ],
     "restauracja": [
         "przepis", "jak ugotować", "kurs gotowania", "dieta",
         "kalorie", "gotowanie w domu", "przepisy kulinarne",
         "blog kulinarny", "kuchnia domowa",
+        "kurs online",
     ],
     "lekarz": [
         "domowe sposoby", "samoleczenie", "studia medyczne", "rezydencja",
         "leki bez recepty sklep", "ziołowe leczenie", "medycyna alternatywna",
         "diagnoza online", "symptomy sprawdź",
+        "poradnia", "nfz", "leczenie domowe",
+        "kurs online",
     ],
     "ecommerce": [
         "używane", "second hand", "za darmo", "crack", "torrent",
         "nielegalne", "podróbka", "fake", "allegro używane",
+        "kurs online",
     ],
     "nieruchomości": [
         "wynajem studencki", "akademik", "umowa najmu wzór",
         "jak napisać umowę", "podatek od nieruchomości kalkulator",
         "prawo budowlane studia", "architekt studia",
+        "kurs online",
     ],
     "edukacja": [
         "darmowy kurs", "piracki materiał", "crack oprogramowanie",
@@ -52,5 +63,6 @@ VERTICAL_NEGATIVES_PL: dict[str, list[str]] = {
         "jak naprawić samodzielnie", "diy remont", "poradnik hydrauliczny",
         "instrukcja montażu", "youtube naprawy", "sklep z narzędziami",
         "materiały budowlane tanio",
+        "kurs online",
     ],
 }
