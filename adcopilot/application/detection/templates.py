@@ -685,6 +685,24 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " Explain the benefit of promoting this search term in plain English."
         ),
     },
+    RecommendationKind.ABOVE_VERTICAL_BENCHMARK: {
+        "pl": (
+            "Twoje konto ma CPA {account_cpa_pln:.2f} zł, czyli o {pct_above_p75:.1f}%"
+            " powyżej górnego kwartyla (p75 = {benchmark_p75_pln:.2f} zł)"
+            " dla branży \"{vertical}\" (tier {city_tier})."
+            " Mediana benchmarku to {benchmark_median_pln:.2f} zł"
+            " na podstawie {benchmark_account_count} kont."
+            " Wskaż konkretne obszary kampanii do optymalizacji CPA, po polsku."
+        ),
+        "en": (
+            "Your account CPA is {account_cpa_pln:.2f} PLN — {pct_above_p75:.1f}%"
+            " above the vertical p75 benchmark ({benchmark_p75_pln:.2f} PLN)"
+            " for the \"{vertical}\" vertical (city tier {city_tier})."
+            " The benchmark median is {benchmark_median_pln:.2f} PLN"
+            " across {benchmark_account_count} accounts."
+            " Suggest specific campaign optimisations to bring CPA closer to benchmark."
+        ),
+    },
 }
 
 

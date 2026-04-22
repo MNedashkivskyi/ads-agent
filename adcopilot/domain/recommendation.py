@@ -71,6 +71,8 @@ class RecommendationKind(Enum):
     LANDING_PAGE_KEYWORD_MISMATCH = "LANDING_PAGE_KEYWORD_MISMATCH"
     # Module 9 — Search term mining
     PROMOTE_SEARCH_TERM = "PROMOTE_SEARCH_TERM"
+    # Module 10 — Benchmarking
+    ABOVE_VERTICAL_BENCHMARK = "ABOVE_VERTICAL_BENCHMARK"
 
 
 class RecommendationSeverity(Enum):
@@ -129,6 +131,8 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         RecommendationKind.REFRESH_SITELINK,
         # Module 8 — landing page quality (informational, no Google Ads mutation)
         RecommendationKind.LANDING_PAGE_KEYWORD_MISMATCH,
+        # Module 10 — benchmarking (informational)
+        RecommendationKind.ABOVE_VERTICAL_BENCHMARK,
     }
 )
 
