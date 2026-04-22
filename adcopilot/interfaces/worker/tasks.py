@@ -2054,3 +2054,35 @@ def compare_recommendation_performance_task() -> dict[str, object]:
             await engine.dispose()
 
     return asyncio.run(_run())  # type: ignore[return-value]
+
+
+@celery_app.task(name="classify_account_vertical_task")  # type: ignore[misc]
+def classify_account_vertical_task(account_id: str) -> dict[str, object]:
+    """Classify the vertical of a single account from its latest keyword snapshot."""
+    import asyncio as _asyncio
+
+    async def _run() -> dict[str, object]:
+        from adcopilot.application.use_cases.classify_account_vertical import (
+            ClassifyAccountVerticalUseCase,
+        )
+        from adcopilot.config import Settings
+        from adcopilot.infrastructure.db.engine import build_async_engine
+        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+            SqlGoogleAdsAccountRepository,
+        )
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        settings = Settings()
+        engine = build_async_engine(settings)
+        try:
+            async with AsyncSession(engine) as session:
+                account_repo = SqlGoogleAdsAccountRepository(session)
+                # Use keyword text from account's latest snapshot if available
+                uc = ClassifyAccountVerticalUseCase(account_repo=account_repo)
+                vertical = await uc.run(account_id=account_id, keywords=[])
+                await session.commit()
+                return {"account_id": account_id, "vertical": vertical}
+        finally:
+            await engine.dispose()
+
+    return _asyncio.run(_run())

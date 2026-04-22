@@ -99,6 +99,12 @@ class GoogleAdsAccountModel(Base):
     write_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     needs_reauth: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     connected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Vertical classification (populated after first snapshot; re-run monthly)
+    vertical: Mapped[str | None] = mapped_column(String(50), nullable=True, default=None)
+    sub_vertical: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
+    vertical_classified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
