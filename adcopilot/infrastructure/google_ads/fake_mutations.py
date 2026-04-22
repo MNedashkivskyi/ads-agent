@@ -379,3 +379,40 @@ class FakeGoogleAdsMutations:
                 "match_type": match_type,
             }
         )
+
+    async def add_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> int:
+        self.calls.append(
+            {
+                "method": "add_keyword",
+                "customer_id": customer_id,
+                "ad_group_id": ad_group_id,
+                "keyword_text": keyword_text,
+                "match_type": match_type,
+            }
+        )
+        return 99999  # fake criterion_id
+
+    async def pause_ad_group_keyword_by_text(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "pause_ad_group_keyword_by_text",
+                "customer_id": customer_id,
+                "ad_group_id": ad_group_id,
+                "keyword_text": keyword_text,
+                "match_type": match_type,
+            }
+        )

@@ -772,3 +772,71 @@ class GoogleAdsMutationsAdapter:
             raise
         except Exception as exc:
             raise _wrap_mutation_exc("remove_campaign_assets", exc) from exc
+
+    async def add_keyword(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> int:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            ad_group_criterion_service = client.get_service("AdGroupCriterionService")
+            ad_group_service = client.get_service("AdGroupService")
+            op = client.get_type("AdGroupCriterionOperation")
+            criterion = op.create
+            criterion.ad_group = ad_group_service.ad_group_path(cid, ad_group_id)
+            criterion.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
+            criterion.keyword.text = keyword_text
+            criterion.keyword.match_type = getattr(client.enums.KeywordMatchTypeEnum, match_type)
+            response = ad_group_criterion_service.mutate_ad_group_criteria(customer_id=cid, operations=[op])
+            new_rn = response.results[0].resource_name
+            # resource_name format: customers/{cid}/adGroupCriteria/{ad_group_id}~{criterion_id}
+            criterion_id = int(new_rn.split("~")[-1])
+            logger.info("keyword added", customer_id=customer_id, ad_group_id=ad_group_id, keyword=keyword_text, criterion_id=criterion_id)
+            return criterion_id
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("add_keyword", exc) from exc
+
+    async def pause_ad_group_keyword_by_text(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        keyword_text: str,
+        match_type: str,
+    ) -> None:
+        """Pause a keyword identified by text + match_type in an ad group."""
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            ga_service = client.get_service("GoogleAdsService")
+            ad_group_criterion_service = client.get_service("AdGroupCriterionService")
+            mt_enum = getattr(client.enums.KeywordMatchTypeEnum, match_type).value
+            query = (
+                f"SELECT ad_group_criterion.resource_name FROM ad_group_criterion "
+                f"WHERE ad_group_criterion.ad_group = 'customers/{cid}/adGroups/{ad_group_id}' "
+                f"AND ad_group_criterion.keyword.text = '{keyword_text}' "
+                f"AND ad_group_criterion.keyword.match_type = {mt_enum} "
+                f"AND ad_group_criterion.type = KEYWORD"
+            )
+            response = ga_service.search(customer_id=cid, query=query)
+            ops = []
+            for row in response:
+                op = client.get_type("AdGroupCriterionOperation")
+                op.update.resource_name = row.ad_group_criterion.resource_name
+                op.update.status = client.enums.AdGroupCriterionStatusEnum.PAUSED
+                op.update_mask.paths.append("status")
+                ops.append(op)
+            if ops:
+                ad_group_criterion_service.mutate_ad_group_criteria(customer_id=cid, operations=ops)
+            logger.info("keyword paused by text", customer_id=customer_id, ad_group_id=ad_group_id, keyword=keyword_text)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("pause_ad_group_keyword_by_text", exc) from exc
