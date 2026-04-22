@@ -270,6 +270,9 @@ class CampaignBrief:
     campaign_resource_name: str | None = None
     """Google Ads campaign resource name, set after the campaign is created (PAUSED state)."""
 
+    vertical: str | None = None
+    """Detected Polish market vertical (e.g. 'prawnik', 'salon'). Used for budget validation."""
+
 
 # ---------------------------------------------------------------------------
 # Performance Max campaign proposal (e-commerce with Merchant Center feed)

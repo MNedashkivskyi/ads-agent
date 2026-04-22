@@ -662,6 +662,7 @@ class LaunchBriefModel(Base):
     # Google Ads resource name for the created campaign (e.g. "customers/123/campaigns/456").
     # Set after create_campaign succeeds; required for enable_campaign.
     campaign_resource_name: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    vertical: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

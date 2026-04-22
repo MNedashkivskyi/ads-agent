@@ -60,6 +60,50 @@ from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
 logger = structlog.get_logger(__name__)
 
 # ---------------------------------------------------------------------------
+# Vertical detection helpers
+# ---------------------------------------------------------------------------
+
+# Maps detect_vertical_from_description output → Polish market benchmark key
+_VERTICAL_TO_POLISH: dict[str, str] = {
+    "salon": "salon",
+    "ecommerce": "e-commerce",
+    "restaurant": "restauracja",
+    "legal": "prawnik",
+    "medical": "lekarz",
+    "nieruchomości": "nieruchomości",
+    "edukacja": "edukacja",
+    "usługi domowe": "usługi domowe",
+}
+
+
+def _detect_vertical(business_description: str) -> str | None:
+    """Return Polish market vertical key for *business_description*, or None."""
+    try:
+        from adcopilot.domain.launch.templates import detect_vertical_from_description
+        raw = detect_vertical_from_description(business_description)
+        return _VERTICAL_TO_POLISH.get(raw)
+    except Exception:
+        return None
+
+
+def _check_budget_warning(vertical: str | None, location: str, budget: "Decimal") -> str:
+    """Return a non-empty warning string if budget is below the Polish market minimum."""
+    from adcopilot.domain.polish_market.budget_validator import validate_budget
+    if not location:
+        return ""
+    effective_vertical = vertical or ""
+    result = validate_budget(effective_vertical, location, budget)
+    if result.warning_message:
+        logger.info(
+            "budget_warning_shown",
+            vertical=effective_vertical,
+            location=location,
+            budget=str(budget),
+        )
+        return "\n\n⚠️ " + result.warning_message
+    return ""
+
+# ---------------------------------------------------------------------------
 # Question definitions
 # ---------------------------------------------------------------------------
 
@@ -219,8 +263,13 @@ async def fsm_handle_text(
     step = brief.interview_step
 
     if step == 1:
+        description = text.strip()
+        detected_vertical = _detect_vertical(description)
         updated = dataclasses.replace(
-            brief, business_description=text.strip(), interview_step=2
+            brief,
+            business_description=description,
+            interview_step=2,
+            vertical=detected_vertical,
         )
         await repo.save(updated)
         return InterviewResult(brief=updated, text=QUESTIONS[2])
@@ -257,18 +306,7 @@ async def fsm_handle_text(
             brief, monthly_budget_pln=budget, interview_step=6
         )
         await repo.save(updated)
-        # Best-effort budget warning against Polish market benchmarks
-        warning_text = ""
-        try:
-            from adcopilot.domain.polish_market.budget_validator import validate_budget
-            vertical = getattr(brief, "vertical", None) or ""
-            location = getattr(brief, "location", None) or ""
-            if vertical and location:
-                result = validate_budget(vertical, location, budget)
-                if result.warning_message:
-                    warning_text = "\n\n" + result.warning_message
-        except Exception:
-            pass
+        warning_text = _check_budget_warning(updated.vertical, updated.location, budget)
         return InterviewResult(brief=updated, text=QUESTIONS[6] + warning_text)
 
     if step == 6:
