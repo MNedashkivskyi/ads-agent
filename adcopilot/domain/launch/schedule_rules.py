@@ -1,11 +1,10 @@
 """Ad schedule rules — proactive dayparting applied at campaign creation.
 
 Polish market defaults:
-  B2B (legal, medical, generic): Mon-Fri 8:00-17:00
-  Salon: Mon-Fri 9:00-19:00, Sat 9:00-17:00
-  Restaurant: daily 11:00-22:00 (Sat extended to 23:00)
+  B2B (legal, medical, generic): Mon-Fri 7:00-19:00
+  Local (salon, restaurant): all 7 days 7:00-22:00
   Ecommerce: no schedule (24/7)
-  MICRO tier always gets Mon-Fri 8:00-17:00 to avoid overnight waste.
+  MICRO tier always gets the same schedule as MID to avoid overnight waste.
 """
 
 from __future__ import annotations
@@ -13,14 +12,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from adcopilot.domain.launch.budget_tier import BudgetTier
-from adcopilot.domain.polish_market.calendar import POLISH_BUSINESS_HOURS
 
 _WEEKDAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"]
 _ALL_DAYS = _WEEKDAYS + ["SATURDAY", "SUNDAY"]
 
 _B2B_VERTICALS = {"legal", "medical", "generic", "prawnik", "lekarz", "nieruchomości"}
 _LOCAL_VERTICALS = {"salon", "restaurant", "restauracja", "usługi domowe"}
-_EXTENDED_VERTICALS = {"edukacja"}
 
 
 @dataclass(frozen=True)
@@ -46,53 +43,25 @@ def _allday_schedule(start_hour: int, end_hour: int) -> list[AdScheduleEntry]:
     ]
 
 
-def _schedule_from_polish_hours(vertical: str) -> list[AdScheduleEntry]:
-    """Build schedule from POLISH_BUSINESS_HOURS for a known vertical."""
-    hours = POLISH_BUSINESS_HOURS.get(vertical)
-    if hours is None:
-        return _weekday_schedule(8, 17)
-
-    entries: list[AdScheduleEntry] = []
-    wd_start, wd_end = hours["weekday"]  # type: ignore[misc]
-    if wd_end == 24:
-        # 24/7 — no schedule constraint
-        return []
-    for day in _WEEKDAYS:
-        entries.append(AdScheduleEntry(day, wd_start, 0, wd_end, 0))
-
-    sat = hours.get("saturday")
-    if sat:
-        entries.append(AdScheduleEntry("SATURDAY", sat[0], 0, sat[1], 0))
-
-    sun = hours.get("sunday")
-    if sun:
-        entries.append(AdScheduleEntry("SUNDAY", sun[0], 0, sun[1], 0))
-
-    return entries
-
-
 def get_ad_schedule(vertical: str, tier: BudgetTier) -> list[AdScheduleEntry]:
     """Return ad schedule entries for a vertical and budget tier.
 
-    MICRO tier always gets Mon-Fri 8:00-17:00 to avoid overnight waste.
     Ecommerce: no schedule (24/7).
-    All other verticals: Polish business hours from POLISH_BUSINESS_HOURS.
+    MICRO tier: always Mon-Fri 7:00-19:00 to limit overnight spend.
+    B2B verticals: Mon-Fri 7:00-19:00.
+    Local verticals: all 7 days 7:00-22:00.
     """
     if vertical in ("ecommerce",):
         return []
 
     if tier == BudgetTier.MICRO:
-        return _weekday_schedule(8, 17)
-
-    # Use Polish vertical hours if available
-    if vertical in POLISH_BUSINESS_HOURS:
-        return _schedule_from_polish_hours(vertical)
+        return _weekday_schedule(7, 19)
 
     if vertical in _B2B_VERTICALS:
-        return _weekday_schedule(8, 17)
+        return _weekday_schedule(7, 19)
 
     if vertical in _LOCAL_VERTICALS:
-        return _schedule_from_polish_hours("salon")
+        return _allday_schedule(7, 22)
 
     # Default
-    return _weekday_schedule(8, 17)
+    return _weekday_schedule(7, 19)

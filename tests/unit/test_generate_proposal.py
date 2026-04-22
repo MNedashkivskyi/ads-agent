@@ -369,6 +369,7 @@ _ECOM_NEGATIVES = json.dumps(
             "job",
             "tutorial",
             "second hand",
+            "youtube",
         ]
     }
 )

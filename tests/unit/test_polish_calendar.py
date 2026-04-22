@@ -121,15 +121,15 @@ def test_salon_mid_includes_saturday() -> None:
     assert "SATURDAY" in days
 
 
-def test_legal_start_hour_is_8() -> None:
+def test_legal_start_hour_is_7() -> None:
     schedule = get_ad_schedule("legal", BudgetTier.MID)
     weekday_entries = [e for e in schedule if e.day_of_week == "MONDAY"]
-    assert weekday_entries[0].start_hour == 8
+    assert weekday_entries[0].start_hour == 7
 
 
-def test_micro_tier_start_hour_is_8() -> None:
+def test_micro_tier_start_hour_is_7() -> None:
     schedule = get_ad_schedule("legal", BudgetTier.MICRO)
-    assert all(e.start_hour == 8 for e in schedule)
+    assert all(e.start_hour == 7 for e in schedule)
 
 
 def test_all_entries_are_schedule_entries() -> None:
