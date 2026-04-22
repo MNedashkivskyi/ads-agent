@@ -53,11 +53,8 @@ class PMaxCampaignWriter:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def _build_client(self, refresh_token: str) -> GoogleAdsClientAdapter:
-        return GoogleAdsClientAdapter(
-            refresh_token=refresh_token,
-            settings=self._settings,
-        )
+    def _build_client(self, refresh_token: str) -> Any:
+        return GoogleAdsClientAdapter(self._settings)._build_client(refresh_token)
 
     async def create_pmax_campaign(
         self,
@@ -122,11 +119,11 @@ class PMaxCampaignWriter:
 
     async def _create_budget(
         self,
-        adapter: GoogleAdsClientAdapter,
+        adapter: Any,
         customer_id: str,
         proposal: PMaxCampaignProposal,
     ) -> str:
-        client = adapter.client
+        client = adapter
         budget_service = client.get_service("CampaignBudgetService")
         campaign_budget_operation = client.get_type("CampaignBudgetOperation")
         budget = campaign_budget_operation.create
@@ -143,12 +140,12 @@ class PMaxCampaignWriter:
 
     async def _create_campaign(
         self,
-        adapter: GoogleAdsClientAdapter,
+        adapter: Any,
         customer_id: str,
         proposal: PMaxCampaignProposal,
         budget_resource_name: str,
     ) -> str:
-        client = adapter.client
+        client = adapter
         campaign_service = client.get_service("CampaignService")
         campaign_operation = client.get_type("CampaignOperation")
         campaign = campaign_operation.create
@@ -172,13 +169,13 @@ class PMaxCampaignWriter:
 
     async def _create_asset_group(
         self,
-        adapter: GoogleAdsClientAdapter,
+        adapter: Any,
         customer_id: str,
         campaign_resource_name: str,
         ag_proposal: Any,
         merchant_center_feed_id: int,
     ) -> str:
-        client = adapter.client
+        client = adapter
         asset_group_service = client.get_service("AssetGroupService")
 
         # Build text assets (headlines + descriptions)
@@ -249,12 +246,12 @@ class PMaxCampaignWriter:
 
     async def _add_audience_signals(
         self,
-        adapter: GoogleAdsClientAdapter,
+        adapter: Any,
         customer_id: str,
         asset_group_resource_name: str,
         audience_signal_resource_names: list[str],
     ) -> None:
-        client = adapter.client
+        client = adapter
         signal_service = client.get_service("AssetGroupSignalService")
         ops = []
         for rn in audience_signal_resource_names:
@@ -270,14 +267,14 @@ class PMaxCampaignWriter:
 
     async def _rollback(
         self,
-        adapter: GoogleAdsClientAdapter,
+        adapter: Any,
         customer_id: str,
         campaign_rn: str | None,
         budget_rn: str | None,
         asset_group_rns: list[str],
     ) -> None:
         """Best-effort cleanup — log but do not re-raise."""
-        client = adapter.client
+        client = adapter
         try:
             if asset_group_rns:
                 ag_service = client.get_service("AssetGroupService")
@@ -316,7 +313,7 @@ class PMaxCampaignWriter:
     ) -> None:
         """Enable a PAUSED PMax campaign."""
         adapter = self._build_client(refresh_token)
-        client = adapter.client
+        client = adapter
         campaign_service = client.get_service("CampaignService")
         op = client.get_type("CampaignOperation")
         campaign = op.update
