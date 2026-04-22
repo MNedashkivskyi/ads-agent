@@ -63,6 +63,24 @@ def _apply_seasonal_multiplier(
     return updated, multiplier
 
 
+def _apply_purchasing_power(
+    proposal: "CampaignProposal",
+    location: str,
+) -> "CampaignProposal":
+    """Scale proposal's daily_budget_micros by the voivodeship purchasing power index."""
+    try:
+        from adcopilot.domain.polish_market.voivodeship_data import get_purchasing_power_for_city
+        index = get_purchasing_power_for_city(location)
+    except Exception:
+        return proposal
+
+    if index == 1.0:
+        return proposal
+
+    adjusted = int(proposal.daily_budget_micros * index)
+    return dataclasses.replace(proposal, daily_budget_micros=adjusted)
+
+
 class GenerateCampaignProposalUseCase:
     """Orchestrate the full proposal-generation pipeline for a ``CampaignBrief``.
 
@@ -219,6 +237,9 @@ class GenerateCampaignProposalUseCase:
                 multiplier=seasonal_multiplier,
             )
 
+        # Apply voivodeship purchasing power adjustment
+        proposal = _apply_purchasing_power(proposal, brief.location)
+
         # Build validation context with landing page check
         lp_ctx = await self._build_validation_context(proposal)
         errors_result = validate_proposal(proposal, brief, lp_ctx)
@@ -263,6 +284,7 @@ class GenerateCampaignProposalUseCase:
 
         proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions)
         proposal, _ = _apply_seasonal_multiplier(proposal, vertical.vertical)
+        proposal = _apply_purchasing_power(proposal, brief.location)
         errors2_result = validate_proposal(proposal, brief, lp_ctx)
         errors2 = errors2_result.errors
 
