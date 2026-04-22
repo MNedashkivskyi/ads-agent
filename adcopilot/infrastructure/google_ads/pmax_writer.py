@@ -54,7 +54,9 @@ class PMaxCampaignWriter:
         self._settings = settings
 
     def _build_client(self, refresh_token: str) -> Any:
-        return GoogleAdsClientAdapter(self._settings)._build_client(refresh_token)
+        from types import SimpleNamespace
+        raw = GoogleAdsClientAdapter(self._settings)._build_client(refresh_token)
+        return SimpleNamespace(client=raw)
 
     async def create_pmax_campaign(
         self,
@@ -123,7 +125,7 @@ class PMaxCampaignWriter:
         customer_id: str,
         proposal: PMaxCampaignProposal,
     ) -> str:
-        client = adapter
+        client = adapter.client
         budget_service = client.get_service("CampaignBudgetService")
         campaign_budget_operation = client.get_type("CampaignBudgetOperation")
         budget = campaign_budget_operation.create
@@ -145,7 +147,7 @@ class PMaxCampaignWriter:
         proposal: PMaxCampaignProposal,
         budget_resource_name: str,
     ) -> str:
-        client = adapter
+        client = adapter.client
         campaign_service = client.get_service("CampaignService")
         campaign_operation = client.get_type("CampaignOperation")
         campaign = campaign_operation.create
@@ -175,7 +177,7 @@ class PMaxCampaignWriter:
         ag_proposal: Any,
         merchant_center_feed_id: int,
     ) -> str:
-        client = adapter
+        client = adapter.client
         asset_group_service = client.get_service("AssetGroupService")
 
         # Build text assets (headlines + descriptions)
@@ -251,7 +253,7 @@ class PMaxCampaignWriter:
         asset_group_resource_name: str,
         audience_signal_resource_names: list[str],
     ) -> None:
-        client = adapter
+        client = adapter.client
         signal_service = client.get_service("AssetGroupSignalService")
         ops = []
         for rn in audience_signal_resource_names:
@@ -274,7 +276,7 @@ class PMaxCampaignWriter:
         asset_group_rns: list[str],
     ) -> None:
         """Best-effort cleanup — log but do not re-raise."""
-        client = adapter
+        client = adapter.client
         try:
             if asset_group_rns:
                 ag_service = client.get_service("AssetGroupService")
@@ -313,7 +315,7 @@ class PMaxCampaignWriter:
     ) -> None:
         """Enable a PAUSED PMax campaign."""
         adapter = self._build_client(refresh_token)
-        client = adapter
+        client = adapter.client
         campaign_service = client.get_service("CampaignService")
         op = client.get_type("CampaignOperation")
         campaign = op.update
