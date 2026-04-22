@@ -209,9 +209,14 @@ class CampaignProposal:
     seasonal_vertical: str | None = None
     """Vertical used to look up the seasonal multiplier (e.g. 'salon')."""
 
+    compliance_warnings: list[dict] = None  # type: ignore[assignment]
+    """Serialised ComplianceWarning dicts from Polish advertising law validators."""
+
     def __post_init__(self) -> None:
         if self.brand_keywords is None:
             object.__setattr__(self, "brand_keywords", [])
+        if self.compliance_warnings is None:
+            object.__setattr__(self, "compliance_warnings", [])
 
 
 # ---------------------------------------------------------------------------
