@@ -53,11 +53,10 @@ class PMaxCampaignWriter:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def _build_client(self, refresh_token: str) -> GoogleAdsClientAdapter:
-        return GoogleAdsClientAdapter(
-            refresh_token=refresh_token,
-            settings=self._settings,
-        )
+    def _build_client(self, refresh_token: str) -> Any:
+        from types import SimpleNamespace
+        raw = GoogleAdsClientAdapter(self._settings)._build_client(refresh_token)
+        return SimpleNamespace(client=raw)
 
     async def create_pmax_campaign(
         self,
@@ -122,7 +121,7 @@ class PMaxCampaignWriter:
 
     async def _create_budget(
         self,
-        adapter: GoogleAdsClientAdapter,
+        adapter: Any,
         customer_id: str,
         proposal: PMaxCampaignProposal,
     ) -> str:
@@ -143,7 +142,7 @@ class PMaxCampaignWriter:
 
     async def _create_campaign(
         self,
-        adapter: GoogleAdsClientAdapter,
+        adapter: Any,
         customer_id: str,
         proposal: PMaxCampaignProposal,
         budget_resource_name: str,
@@ -172,7 +171,7 @@ class PMaxCampaignWriter:
 
     async def _create_asset_group(
         self,
-        adapter: GoogleAdsClientAdapter,
+        adapter: Any,
         customer_id: str,
         campaign_resource_name: str,
         ag_proposal: Any,
@@ -249,7 +248,7 @@ class PMaxCampaignWriter:
 
     async def _add_audience_signals(
         self,
-        adapter: GoogleAdsClientAdapter,
+        adapter: Any,
         customer_id: str,
         asset_group_resource_name: str,
         audience_signal_resource_names: list[str],
@@ -270,7 +269,7 @@ class PMaxCampaignWriter:
 
     async def _rollback(
         self,
-        adapter: GoogleAdsClientAdapter,
+        adapter: Any,
         customer_id: str,
         campaign_rn: str | None,
         budget_rn: str | None,

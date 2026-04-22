@@ -1786,9 +1786,11 @@ def check_rlsa_eligibility_task() -> dict[str, object]:
 
         from adcopilot.application.use_cases.add_rlsa_audiences import AddRlsaAudiencesUseCase
         from adcopilot.domain.entities import AccountId
-        from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
         from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
             SqlGoogleAdsAccountRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+            SqlOAuthCredentialsRepository,
         )
         from adcopilot.infrastructure.google_ads.campaign_writer import CampaignWriter
         from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
@@ -1800,29 +1802,32 @@ def check_rlsa_eligibility_task() -> dict[str, object]:
         try:
             async with AsyncSession(engine) as session:
                 account_repo = SqlGoogleAdsAccountRepository(session)
+                credentials_repo = SqlOAuthCredentialsRepository(
+                    session, settings.TOKEN_ENCRYPTION_KEY
+                )
                 accounts = await account_repo.list_active()
+                account_creds = []
+                for acct in accounts:
+                    if acct.is_manager:
+                        continue
+                    creds = await credentials_repo.get(AccountId(acct.id))
+                    if creds is None:
+                        continue
+                    account_creds.append((acct, acct.customer_id, creds.refresh_token))
 
             queries_adapter = GoogleAdsQueriesAdapter(settings)
             writer = CampaignWriter(settings)
 
-            for account in accounts:
+            for account, customer_id, refresh_token in account_creds:
                 try:
-                    # Only run for GROWTH-tier accounts
-                    from decimal import Decimal
-                    budget = getattr(account, "monthly_budget_pln", None)
-                    if budget is None:
-                        continue
-                    if classify_budget_tier(Decimal(str(budget))) != BudgetTier.GROWTH:
-                        continue
-
                     use_case = AddRlsaAudiencesUseCase(
                         queries_adapter=queries_adapter,
                         campaign_writer=writer,
                     )
                     added = await use_case.execute(
                         account_id=AccountId(str(account.id)),
-                        refresh_token=account.refresh_token,
-                        customer_id=str(account.google_ads_customer_id),
+                        refresh_token=refresh_token,
+                        customer_id=customer_id,
                     )
                     total_added += added
                     accounts_checked += 1
@@ -1865,13 +1870,14 @@ def check_remarketing_campaign_eligibility_task() -> dict[str, object]:
             ProposeRemarketingCampaignUseCase,
         )
         from adcopilot.domain.entities import AccountId
-        from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
         from adcopilot.domain.launch.entities import CampaignBriefId
         from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
             SqlGoogleAdsAccountRepository,
         )
+        from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+            SqlOAuthCredentialsRepository,
+        )
         from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
-        from decimal import Decimal
 
         engine = create_async_engine(settings.DATABASE_URL)
         proposals_generated = 0
@@ -1880,29 +1886,30 @@ def check_remarketing_campaign_eligibility_task() -> dict[str, object]:
         try:
             async with AsyncSession(engine) as session:
                 account_repo = SqlGoogleAdsAccountRepository(session)
+                credentials_repo = SqlOAuthCredentialsRepository(
+                    session, settings.TOKEN_ENCRYPTION_KEY
+                )
                 accounts = await account_repo.list_active()
+                account_creds = []
+                for acct in accounts:
+                    if acct.is_manager:
+                        continue
+                    creds = await credentials_repo.get(AccountId(acct.id))
+                    if creds is None:
+                        continue
+                    account_creds.append((acct, acct.customer_id, creds.refresh_token))
 
             queries_adapter = GoogleAdsQueriesAdapter(settings)
 
-            for account in accounts:
+            for account, customer_id, refresh_token in account_creds:
                 try:
-                    # Only GROWTH-tier accounts
-                    budget = getattr(account, "monthly_budget_pln", None)
-                    if budget is None:
-                        continue
-                    if classify_budget_tier(Decimal(str(budget))) != BudgetTier.GROWTH:
-                        continue
-
-                    # Estimate daily budget from monthly (proxy)
-                    daily_budget_micros = int(Decimal(str(budget)) / 30 * 1_000_000)
-
                     use_case = ProposeRemarketingCampaignUseCase(queries_adapter=queries_adapter)
                     proposal = await use_case.execute(
                         account_id=AccountId(str(account.id)),
                         brief_id=CampaignBriefId(""),
-                        refresh_token=account.refresh_token,
-                        customer_id=str(account.google_ads_customer_id),
-                        search_daily_budget_micros=daily_budget_micros,
+                        refresh_token=refresh_token,
+                        customer_id=customer_id,
+                        search_daily_budget_micros=0,
                     )
                     if proposal is not None:
                         proposals_generated += 1
@@ -2029,7 +2036,7 @@ def compare_recommendation_performance_task() -> dict[str, object]:
                     from datetime import date
                     today = date.today()
                     from adcopilot.domain.entities import AccountId
-                    campaigns = await snapshot_repo.get_campaigns(AccountId(account_id), today)
+                    campaigns = await snapshot_repo.get_campaigns_by_date(AccountId(account_id), today)
                     if entity_type == "campaign":
                         for c in campaigns:
                             if c.campaign_id == entity_id:
