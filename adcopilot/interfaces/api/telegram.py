@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import hmac
+import struct
+import time
 import uuid
-from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from jose import JWTError, jwt
 from telegram import Update
 
 from adcopilot.config import Settings, get_settings
@@ -19,32 +21,60 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="", tags=["telegram"])
 
-LINK_JWT_ALGORITHM = "HS256"
-LINK_JWT_EXPIRY_HOURS = 24
+LINK_TOKEN_EXPIRY_HOURS = 24
+_LINK_TOKEN_SIG_BYTES = 10  # truncated HMAC-SHA256
+_LINK_TOKEN_PAYLOAD_BYTES = 20  # 16-byte UUID + 4-byte expiry
 
 
-def _make_link_jwt(user_id: str, secret_key: str) -> str:
-    payload = {
-        "sub": user_id,
-        "exp": datetime.now(UTC) + timedelta(hours=LINK_JWT_EXPIRY_HOURS),
-        "jti": str(uuid.uuid4()),
-        "type": "tg_link",
-    }
-    token: str = jwt.encode(payload, secret_key, algorithm=LINK_JWT_ALGORITHM)
+def _make_link_token(user_id: str, secret_key: str) -> str:
+    """Build a compact signed token suitable for Telegram's ``?start=`` parameter.
+
+    Telegram's Bot API restricts the start payload to ``[A-Za-z0-9_-]{1,64}`` —
+    which rules out JWTs (they contain ``.`` separators and easily exceed 64
+    chars). This packs the user UUID + expiry into 20 bytes, signs it with a
+    truncated HMAC-SHA256, and base64url-encodes the 30-byte result into a
+    40-char token that is fully within Telegram's allowed charset.
+    """
+    uid_bytes = uuid.UUID(user_id).bytes  # 16 bytes
+    exp_ts = int(time.time()) + LINK_TOKEN_EXPIRY_HOURS * 3600
+    exp_bytes = struct.pack(">I", exp_ts)  # 4 bytes
+    payload = uid_bytes + exp_bytes
+    sig = hmac.new(
+        secret_key.encode("utf-8"), payload, hashlib.sha256
+    ).digest()[:_LINK_TOKEN_SIG_BYTES]
+    token = base64.urlsafe_b64encode(payload + sig).decode("ascii").rstrip("=")
     return token
 
 
-def _verify_link_jwt(token: str, secret_key: str) -> str | None:
+def _verify_link_token(token: str, secret_key: str) -> str | None:
     """Returns user_id or None if invalid/expired."""
     try:
-        payload = jwt.decode(token, secret_key, algorithms=[LINK_JWT_ALGORITHM])
-        if payload.get("type") != "tg_link":
-            return None
-        user_id: str = payload["sub"]
-        return user_id
-    except JWTError:
+        # Re-pad for base64 decoding (urlsafe_b64encode without padding emits
+        # a multiple-of-4 string here anyway, but be defensive).
+        padded = token + "=" * (-len(token) % 4)
+        raw = base64.urlsafe_b64decode(padded.encode("ascii"))
+    except (ValueError, TypeError):
         return None
 
+    if len(raw) != _LINK_TOKEN_PAYLOAD_BYTES + _LINK_TOKEN_SIG_BYTES:
+        return None
+
+    payload, sig = raw[:_LINK_TOKEN_PAYLOAD_BYTES], raw[_LINK_TOKEN_PAYLOAD_BYTES:]
+    expected_sig = hmac.new(
+        secret_key.encode("utf-8"), payload, hashlib.sha256
+    ).digest()[:_LINK_TOKEN_SIG_BYTES]
+    if not hmac.compare_digest(sig, expected_sig):
+        return None
+
+    (exp_ts,) = struct.unpack(">I", payload[16:20])
+    if exp_ts < int(time.time()):
+        return None
+
+    try:
+        user_id = str(uuid.UUID(bytes=payload[:16]))
+    except ValueError:
+        return None
+    return user_id
 
 @router.post("/telegram/webhook")
 async def telegram_webhook(
@@ -92,7 +122,7 @@ async def generate_telegram_link(
     if not settings.TELEGRAM_BOT_TOKEN:
         raise HTTPException(status_code=503, detail="Telegram bot not configured")
 
-    token = _make_link_jwt(user_id, settings.SECRET_KEY)
+    token = _make_link_token(user_id, settings.SECRET_KEY)
     bot_name = await _get_bot_username(settings.TELEGRAM_BOT_TOKEN)
     deep_link_url = f"https://t.me/{bot_name}?start={token}"
     return {"deep_link_url": deep_link_url}
