@@ -45,14 +45,20 @@ def validate_proposal(
     # ------------------------------------------------------------------
     # Budget check
     # ------------------------------------------------------------------
-    expected_daily = int(brief.monthly_budget_pln / 30 * 1_000_000)
+    base_expected = int(brief.monthly_budget_pln / 30 * 1_000_000)
+    # The pipeline intentionally scales daily budget by the vertical's
+    # seasonal multiplier (see ``_apply_seasonal_multiplier``). Compare
+    # against the adjusted expected value so valid proposals aren't
+    # rejected in non-neutral months.
+    multiplier = proposal.seasonal_multiplier or 1.0
+    expected_daily = int(base_expected * multiplier)
     if expected_daily > 0:
         drift = abs(proposal.daily_budget_micros - expected_daily) / expected_daily
         if drift > _BUDGET_TOLERANCE:
             errors.append(
                 f"daily_budget_micros {proposal.daily_budget_micros} deviates "
                 f"{drift:.1%} from expected {expected_daily} "
-                f"(monthly {brief.monthly_budget_pln} PLN / 30)"
+                f"(monthly {brief.monthly_budget_pln} PLN / 30 × seasonal {multiplier:.2f})"
             )
 
     # ------------------------------------------------------------------

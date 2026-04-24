@@ -324,14 +324,15 @@ class TestRule4Negatives:
     """Must include standard categories + vertical + user exclusions."""
 
     def _full_negatives(self, extra: list[str] | None = None) -> list[str]:
-        # Covers all 5 Polish standard categories:
-        # darmowy, praca, diy, edukacja, forum/media
+        # Covers all 6 Polish standard categories:
+        # darmowy, praca, diy, edukacja, forum/media, pobieranie
         return [
             "za darmo",   # darmowy
             "praca",      # praca
             "jak zrobić", # diy
             "kurs",       # edukacja
             "youtube",    # forum/media
+            "szablon",    # pobieranie
         ] + (extra or [])
 
     def test_full_standard_negatives_pass(self):
@@ -342,7 +343,9 @@ class TestRule4Negatives:
 
     def test_darmowy_counts_as_free_category(self):
         """Polish synonym 'darmowe' satisfies the darmowy category."""
-        proposal = _proposal(negatives=["darmowe", "praca", "jak zrobić", "kurs", "youtube"])
+        proposal = _proposal(
+            negatives=["darmowe", "praca", "jak zrobić", "kurs", "youtube", "szablon"]
+        )
         result = validate_proposal(proposal, _brief())
         assert not result.rule_results["negatives"]
 
@@ -782,7 +785,7 @@ class TestValidationResult:
         ag = _ag(keywords=[_kw(f"valid keyword {i}") for i in range(5)])
         proposal = _proposal(
             ad_groups=[ag],
-            negatives=["za darmo", "praca", "jak zrobić", "kurs", "youtube"],
+            negatives=["za darmo", "praca", "jak zrobić", "kurs", "youtube", "szablon"],
         )
         result = validate_proposal(proposal, _brief(), ctx)
         assert result.passed is True
@@ -888,7 +891,9 @@ class TestFullValidation:
             bidding="MAXIMIZE_CONVERSIONS",
             location="Warsaw, PL",
             ad_groups=[ag],
-            negatives=["za darmo", "praca", "jak zrobić", "kurs", "youtube", "peruka"],
+            negatives=[
+                "za darmo", "praca", "jak zrobić", "kurs", "youtube", "szablon", "peruka",
+            ],
         )
         brief = _brief(
             monthly_budget=monthly,

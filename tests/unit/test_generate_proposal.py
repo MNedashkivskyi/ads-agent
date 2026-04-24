@@ -370,6 +370,7 @@ _ECOM_NEGATIVES = json.dumps(
             "tutorial",
             "second hand",
             "youtube",
+            "szablon",
         ]
     }
 )
@@ -503,8 +504,10 @@ async def test_ecommerce_golden_proposal() -> None:
     assert len(proposal.ad_groups) == 2
     assert "Pet Food" in proposal.campaign_name or "Organic" in proposal.campaign_name
 
-    # Budget: 2000 PLN / 30 * 1_000_000 ≈ 66_666_667 micros
-    expected_daily = int(Decimal("2000") / 30 * 1_000_000)
+    # Budget: 2000 PLN / 30 * 1_000_000 ≈ 66_666_667 micros, then scaled by
+    # the month's seasonal multiplier for the detected vertical (e-commerce).
+    base_daily = int(Decimal("2000") / 30 * 1_000_000)
+    expected_daily = int(base_daily * proposal.seasonal_multiplier)
     assert abs(proposal.daily_budget_micros - expected_daily) < 10
 
     # Location

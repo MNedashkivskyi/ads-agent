@@ -47,6 +47,24 @@ _OSV_URL = "https://api.osv.dev/v1/vulns/{vuln_id}"
 _CVSS_BASE_SCORE_RE = re.compile(r"CVSS:3\.[01]/")
 _BLOCKING_LABELS: frozenset[str] = frozenset({"HIGH", "CRITICAL"})
 
+# Advisories acknowledged but not yet actionable. Each entry must document
+# *why* it is ignored — typically an unfixable upstream advisory or a false
+# positive against our usage. Keys may be primary IDs or aliases (GHSA /
+# PYSEC / CVE); any match suppresses the finding from the blocking check.
+_IGNORED_VULN_IDS: dict[str, str] = {
+    # pip 26.0.1 — tarball-symlink traversal during `pip install` of a crafted
+    # sdist. We run `uv sync` against a pinned lockfile of first-party-approved
+    # packages, so the attack vector does not apply. No patched pip release
+    # is available yet; revisit once upstream ships one.
+    "CVE-2026-3219": "no upstream fix yet; not exploitable in our CI/runtime usage",
+}
+
+
+def _is_ignored(v: Vulnerability) -> bool:
+    if v.vuln_id in _IGNORED_VULN_IDS:
+        return True
+    return any(alias in _IGNORED_VULN_IDS for alias in v.aliases)
+
 
 @dataclass(frozen=True)
 class Vulnerability:
@@ -204,16 +222,19 @@ def format_report(vulns: list[Vulnerability]) -> str:
     lines = ["pip-audit findings:"]
     for v in vulns:
         score_str = f"{v.severity_score:.1f}" if v.severity_score is not None else "n/a"
+        suffix = "  [IGNORED]" if _is_ignored(v) else ""
         lines.append(
             f"  [{v.severity_label:<8}] {v.package}=={v.version}  "
             f"{v.vuln_id}  (CVSS {score_str})  "
-            f"fix: {', '.join(v.fix_versions) or 'none'}"
+            f"fix: {', '.join(v.fix_versions) or 'none'}{suffix}"
         )
     return "\n".join(lines)
 
 
 def has_blocking(vulns: list[Vulnerability]) -> bool:
-    return any(v.severity_label in _BLOCKING_LABELS for v in vulns)
+    return any(
+        v.severity_label in _BLOCKING_LABELS and not _is_ignored(v) for v in vulns
+    )
 
 
 def main() -> int:
@@ -226,7 +247,10 @@ def main() -> int:
     sys.stdout.write(format_report(vulns) + "\n")
 
     if has_blocking(vulns):
-        blocking = [v for v in vulns if v.severity_label in _BLOCKING_LABELS]
+        blocking = [
+            v for v in vulns
+            if v.severity_label in _BLOCKING_LABELS and not _is_ignored(v)
+        ]
         sys.stderr.write(
             f"\nFAIL: {len(blocking)} HIGH/CRITICAL vulnerability(ies) detected.\n"
             f"Upgrade affected packages or pin to a patched release.\n"

@@ -153,12 +153,19 @@ def _rule_budget(
     brief: CampaignBrief,
     ctx: ValidationContext,
 ) -> list[str]:
-    """Rule 1: daily_budget_micros == monthly_budget_pln / 30 ± 5 %."""
+    """Rule 1: daily_budget_micros == monthly_budget_pln / 30 * seasonal ± 5 %."""
     errors: list[str] = []
-    expected = int(brief.monthly_budget_pln / Decimal("30") * Decimal("1_000_000"))
-    if expected == 0:
+    base_expected = int(brief.monthly_budget_pln / Decimal("30") * Decimal("1_000_000"))
+    if base_expected == 0:
         errors.append("Rule 1 (Budget): monthly_budget_pln is zero — cannot validate budget")
         return errors
+
+    # Seasonal multiplier is intentionally applied to the daily budget after
+    # the LLM sets it (see ``_apply_seasonal_multiplier``). Rule 1 must
+    # therefore compare against the seasonally-adjusted expected value, or
+    # every proposal generated in a non-neutral month would fail.
+    multiplier = proposal.seasonal_multiplier or 1.0
+    expected = int(base_expected * multiplier)
 
     actual = proposal.daily_budget_micros
     drift = abs(actual - expected) / expected
@@ -166,7 +173,8 @@ def _rule_budget(
         errors.append(
             f"Rule 1 (Budget): daily_budget_micros {actual:,} deviates "
             f"{drift:.1%} from expected {expected:,} "
-            f"(monthly {brief.monthly_budget_pln} PLN / 30 * 1 000 000). "
+            f"(monthly {brief.monthly_budget_pln} PLN / 30 * 1 000 000 "
+            f"× seasonal {multiplier:.2f}). "
             f"Allowed tolerance: ±{_BUDGET_TOLERANCE:.0%}."
         )
     return errors

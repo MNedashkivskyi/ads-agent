@@ -36,7 +36,7 @@ def validate_budget(vertical: str, location: str, budget_pln: Decimal) -> Budget
     if budget_pln < benchmark.min_monthly_budget_pln:
         from adcopilot.domain.polish_market.currency import format_pln
         msg = (
-            f"Twój budżet {format_pln(int(budget_pln))} jest niski dla branży "
+            f"⚠️ Twój budżet {format_pln(int(budget_pln))} jest niski dla branży "
             f"{vertical} w {location}. "
             f"Rekomendowany minimum to {format_pln(benchmark.min_monthly_budget_pln)}/mies. "
             f"Kontynuujesz?"
