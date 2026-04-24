@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import Settings, get_settings
 from adcopilot.domain.entities import UserId
+from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
 
@@ -82,9 +83,13 @@ class UserMeResponse(BaseModel):
 @router.get("/{user_id}/me", response_model=UserMeResponse)
 async def get_user_me(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> UserMeResponse:
     """Return basic user info including Telegram connection status."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
 
     engine = create_async_engine(settings.DATABASE_URL)

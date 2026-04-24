@@ -6,6 +6,7 @@ import dataclasses
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import redis as redis_sync
 import sqlalchemy as sa
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -17,7 +18,7 @@ from adcopilot.config import get_settings
 from adcopilot.domain.entities import UserId
 from adcopilot.domain.recommendation import RecommendationStatus
 from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
-from adcopilot.interfaces.api.telegram import _verify_link_jwt
+from adcopilot.interfaces.api.telegram import _verify_link_token
 
 logger = structlog.get_logger(__name__)
 
@@ -49,7 +50,12 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     deep_link_token = args[0]
     settings = get_settings()
 
-    user_id = _verify_link_jwt(deep_link_token, settings.SECRET_KEY)
+    redis_client = redis_sync.Redis.from_url(settings.REDIS_URL)
+    try:
+        user_id = _verify_link_token(deep_link_token, redis_client)
+    finally:
+        redis_client.close()
+
     if user_id is None:
         await update.message.reply_text(
             "Ten link wygasł. Wygeneruj nowy na adswise.xyz/app/telegram"

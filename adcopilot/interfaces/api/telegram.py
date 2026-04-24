@@ -4,46 +4,50 @@ from __future__ import annotations
 
 import hmac
 import uuid
-from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
+import redis as redis_sync
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
-from jose import JWTError, jwt
 from telegram import Update
 
 from adcopilot.config import Settings, get_settings
 from adcopilot.infrastructure.telegram.bot import resolve_webhook_secret
+from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="", tags=["telegram"])
 
-LINK_JWT_ALGORITHM = "HS256"
-LINK_JWT_EXPIRY_HOURS = 24
+# Telegram's ?start= payload allows only [A-Za-z0-9_-], max 64 chars.
+# A UUID4 hex string (32 lowercase hex chars) fits within that limit perfectly.
+_TG_LINK_TOKEN_PREFIX = "tg-link:"
+_TG_LINK_TOKEN_TTL_SECONDS = 24 * 3600
 
 
-def _make_link_jwt(user_id: str, secret_key: str) -> str:
-    payload = {
-        "sub": user_id,
-        "exp": datetime.now(UTC) + timedelta(hours=LINK_JWT_EXPIRY_HOURS),
-        "jti": str(uuid.uuid4()),
-        "type": "tg_link",
-    }
-    token: str = jwt.encode(payload, secret_key, algorithm=LINK_JWT_ALGORITHM)
+def _make_link_token(user_id: str, redis_client: redis_sync.Redis) -> str:  # type: ignore[type-arg]
+    """Generate a short opaque token, store user_id in Redis, and return the token."""
+    token = uuid.uuid4().hex  # 32 lowercase hex chars — valid Telegram start payload
+    redis_client.set(
+        _TG_LINK_TOKEN_PREFIX + token,
+        user_id,
+        ex=_TG_LINK_TOKEN_TTL_SECONDS,
+    )
     return token
 
 
-def _verify_link_jwt(token: str, secret_key: str) -> str | None:
-    """Returns user_id or None if invalid/expired."""
-    try:
-        payload = jwt.decode(token, secret_key, algorithms=[LINK_JWT_ALGORITHM])
-        if payload.get("type") != "tg_link":
-            return None
-        user_id: str = payload["sub"]
-        return user_id
-    except JWTError:
+def _verify_link_token(token: str, redis_client: redis_sync.Redis) -> str | None:  # type: ignore[type-arg]
+    """Look up the token in Redis, consume it (single-use), and return user_id or None."""
+    key = _TG_LINK_TOKEN_PREFIX + token
+    value = redis_client.get(key)
+    if value is None:
         return None
+    redis_client.delete(key)
+    return value.decode() if isinstance(value, bytes) else str(value)
+
+
+def _get_redis_client(settings: Annotated[Settings, Depends(get_settings)]) -> redis_sync.Redis:  # type: ignore[type-arg]
+    return redis_sync.Redis.from_url(settings.REDIS_URL)
 
 
 @router.post("/telegram/webhook")
@@ -86,13 +90,21 @@ async def telegram_webhook(
 @router.post("/api/users/{user_id}/telegram-link")
 async def generate_telegram_link(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, str]:
     """Generate a Telegram deep-link URL for the user to click and link their account."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
     if not settings.TELEGRAM_BOT_TOKEN:
         raise HTTPException(status_code=503, detail="Telegram bot not configured")
 
-    token = _make_link_jwt(user_id, settings.SECRET_KEY)
+    redis_client = redis_sync.Redis.from_url(settings.REDIS_URL)
+    try:
+        token = _make_link_token(user_id, redis_client)
+    finally:
+        redis_client.close()
+
     bot_name = await _get_bot_username(settings.TELEGRAM_BOT_TOKEN)
     deep_link_url = f"https://t.me/{bot_name}?start={token}"
     return {"deep_link_url": deep_link_url}
