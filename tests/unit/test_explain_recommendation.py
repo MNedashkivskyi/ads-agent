@@ -64,9 +64,10 @@ def test_format_micros_usd() -> None:
 
 
 def test_format_micros_pln() -> None:
-    result = format_micros_as_currency(50_000_000, "PLN")
-    assert "50.00" in result
-    assert "zł" in result
+    # Polish convention: no decimals for whole amounts, comma for grosze,
+    # non-breaking-space thousands separator.
+    assert format_micros_as_currency(50_000_000, "PLN") == "50 zł"
+    assert format_micros_as_currency(50_500_000, "PLN") == "50,50 zł"
 
 
 def test_format_micros_zero() -> None:

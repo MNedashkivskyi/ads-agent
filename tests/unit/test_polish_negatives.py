@@ -11,7 +11,9 @@ from adcopilot.domain.polish_market.negative_keywords import (
 from adcopilot.domain.launch.templates import _TEMPLATES
 
 
-REQUIRED_STANDARD_CATEGORIES = {"darmowy", "praca", "diy", "edukacja", "forum/media"}
+REQUIRED_STANDARD_CATEGORIES = {
+    "darmowy", "praca", "diy", "edukacja", "forum/media", "pobieranie",
+}
 REQUIRED_VERTICALS = {
     "salon", "prawnik", "restauracja", "lekarz", "ecommerce",
     "nieruchomości", "edukacja", "usługi domowe",
