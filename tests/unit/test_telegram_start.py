@@ -5,12 +5,13 @@ Unit tests for the Telegram /start command handler using fake UserRepository.
 from __future__ import annotations
 
 import dataclasses
+import re
 import uuid
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from adcopilot.domain.entities import PlanTier, User, UserId
-from adcopilot.interfaces.api.telegram import _make_link_jwt, _verify_link_jwt
+from adcopilot.interfaces.api.telegram import _make_link_token, _verify_link_token
 
 SECRET_KEY = "test-secret-key"
 
@@ -27,22 +28,40 @@ def _make_user(**kwargs: object) -> User:
     return User(**defaults)  # type: ignore[arg-type]
 
 
-def test_make_and_verify_link_jwt_roundtrip() -> None:
+def test_make_and_verify_link_token_roundtrip() -> None:
     user_id = str(uuid.uuid4())
-    token = _make_link_jwt(user_id, SECRET_KEY)
-    result = _verify_link_jwt(token, SECRET_KEY)
+    token = _make_link_token(user_id, SECRET_KEY)
+    result = _verify_link_token(token, SECRET_KEY)
     assert result == user_id
 
 
-def test_verify_link_jwt_wrong_key_returns_none() -> None:
-    token = _make_link_jwt("user-1", SECRET_KEY)
-    result = _verify_link_jwt(token, "wrong-key")
+def test_verify_link_token_wrong_key_returns_none() -> None:
+    token = _make_link_token(str(uuid.uuid4()), SECRET_KEY)
+    result = _verify_link_token(token, "wrong-key")
     assert result is None
 
 
-def test_verify_link_jwt_invalid_token_returns_none() -> None:
-    result = _verify_link_jwt("not.a.jwt", SECRET_KEY)
-    assert result is None
+def test_verify_link_token_invalid_token_returns_none() -> None:
+    # Dots are not valid in the new token format either.
+    assert _verify_link_token("not.a.token", SECRET_KEY) is None
+    assert _verify_link_token("", SECRET_KEY) is None
+    assert _verify_link_token("garbage!!!", SECRET_KEY) is None
+
+
+def test_link_token_is_valid_telegram_start_payload() -> None:
+    """Telegram's Bot API restricts ``?start=`` to ``[A-Za-z0-9_-]{1,64}``.
+
+    Regression test for the bug where JWTs (with ``.`` separators, >200 chars)
+    were generated and silently rejected by the Telegram client, so the bot
+    chat opened but no linking happened.
+    """
+    telegram_start_re = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+    for _ in range(20):
+        token = _make_link_token(str(uuid.uuid4()), SECRET_KEY)
+        assert telegram_start_re.match(token), (
+            f"token {token!r} ({len(token)} chars) violates Telegram's "
+            "start-parameter charset/length rules"
+        )
 
 
 def _make_async_update(chat_id: int = 123) -> MagicMock:
@@ -67,7 +86,7 @@ async def test_start_with_valid_token_links_account(
 
     user_id = str(uuid.uuid4())
     user = _make_user(id=UserId(user_id))
-    token = _make_link_jwt(user_id, SECRET_KEY)
+    token = _make_link_token(user_id, SECRET_KEY)
 
     mock_repo = AsyncMock()
     mock_repo.get_by_id.return_value = user
