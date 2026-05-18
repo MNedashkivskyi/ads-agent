@@ -7,8 +7,6 @@ end-to-end without deploying a special build.
 
 from __future__ import annotations
 
-import os
-
 import structlog
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -48,8 +46,6 @@ async def env_check() -> EnvCheckResponse:
         "GOOGLE_ADS_CLIENT_SECRET": settings.GOOGLE_ADS_CLIENT_SECRET,
         "OAUTH_REDIRECT_URI": settings.OAUTH_REDIRECT_URI,
         "APP_URL": settings.APP_URL,
-        "TELEGRAM_BOT_TOKEN": settings.TELEGRAM_BOT_TOKEN,
-        "TELEGRAM_WEBHOOK_URL": settings.TELEGRAM_WEBHOOK_URL,
         "DATABASE_URL": settings.DATABASE_URL,
         "REDIS_URL": settings.REDIS_URL,
     }
@@ -68,11 +64,7 @@ async def env_check() -> EnvCheckResponse:
             "this will not work in production. Set it to your Railway API public URL, e.g. "
             "https://<api-service>.up.railway.app/oauth/google/callback"
         )
-    if not os.environ.get("RAILWAY_PUBLIC_DOMAIN") and not settings.TELEGRAM_WEBHOOK_URL:
-        warnings.append(
-            "Neither TELEGRAM_WEBHOOK_URL nor RAILWAY_PUBLIC_DOMAIN is available — "
-            "Telegram webhook cannot be registered automatically"
-        )
+
 
     return EnvCheckResponse(
         ok=len(missing) == 0,

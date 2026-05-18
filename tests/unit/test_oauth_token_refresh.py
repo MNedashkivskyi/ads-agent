@@ -7,7 +7,7 @@ Covers:
 - _handle_auth_failure marks rec FAILED, sets needs_reauth, sends notification
 - _notify_reauth_required sends reauth notification for snapshot auth failures
 - SnapshotAccountUseCase already sets needs_reauth (regression guard)
-- send_reauth_required in TelegramDigestNotifier and FakeTelegramNotifier
+- send_reauth_required in FakeNotifier
 """
 
 from __future__ import annotations
@@ -220,15 +220,15 @@ def test_generic_error_still_retries() -> None:
 
 
 # ---------------------------------------------------------------------------
-# FakeTelegramNotifier.send_reauth_required
+# FakeNotifier.send_reauth_required
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_fake_notifier_records_send_reauth_required() -> None:
-    from adcopilot.infrastructure.fake_notifier import FakeTelegramNotifier
+    from adcopilot.infrastructure.fake_notifier import FakeNotifier
 
-    notifier = FakeTelegramNotifier()
+    notifier = FakeNotifier()
     await notifier.send_reauth_required(
         chat_id=99,
         account_name="My Account",

@@ -11,7 +11,6 @@ prefix                 limit (per source IP)
 ``/oauth/*``           ``10/minute``
 ``/api/*``             ``60/minute``
 ``/webhooks/*``        ``100/minute``
-``/telegram/webhook``  ``100/minute`` (treated as a webhook)
 ====================  ==========================
 
 Decorating every route handler individually would be brittle — new routes
@@ -61,7 +60,6 @@ def build_default_prefix_rate_limits() -> list[PrefixRateLimitConfig]:
     return [
         PrefixRateLimitConfig(prefix="/oauth/", limit="10/minute"),
         PrefixRateLimitConfig(prefix="/webhooks/", limit="100/minute"),
-        PrefixRateLimitConfig(prefix="/telegram/webhook", limit="100/minute"),
         # The broadest /api/ limit goes last so longer, more specific prefixes
         # above win during the longest-match lookup.
         PrefixRateLimitConfig(prefix="/api/", limit="60/minute"),

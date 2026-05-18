@@ -55,8 +55,8 @@ def create_app() -> FastAPI:
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     application.add_middleware(SlowAPIMiddleware)
     # Path-prefix rate limits envelope the per-endpoint slowapi decorators.
-    # Configured limits: /oauth/* 10/min, /api/* 60/min, /webhooks/* 100/min,
-    # /telegram/webhook 100/min.  See adcopilot/security/rate_limiting.py.
+    # Configured limits: /oauth/* 10/min, /api/* 60/min, /webhooks/* 100/min.
+    # See adcopilot/security/rate_limiting.py.
     application.add_middleware(PathPrefixRateLimitMiddleware, storage_uri=get_settings().REDIS_URL)
     application.add_middleware(RequestIdMiddleware)
     application.add_middleware(SentryContextMiddleware)

@@ -1,4 +1,4 @@
-"""SendDailyDigestUseCase: sends top-5 PENDING recommendations to a user via Telegram."""
+"""SendDailyDigestUseCase: computes top-5 PENDING recommendations and logs them (log-only mode)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import structlog
 
 from adcopilot.application.ports.digest_sent_log_repository import DigestSentLogRepository
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
-from adcopilot.application.ports.telegram_notifier import TelegramNotifier
 from adcopilot.domain.entities import AccountId, UserId
 from adcopilot.domain.recommendation import Recommendation, RecommendationSeverity
 
@@ -33,7 +32,7 @@ def _sort_key(rec: Recommendation) -> tuple[int, int]:
 class DigestResult:
     sent: bool
     count: int
-    reason: str  # "sent" | "no_telegram" | "no_recommendations" | "already_sent"
+    reason: str  # "sent" | "no_recommendations" | "already_sent"
 
 
 class SendDailyDigestUseCase:
@@ -42,34 +41,26 @@ class SendDailyDigestUseCase:
         account_repo: object,  # GoogleAdsAccountRepository Protocol
         rec_repo: RecommendationRepository,
         digest_log_repo: DigestSentLogRepository,
-        notifier: TelegramNotifier,
     ) -> None:
         self._account_repo = account_repo
         self._rec_repo = rec_repo
         self._digest_log_repo = digest_log_repo
-        self._notifier = notifier
 
     async def execute(
         self,
         user_id: UserId,
-        telegram_chat_id: int | None,
         account_ids: list[AccountId],
         today: date | None = None,
         notifications_paused: bool = False,
     ) -> DigestResult:
-        """Send a daily digest to the user.
+        """Compute and log the daily digest for a user (log-only; no notification sent yet).
 
         Args:
-            user_id: The user to send the digest to.
-            telegram_chat_id: The user's Telegram chat ID (None = skip).
+            user_id: The user to compute the digest for.
             account_ids: All Google Ads account IDs owned by the user.
             today: Override for the current date (for testing).
             notifications_paused: If True, skip this user's digest.
         """
-        if telegram_chat_id is None:
-            logger.info("skipping digest: no telegram", user_id=user_id)
-            return DigestResult(sent=False, count=0, reason="no_telegram")
-
         if notifications_paused:
             logger.info("skipping digest: notifications paused", user_id=user_id)
             return DigestResult(sent=False, count=0, reason="paused")
@@ -92,15 +83,12 @@ class SendDailyDigestUseCase:
 
         top_recs = sorted(all_recs, key=_sort_key)[:_MAX_RECS]
 
-        await self._notifier.send_digest(telegram_chat_id, top_recs)
-
         rec_ids: list[str] = [str(rec.id) for rec in top_recs]
         await self._digest_log_repo.record(user_id, today, rec_ids)
 
         logger.info(
-            "digest sent",
+            "digest computed (log-only)",
             user_id=user_id,
-            chat_id=telegram_chat_id,
             count=len(top_recs),
             date=today,
         )

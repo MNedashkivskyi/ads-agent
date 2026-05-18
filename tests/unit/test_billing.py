@@ -275,15 +275,12 @@ async def test_oauth_callback_allows_growth_second_account() -> None:
 
 
 @pytest.mark.asyncio
-async def test_trial_reminders_sends_to_ending_trials() -> None:
-    """_run_trial_reminders sends message to users whose trial ends in ~2 days."""
+async def test_trial_reminders_returns_skipped_count() -> None:
+    """_run_trial_reminders returns skipped count for users whose trial ends in ~2 days."""
     from adcopilot.config import Settings
     from adcopilot.interfaces.worker.tasks import _run_trial_reminders
 
-    settings = Settings(
-        DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
-        TELEGRAM_BOT_TOKEN="bot:token",
-    )
+    settings = Settings(DATABASE_URL="postgresql+asyncpg://x:x@localhost/x")
 
     mock_user_model = MagicMock()
     mock_user_model.telegram_chat_id = 999
@@ -303,28 +300,12 @@ async def test_trial_reminders_sends_to_ending_trials() -> None:
     mock_engine = MagicMock()
     mock_engine.dispose = AsyncMock()
 
-    mock_bot_instance = AsyncMock()
-    mock_bot_instance.__aenter__ = AsyncMock(return_value=mock_bot_instance)
-    mock_bot_instance.__aexit__ = AsyncMock(return_value=False)
-    mock_bot_instance.send_message = AsyncMock()
-
     with (
         patch("sqlalchemy.ext.asyncio.create_async_engine", return_value=mock_engine),
         patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_session),
-        patch("telegram.Bot", return_value=mock_bot_instance),
     ):
         result = await _run_trial_reminders(settings)
 
-    assert result["sent"] == 1
-    assert result["skipped"] == 0
-    mock_bot_instance.send_message.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_trial_reminders_skips_when_no_bot_token() -> None:
-    from adcopilot.config import Settings
-    from adcopilot.interfaces.worker.tasks import _run_trial_reminders
-
-    settings = Settings(DATABASE_URL="postgresql+asyncpg://x:x@localhost/x")
-    result = await _run_trial_reminders(settings)
-    assert result["reason"] == "no_bot_token"
+    # Notifier not yet wired — users are skipped (log-only mode)
+    assert result["sent"] == 0
+    assert result["skipped"] == 1
