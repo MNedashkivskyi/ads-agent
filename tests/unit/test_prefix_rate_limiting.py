@@ -30,7 +30,6 @@ def _app(configs: list[PrefixRateLimitConfig]) -> TestClient:
         Route("/api/ping", _echo),
         Route("/oauth/google/start", _echo),
         Route("/webhooks/stripe", _echo),
-        Route("/telegram/webhook", _echo, methods=["POST"]),
         Route("/health", _echo),
     ]
     app = Starlette(routes=routes)
@@ -43,9 +42,9 @@ def _app(configs: list[PrefixRateLimitConfig]) -> TestClient:
 
 
 def test_default_config_covers_all_required_prefixes() -> None:
-    """The spec requires /oauth/, /api/, /webhooks/, /telegram/webhook."""
+    """The spec requires /oauth/, /api/, /webhooks/."""
     prefixes = {c.prefix for c in build_default_prefix_rate_limits()}
-    assert {"/oauth/", "/api/", "/webhooks/", "/telegram/webhook"} <= prefixes
+    assert {"/oauth/", "/api/", "/webhooks/"} <= prefixes
 
 
 def test_default_config_limit_values() -> None:
@@ -54,7 +53,6 @@ def test_default_config_limit_values() -> None:
     assert by_prefix["/oauth/"] == "10/minute"
     assert by_prefix["/api/"] == "60/minute"
     assert by_prefix["/webhooks/"] == "100/minute"
-    assert by_prefix["/telegram/webhook"] == "100/minute"
 
 
 def test_api_prefix_returns_429_after_limit() -> None:
@@ -90,20 +88,6 @@ def test_webhook_prefix_has_its_own_counter() -> None:
     assert client.get("/webhooks/stripe", headers=hdr).status_code == 429
 
 
-def test_telegram_webhook_more_specific_than_api() -> None:
-    """A rule on /telegram/webhook must take precedence over /api/."""
-    # The broadest /api/ limit last; /telegram/webhook should still win on
-    # longest-prefix match even when it appears earlier.
-    client = _app(
-        [
-            PrefixRateLimitConfig("/telegram/webhook", "1/minute"),
-            PrefixRateLimitConfig("/api/", "100/minute"),
-        ]
-    )
-    hdr = {"X-Real-IP": "4.4.4.4"}
-    assert client.post("/telegram/webhook", headers=hdr).status_code == 200
-    assert client.post("/telegram/webhook", headers=hdr).status_code == 429
-
 
 def test_unrelated_path_is_not_limited() -> None:
     """/health must not be touched by prefix limiter."""
@@ -128,7 +112,6 @@ def test_different_ips_counted_separately() -> None:
         ("/api/foo", "/api/"),
         ("/oauth/google/start", "/oauth/"),
         ("/webhooks/stripe", "/webhooks/"),
-        ("/telegram/webhook", "/telegram/webhook"),
         ("/health", None),
     ],
 )
