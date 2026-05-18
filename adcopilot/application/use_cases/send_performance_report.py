@@ -40,11 +40,6 @@ class SendPerformanceReportUseCase:
 
         for account in accounts:
             try:
-                chat_id = getattr(account, "telegram_chat_id", None)
-                if not chat_id:
-                    reports_skipped += 1
-                    continue
-
                 comparisons_raw = await self._comparison_repo.list_for_account(
                     str(account.id), limit=50
                 )

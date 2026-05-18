@@ -307,7 +307,6 @@ async def _run_trial_reminders(settings: object) -> dict[str, object]:
         async with AsyncSession(engine) as session, session.begin():
             result = await session.execute(
                 select(UserModel).where(
-                    UserModel.telegram_chat_id.isnot(None),
                     UserModel.subscription_status == "trialing",
                     UserModel.trial_ends_at.isnot(None),
                     UserModel.trial_ends_at >= reminder_window_start,
