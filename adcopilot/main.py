@@ -22,61 +22,7 @@ async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     logger.info("adcopilot starting", env=settings.ENV)
 
-    # --- Telegram bot lifecycle -------------------------------------------
-    # Build the Application once and keep it for the lifetime of the process.
-    # The webhook endpoint reads it from app.state instead of re-building it
-    # on every request.
-    if settings.TELEGRAM_BOT_TOKEN:
-        from adcopilot.infrastructure.telegram.bot import (
-            build_telegram_app,
-            register_webhook,
-            resolve_webhook_secret,
-        )
-
-        tg_app = build_telegram_app(settings)
-        await tg_app.initialize()
-        application.state.telegram_app = tg_app
-        logger.info("telegram bot initialised")
-
-        # Determine the webhook base URL.
-        # Prefer the explicit TELEGRAM_WEBHOOK_URL env var.
-        # Fall back to RAILWAY_PUBLIC_DOMAIN so Railway deployments work
-        # automatically even when the explicit var is not set.
-        import os as _os
-
-        _base = settings.TELEGRAM_WEBHOOK_URL or (
-            f"https://{_os.environ['RAILWAY_PUBLIC_DOMAIN']}"
-            if _os.environ.get("RAILWAY_PUBLIC_DOMAIN")
-            else None
-        )
-        if _base:
-            webhook_url = _base.rstrip("/") + "/telegram/webhook"
-            secret = resolve_webhook_secret(settings)
-            try:
-                await register_webhook(tg_app.bot, webhook_url, secret)
-            except Exception as exc:
-                # Non-fatal — log clearly so it shows up in Railway logs.
-                logger.warning(
-                    "telegram webhook registration failed — bot will not receive updates",
-                    error=str(exc),
-                    webhook_url=webhook_url,
-                )
-        else:
-            logger.warning(
-                "TELEGRAM_WEBHOOK_URL not set and RAILWAY_PUBLIC_DOMAIN unavailable "
-                "— webhook not registered, bot will not receive updates. "
-                "Set TELEGRAM_WEBHOOK_URL=https://<your-api-service>.up.railway.app"
-            )
-    # ----------------------------------------------------------------------
-
     yield
-
-    # --- Telegram bot shutdown --------------------------------------------
-    tg_app = getattr(application.state, "telegram_app", None)
-    if tg_app is not None:
-        await tg_app.shutdown()
-        logger.info("telegram bot shut down")
-    # ----------------------------------------------------------------------
 
     logger.info("adcopilot shutting down")
 
@@ -95,7 +41,6 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.launch import router as launch_router
     from adcopilot.interfaces.api.oauth import router as oauth_router
     from adcopilot.interfaces.api.snapshots import router as snapshots_router
-    from adcopilot.interfaces.api.telegram import router as telegram_router
     from adcopilot.interfaces.api.users import router as users_router
     from adcopilot.rate_limit import limiter
     from adcopilot.security import PathPrefixRateLimitMiddleware
@@ -140,7 +85,6 @@ def create_app() -> FastAPI:
     )
     application.include_router(auth_router)
     application.include_router(oauth_router)
-    application.include_router(telegram_router)
     application.include_router(snapshots_router)
     application.include_router(digest_router)
     application.include_router(users_router)

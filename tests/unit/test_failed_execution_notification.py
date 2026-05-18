@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from adcopilot.infrastructure.telegram.fake_notifier import FakeTelegramNotifier
+from adcopilot.infrastructure.fake_notifier import FakeTelegramNotifier
 
 # ---------------------------------------------------------------------------
 # FakeTelegramNotifier
@@ -54,46 +54,6 @@ async def test_fake_notifier_records_send_execution_failed() -> None:
 # ---------------------------------------------------------------------------
 # TelegramDigestNotifier.send_execution_failed
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_digest_notifier_sends_failure_message() -> None:
-    from datetime import datetime
-
-    from adcopilot.domain.entities import AccountId
-    from adcopilot.domain.recommendation import (
-        Recommendation,
-        RecommendationId,
-        RecommendationKind,
-        RecommendationSeverity,
-        RecommendationStatus,
-    )
-    from adcopilot.infrastructure.telegram.digest_notifier import TelegramDigestNotifier
-
-    rec = Recommendation(
-        id=RecommendationId("rec-2"),
-        account_id=AccountId("acc-2"),
-        kind=RecommendationKind.CHANGE_MATCH_TYPE,
-        severity=RecommendationSeverity.MEDIUM,
-        target={},
-        payload={},
-        estimated_monthly_savings_micros=0,
-        evidence={},
-        created_at=datetime.utcnow(),
-        status=RecommendationStatus.FAILED,
-    )
-
-    bot_mock = AsyncMock()
-    notifier = TelegramDigestNotifier.__new__(TelegramDigestNotifier)
-    notifier._bot = bot_mock
-
-    await notifier.send_execution_failed(chat_id=99, recommendation=rec, error_message="API error")
-
-    bot_mock.send_message.assert_awaited_once()
-    kwargs = bot_mock.send_message.call_args.kwargs
-    assert kwargs["chat_id"] == 99
-    assert "Change Match Type" in kwargs["text"]
-    assert "API error" in kwargs["text"]
 
 
 # ---------------------------------------------------------------------------
