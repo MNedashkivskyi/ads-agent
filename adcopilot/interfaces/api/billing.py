@@ -270,22 +270,7 @@ async def _handle_payment_failed(invoice: Any, settings: Settings) -> None:
             await repo.save(updated)
             await session.commit()
 
-            # Send Telegram warning if linked
-            if user_model.telegram_chat_id and settings.TELEGRAM_BOT_TOKEN:
-                try:
-                    from telegram import Bot
-
-                    bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-                    async with bot:
-                        await bot.send_message(
-                            chat_id=user_model.telegram_chat_id,
-                            text=(
-                                "⚠️ Płatność nieudana. Odwiedź adswise.xyz/app/billing, "
-                                "aby zaktualizować dane płatności i uniknąć przerwy w usłudze."
-                            ),
-                        )
-                except Exception:
-                    logger.exception("failed to send payment failed telegram", customer_id=customer_id)
+            # TODO(phase-0.2): notify user via new notifier when payment fails
     finally:
         await engine.dispose()
 

@@ -252,29 +252,7 @@ async def oauth_google_callback(
     await session.commit()
     logger.info("google oauth complete", user_id=user_id, accounts=len(linked_ids))
 
-    # Notify the user via Telegram if they have a linked chat.
-    if user.telegram_chat_id and settings.TELEGRAM_BOT_TOKEN:
-        try:
-            from telegram import Bot
-
-            if linked_ids:
-                tg_msg = (
-                    f"✅ Google Ads połączono pomyślnie!\n\n"
-                    f"Połączono {len(linked_ids)} konto{'a' if len(linked_ids) > 1 else ''}.\n"
-                    f"Przejdź do adswise.xyz/app, aby zobaczyć szczegóły i rekomendacje."
-                )
-            else:
-                tg_msg = (
-                    "⚠️ Autoryzacja Google zakończona, ale nie znaleziono żadnych kont Google Ads.\n\n"
-                    "Upewnij się, że masz dostęp do konta Google Ads i spróbuj ponownie na adswise.xyz/app/connect."
-                )
-            async with Bot(token=settings.TELEGRAM_BOT_TOKEN) as bot:
-                await bot.send_message(chat_id=user.telegram_chat_id, text=tg_msg)
-        except Exception:
-            logger.warning(
-                "failed to send google ads connected telegram notification",
-                user_id=user_id,
-            )
+    # TODO(phase-0.2): notify user via new notifier when Google Ads connected
 
     # Redirect the browser back to the frontend dashboard.
     # APP_URL is the frontend origin (e.g. https://adswise.xyz).

@@ -215,8 +215,6 @@ async def _run_send_digests(settings: object) -> dict[str, object]:
     from adcopilot.infrastructure.db.repositories.recommendation_repository import (
         SqlRecommendationRepository,
     )
-    from adcopilot.infrastructure.telegram.digest_notifier import TelegramDigestNotifier
-
     assert isinstance(settings, Settings)
     if not settings.TELEGRAM_BOT_TOKEN:
         logger.warning("TELEGRAM_BOT_TOKEN not set, skipping digests")
@@ -240,61 +238,11 @@ async def _run_send_digests(settings: object) -> dict[str, object]:
             )
             users = result.scalars().all()
 
-        notifier = TelegramDigestNotifier(bot_token=settings.TELEGRAM_BOT_TOKEN)
-
-        for user_model in users:
-            if user_model.subscription_status in _INACTIVE_STATUSES:
-                try:
-                    from telegram import Bot
-
-                    if user_model.telegram_chat_id is not None:
-                        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-                        async with bot:
-                            await bot.send_message(
-                                chat_id=user_model.telegram_chat_id,
-                                text=(
-                                    "⚠️ Twoja subskrypcja jest nieaktywna. Odwiedź adswise.xyz/app/billing, "
-                                    "aby wznowić dostęp."
-                                ),
-                            )
-                except Exception:
-                    logger.exception(
-                        "failed to send inactive sub warning", user_id=str(user_model.id)
-                    )
-                skipped += 1
-                continue
-            try:
-                async with AsyncSession(engine) as session, session.begin():
-                    account_repo = SqlGoogleAdsAccountRepository(session)
-                    rec_repo = SqlRecommendationRepository(session)
-                    digest_log_repo = SqlDigestSentLogRepository(session)
-
-                    accounts = await account_repo.list_for_user(UserId(str(user_model.id)))
-                    account_ids = [AccountId(a.id) for a in accounts]
-
-                    use_case = SendDailyDigestUseCase(
-                        account_repo=account_repo,
-                        rec_repo=rec_repo,
-                        digest_log_repo=digest_log_repo,
-                        notifier=notifier,
-                    )
-                    digest_result = await use_case.execute(
-                        user_id=UserId(str(user_model.id)),
-                        telegram_chat_id=user_model.telegram_chat_id,
-                        account_ids=account_ids,
-                        today=today,
-                    )
-                if digest_result.sent:
-                    sent += 1
-                else:
-                    skipped += 1
-            except Exception:
-                logger.exception("digest failed for user", user_id=str(user_model.id))
-                skipped += 1
+        # TODO(phase-0.2): wire new notifier implementation
+        logger.warning("digest_notifier not configured, skipping digest sends")
+        return {"sent": 0, "skipped": len(users), "reason": "notifier_not_configured"}
     finally:
         await engine.dispose()
-
-    return {"sent": sent, "skipped": skipped}
 
 
 @celery_app.task(name="adcopilot.interfaces.worker.tasks.run_nightly_snapshots")  # type: ignore[untyped-decorator]
@@ -378,26 +326,9 @@ async def _run_trial_reminders(settings: object) -> dict[str, object]:
             )
             users = result.scalars().all()
 
-        from telegram import Bot
-
-        for user_model in users:
-            if user_model.telegram_chat_id is None:
-                skipped += 1
-                continue
-            try:
-                bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-                async with bot:
-                    await bot.send_message(
-                        chat_id=user_model.telegram_chat_id,
-                        text=(
-                            "⏳ Twój 14-dniowy okres próbny kończy się za 2 dni. "
-                            "Odwiedź adswise.xyz/app/billing, aby wybrać plan i kontynuować korzystanie z AdsWise."
-                        ),
-                    )
-                sent += 1
-            except Exception:
-                logger.exception("trial reminder failed", user_id=str(user_model.id))
-                skipped += 1
+        # TODO(phase-0.2): wire new notifier implementation
+        logger.warning("trial_reminder_notifier not configured, skipping")
+        skipped = len(users)
     finally:
         await engine.dispose()
 
@@ -531,27 +462,7 @@ async def _handle_auth_failure(rec_id: str) -> None:
                 rec_id=rec_id,
             )
 
-            if not settings.TELEGRAM_BOT_TOKEN:
-                return
-
-            user_repo = SqlUserRepository(session)
-            user = await user_repo.get_by_id(account.user_id)
-            if user is None or user.telegram_chat_id is None or user.notifications_paused:
-                return
-
-            reauth_url = (
-                f"{settings.APP_URL.rstrip('/')}/oauth/google/start?account_id={account.id}"
-                if settings.APP_URL
-                else None
-            )
-            from adcopilot.infrastructure.telegram.digest_notifier import TelegramDigestNotifier
-
-            notifier = TelegramDigestNotifier(bot_token=settings.TELEGRAM_BOT_TOKEN)
-            await notifier.send_reauth_required(
-                chat_id=user.telegram_chat_id,
-                account_name=account.descriptive_name,
-                reauth_url=reauth_url,
-            )
+            # TODO(phase-0.2): send reauth notification via new notifier
     finally:
         await engine.dispose()
 
@@ -588,19 +499,7 @@ async def _notify_reauth_required(account_id: str, settings: object) -> None:
             if user is None or user.telegram_chat_id is None or user.notifications_paused:
                 return
 
-            reauth_url = (
-                f"{settings.APP_URL.rstrip('/')}/oauth/google/start?account_id={account.id}"
-                if settings.APP_URL
-                else None
-            )
-            from adcopilot.infrastructure.telegram.digest_notifier import TelegramDigestNotifier
-
-            notifier = TelegramDigestNotifier(bot_token=settings.TELEGRAM_BOT_TOKEN)
-            await notifier.send_reauth_required(
-                chat_id=user.telegram_chat_id,
-                account_name=account.descriptive_name,
-                reauth_url=reauth_url,
-            )
+            # TODO(phase-0.2): send reauth notification via new notifier
     finally:
         await engine.dispose()
 
@@ -650,14 +549,7 @@ async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
             if user is None or user.telegram_chat_id is None or user.notifications_paused:
                 return
 
-            from adcopilot.infrastructure.telegram.digest_notifier import TelegramDigestNotifier
-
-            notifier = TelegramDigestNotifier(bot_token=settings.TELEGRAM_BOT_TOKEN)
-            await notifier.send_execution_failed(
-                chat_id=user.telegram_chat_id,
-                recommendation=rec,
-                error_message=error_message,
-            )
+            # TODO(phase-0.2): send execution failed notification via new notifier
     finally:
         await engine.dispose()
 
@@ -706,10 +598,6 @@ async def _run_generate_campaign(
     from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
     from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
     from adcopilot.infrastructure.llm.campaign_generator import CampaignGenerator
-    from adcopilot.infrastructure.telegram.proposal_handler import (
-        format_proposal_summary,
-        proposal_action_keyboard,
-    )
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -758,50 +646,8 @@ async def _run_generate_campaign(
     finally:
         await engine.dispose()
 
-    if not settings.TELEGRAM_BOT_TOKEN or chat_id is None:
-        return {"proposal_id": proposal_id, "error": error_text}
-
-    from telegram import Bot
-
-    bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-    async with bot:
-        if error_text:
-            await bot.send_message(
-                chat_id=chat_id,
-                text=(
-                    "⚠️ I ran into an issue generating your proposal. "
-                    "Please try again with /launch or contact support."
-                ),
-            )
-        else:
-            # Re-load proposal for summary (outside the closed session)
-            engine2 = create_async_engine(settings.DATABASE_URL)
-            try:
-                async with AsyncSession(engine2) as session2:
-                    from adcopilot.domain.launch.entities import CampaignProposalId
-
-                    proposal_repo2 = SqlCampaignProposalRepository(session2)
-                    proposal_obj = await proposal_repo2.get(CampaignProposalId(proposal_id))  # type: ignore[arg-type]
-            finally:
-                await engine2.dispose()
-
-            if proposal_obj is None:
-                return {"error": "proposal_not_found_after_save"}
-
-            summary = format_proposal_summary(proposal_obj)
-            keyboard = proposal_action_keyboard(
-                proposal_id=str(proposal_obj.id),
-                brief_id=brief_id,
-                app_url=settings.APP_URL,
-            )
-            await bot.send_message(
-                chat_id=chat_id,
-                text=summary,
-                reply_markup=keyboard,
-                parse_mode="Markdown",
-            )
-
-    return {"proposal_id": proposal_id}
+    # TODO(phase-0.2): send proposal notification via new notifier
+    return {"proposal_id": proposal_id, "error": error_text}
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
@@ -846,7 +692,6 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
         SqlOAuthCredentialsRepository,
     )
     from adcopilot.infrastructure.google_ads.campaign_writer import CampaignWriter
-    from adcopilot.infrastructure.telegram.proposal_handler import post_launch_keyboard
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -1020,90 +865,8 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
     finally:
         await engine.dispose()
 
-    if not settings.TELEGRAM_BOT_TOKEN:
-        return {"campaign_rn": campaign_rn, "error": error_text}
-
-    from telegram import Bot
-
-    bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-    async with bot:
-        if error_text:
-            await bot.send_message(
-                chat_id=telegram_chat_id,
-                text=(
-                    "⚠️ Failed to create your campaign in Google Ads.\n\n"
-                    f"Error: {error_text}\n\n"
-                    "Please try again or contact support."
-                ),
-            )
-        else:
-            # Check conversion tracking and send guide if missing
-            _has_tracking = False
-            _conversion_guide: str | None = None
-            try:
-                from datetime import date
-
-                from adcopilot.application.use_cases.launch.check_conversion_setup import (
-                    has_macro_conversion_tracking,
-                )
-                from adcopilot.infrastructure.telegram.conversion_guides import get_conversion_guide
-                from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
-
-                _qsettings = get_settings()
-                _qa = GoogleAdsQueriesAdapter(_qsettings)
-                _conv_actions = await _qa.query_conversion_actions(
-                    _saved_refresh_token or "", _saved_customer_id or "", date.today()
-                )
-                _has_tracking = has_macro_conversion_tracking(_conv_actions)
-                if not _has_tracking:
-                    _conversion_guide = get_conversion_guide(_saved_primary_action or "")
-            except Exception:
-                logger.warning("conversion_tracking_check_failed", brief_id=brief_id)
-
-            if _conversion_guide:
-                await bot.send_message(
-                    chat_id=telegram_chat_id,
-                    text=_conversion_guide,
-                    parse_mode="Markdown",
-                )
-
-            # Send remarketing tag guide for GROWTH-tier accounts
-            try:
-                from adcopilot.domain.launch.budget_tier import classify_budget_tier, BudgetTier as _BT
-                from adcopilot.infrastructure.telegram.remarketing_guide import get_remarketing_guide
-                _brief_tier = classify_budget_tier(brief.monthly_budget_pln)
-                if _brief_tier == _BT.GROWTH:
-                    await bot.send_message(
-                        chat_id=telegram_chat_id,
-                        text=get_remarketing_guide(),
-                        parse_mode="MarkdownV2",
-                    )
-            except Exception:
-                logger.warning("remarketing_guide_send_failed", brief_id=brief_id)
-
-            _tracking_warning = (
-                "\n\n⚠️ No conversion tracking detected\\. Your campaign will start with "
-                "MAXIMIZE\\_CLICKS bidding\\. Set up tracking above — once active, "
-                "I'll automatically upgrade your bidding strategy\\."
-                if not _has_tracking
-                else ""
-            )
-
-            keyboard = post_launch_keyboard(brief_id)
-            await bot.send_message(
-                chat_id=telegram_chat_id,
-                text=(
-                    "✅ *Campaigns created and paused\\.*\n\n"
-                    "Your campaign is ready in Google Ads but not yet spending\\.\n\n"
-                    "Tap *Enable and go live* when you're ready to start serving ads, "
-                    "or *Don't enable yet* to review it first\\."
-                    + _tracking_warning
-                ),
-                reply_markup=keyboard,
-                parse_mode="MarkdownV2",
-            )
-
-    return {"campaign_rn": campaign_rn}
+    # TODO(phase-0.2): send campaign created notification via new notifier
+    return {"campaign_rn": campaign_rn, "error": error_text}
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
@@ -1193,32 +956,7 @@ async def _run_enable_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
     finally:
         await engine.dispose()
 
-    if not settings.TELEGRAM_BOT_TOKEN:
-        return {"error": error_text}
-
-    from telegram import Bot
-
-    bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-    async with bot:
-        if error_text:
-            await bot.send_message(
-                chat_id=telegram_chat_id,
-                text=(
-                    "⚠️ Failed to enable your campaign.\n\n"
-                    f"Error: {error_text}\n\n"
-                    "Please try again or contact support."
-                ),
-            )
-        else:
-            await bot.send_message(
-                chat_id=telegram_chat_id,
-                text=(
-                    "🚀 *You're live!*\n\n"
-                    "I'll monitor this campaign closely for the first 48 hours "
-                    "and alert you immediately if anything unusual is detected."
-                ),
-                parse_mode="Markdown",
-            )
+    # TODO(phase-0.2): send enable notification via new notifier
 
     # Schedule 48-hour high-alert monitoring (hourly checks)
     if not error_text and account_id_str:
@@ -1278,8 +1016,6 @@ async def _run_monitor_new_campaign(
     from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
         SqlCampaignBriefRepository,
     )
-    from adcopilot.infrastructure.telegram.proposal_handler import panic_pause_keyboard
-
     settings = get_settings()
 
     # Verify campaign is still ENABLED
@@ -1328,28 +1064,9 @@ async def _run_monitor_new_campaign(
             )
             new_recs = result.scalars().all()
 
-            if new_recs and settings.TELEGRAM_BOT_TOKEN:
-                from telegram import Bot
-
-                bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-                async with bot:
-                    for rec in new_recs:
-                        kind_label = rec.kind.replace("_", " ").title()
-                        savings_pln = rec.estimated_monthly_savings_micros / 1_000_000
-                        alert_text = (
-                            f"⚠️ *Early alert — {kind_label}*\n\n"
-                            f"Potential issue detected in your new campaign.\n"
-                            f"Est. impact: {savings_pln:,.2f} PLN/month\n\n"
-                            f"Review at /app to take action."
-                        )
-                        keyboard = panic_pause_keyboard(account_id)
-                        await bot.send_message(
-                            chat_id=telegram_chat_id,
-                            text=alert_text,
-                            reply_markup=keyboard,
-                            parse_mode="Markdown",
-                        )
-                        alerts_sent += 1
+            if new_recs:
+                # TODO(phase-0.2): send early alerts via new notifier
+                alerts_sent = len(new_recs)
     finally:
         await engine2.dispose()
 
@@ -1366,20 +1083,7 @@ async def _run_monitor_new_campaign(
         )
     else:
         # 48-hour window complete — revert to standard daily digest
-        if settings.TELEGRAM_BOT_TOKEN:
-            from telegram import Bot
-
-            bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-            async with bot:
-                await bot.send_message(
-                    chat_id=telegram_chat_id,
-                    text=(
-                        "✅ *48-hour monitoring window complete.*\n\n"
-                        "Your campaign is now covered by the standard daily digest. "
-                        "I'll keep optimising and report any issues each morning."
-                    ),
-                    parse_mode="Markdown",
-                )
+        # TODO(phase-0.2): send monitoring complete notification via new notifier
         logger.info(
             "48h monitoring window complete",
             brief_id=brief_id,
@@ -1456,37 +1160,7 @@ async def _run_panic_pause(account_id: str, telegram_chat_id: int) -> dict[str, 
     finally:
         await engine.dispose()
 
-    if not settings.TELEGRAM_BOT_TOKEN:
-        return {"paused": paused_count, "error": error_text}
-
-    from telegram import Bot
-
-    bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-    async with bot:
-        if error_text:
-            await bot.send_message(
-                chat_id=telegram_chat_id,
-                text=(
-                    f"⚠️ Panic pause encountered an error: {error_text}\n\n"
-                    "Please check Google Ads directly to verify campaign statuses."
-                ),
-            )
-        elif paused_count == 0:
-            await bot.send_message(
-                chat_id=telegram_chat_id,
-                text="No enabled campaigns found to pause in this account.",
-            )
-        else:
-            await bot.send_message(
-                chat_id=telegram_chat_id,
-                text=(
-                    f"🛑 *Done. {paused_count} campaign(s) paused.*\n\n"
-                    "All campaigns in this account are now paused and no longer spending. "
-                    "Use /launch to manage or re-enable them."
-                ),
-                parse_mode="Markdown",
-            )
-
+    # TODO(phase-0.2): send panic pause notification via new notifier
     return {"paused": paused_count, "error": error_text}
 
 
@@ -1958,34 +1632,9 @@ def send_weekly_performance_report_task() -> dict[str, object]:
     settings = get_settings()
 
     async def _run() -> dict[str, object]:
-        from datetime import UTC, datetime
-
-        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-
-        from adcopilot.application.use_cases.send_performance_report import SendPerformanceReportUseCase
-        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
-            SqlGoogleAdsAccountRepository,
-        )
-        from adcopilot.infrastructure.db.repositories.performance_comparison_repository import (
-            SqlPerformanceComparisonRepository,
-        )
-        from adcopilot.infrastructure.db.repositories.recommendation_repository import (
-            SqlRecommendationRepository,
-        )
-        from adcopilot.infrastructure.telegram.performance_report import TelegramPerformanceReporter
-
-        engine = create_async_engine(settings.DATABASE_URL)
-        try:
-            async with AsyncSession(engine) as session:
-                use_case = SendPerformanceReportUseCase(
-                    account_repo=SqlGoogleAdsAccountRepository(session),
-                    rec_repo=SqlRecommendationRepository(session),
-                    comparison_repo=SqlPerformanceComparisonRepository(session),
-                    reporter=TelegramPerformanceReporter(settings.TELEGRAM_BOT_TOKEN),
-                )
-                return await use_case.run(now=datetime.now(UTC))
-        finally:
-            await engine.dispose()
+        # TODO(phase-0.2): wire new performance reporter implementation
+        logger.warning("performance_reporter not configured, skipping weekly report")
+        return {"skipped": True, "reason": "reporter_not_configured"}
 
     return asyncio.run(_run())  # type: ignore[return-value]
 

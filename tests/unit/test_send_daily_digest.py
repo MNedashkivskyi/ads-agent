@@ -17,7 +17,7 @@ from adcopilot.domain.recommendation import (
     RecommendationSeverity,
     RecommendationStatus,
 )
-from adcopilot.infrastructure.telegram.fake_notifier import FakeTelegramNotifier
+from adcopilot.infrastructure.fake_notifier import FakeTelegramNotifier
 
 _ACCOUNT_ID = AccountId("acct-1")
 _USER_ID = UserId(str(uuid.uuid4()))

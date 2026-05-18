@@ -220,56 +220,13 @@ def test_generic_error_still_retries() -> None:
 
 
 # ---------------------------------------------------------------------------
-# TelegramDigestNotifier.send_reauth_required
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_digest_notifier_send_reauth_required_with_url() -> None:
-    from adcopilot.infrastructure.telegram.digest_notifier import TelegramDigestNotifier
-
-    bot_mock = AsyncMock()
-    notifier = TelegramDigestNotifier.__new__(TelegramDigestNotifier)
-    notifier._bot = bot_mock
-
-    await notifier.send_reauth_required(
-        chat_id=42,
-        account_name="Acme Corp",
-        reauth_url="https://app.example.com/oauth/google/start?account_id=abc",
-    )
-
-    bot_mock.send_message.assert_awaited_once()
-    kwargs = bot_mock.send_message.call_args.kwargs
-    assert kwargs["chat_id"] == 42
-    assert "Acme Corp" in kwargs["text"]
-    assert "https://app.example.com" in kwargs["text"]
-
-
-@pytest.mark.asyncio
-async def test_digest_notifier_send_reauth_required_without_url() -> None:
-    from adcopilot.infrastructure.telegram.digest_notifier import TelegramDigestNotifier
-
-    bot_mock = AsyncMock()
-    notifier = TelegramDigestNotifier.__new__(TelegramDigestNotifier)
-    notifier._bot = bot_mock
-
-    await notifier.send_reauth_required(chat_id=7, account_name="Test Account")
-
-    bot_mock.send_message.assert_awaited_once()
-    text = bot_mock.send_message.call_args.kwargs["text"]
-    assert "Test Account" in text
-    # Should contain a CTA without a URL
-    assert "zaloguj" in text.lower()
-
-
-# ---------------------------------------------------------------------------
 # FakeTelegramNotifier.send_reauth_required
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_fake_notifier_records_send_reauth_required() -> None:
-    from adcopilot.infrastructure.telegram.fake_notifier import FakeTelegramNotifier
+    from adcopilot.infrastructure.fake_notifier import FakeTelegramNotifier
 
     notifier = FakeTelegramNotifier()
     await notifier.send_reauth_required(

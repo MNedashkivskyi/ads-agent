@@ -48,8 +48,6 @@ async def trigger_digest(
 
     from sqlalchemy import select
 
-    from adcopilot.infrastructure.telegram.digest_notifier import TelegramDigestNotifier
-
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with AsyncSession(engine) as session, session.begin():
@@ -67,7 +65,8 @@ async def trigger_digest(
             accounts = await account_repo.list_for_user(UserId(user_id))
             account_ids = [AccountId(a.id) for a in accounts]
 
-            notifier = TelegramDigestNotifier(bot_token=settings.TELEGRAM_BOT_TOKEN)
+            # TODO(phase-0.2): wire new notifier implementation
+            raise HTTPException(status_code=503, detail="Digest notifier not configured")
             use_case = SendDailyDigestUseCase(
                 account_repo=account_repo,
                 rec_repo=rec_repo,
