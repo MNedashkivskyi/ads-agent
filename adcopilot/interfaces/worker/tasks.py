@@ -61,11 +61,9 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
         # needs_reauth=True on the account.  Notify the user so they know to
         # reconnect their Google Ads account.
         if not result.success and "GoogleAdsAuthError" in (result.error_message or ""):
-            try:
-                asyncio.run(_notify_reauth_required(account_id, settings))
-            except Exception:
-                logger.exception(
-                    "failed to send reauth notification after snapshot",
+                # TODO(phase-1): send reauth notification via new notifier
+                logger.warning(
+                    "snapshot auth failure — user needs to reconnect Google Ads",
                     account_id=account_id,
                 )
         if result.success:
@@ -185,7 +183,7 @@ def _save_run(session: object, result: SnapshotResult) -> None:
 
 @celery_app.task(name="adcopilot.interfaces.worker.tasks.send_daily_digests_task")  # type: ignore[untyped-decorator]
 def send_daily_digests_task() -> dict[str, object]:
-    """Send daily recommendation digests to all users with Telegram linked."""
+    """Send daily recommendation digests to all users."""
     import asyncio
 
     from adcopilot.config import get_settings
@@ -197,7 +195,7 @@ def send_daily_digests_task() -> dict[str, object]:
 
 
 async def _run_send_digests(settings: object) -> dict[str, object]:
-    """Send digests to all Telegram-linked users."""
+    """Compute digests for all users (log-only; notifier wired in Phase 1)."""
     from datetime import datetime
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -216,9 +214,6 @@ async def _run_send_digests(settings: object) -> dict[str, object]:
         SqlRecommendationRepository,
     )
     assert isinstance(settings, Settings)
-    if not settings.TELEGRAM_BOT_TOKEN:
-        logger.warning("TELEGRAM_BOT_TOKEN not set, skipping digests")
-        return {"sent": 0, "skipped": 0, "reason": "no_bot_token"}
 
     today = datetime.now(UTC).date()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -227,18 +222,15 @@ async def _run_send_digests(settings: object) -> dict[str, object]:
     try:
         from sqlalchemy import select
 
-        _INACTIVE_STATUSES = {"past_due", "canceled", "unpaid"}
-
         async with AsyncSession(engine) as session, session.begin():
             result = await session.execute(
                 select(UserModel).where(
-                    UserModel.telegram_chat_id.isnot(None),
                     UserModel.notifications_paused.is_(False),
                 )
             )
             users = result.scalars().all()
 
-        # TODO(phase-0.2): wire new notifier implementation
+        # TODO(phase-1): wire new notifier implementation
         logger.warning("digest_notifier not configured, skipping digest sends")
         return {"sent": 0, "skipped": len(users), "reason": "notifier_not_configured"}
     finally:
@@ -302,8 +294,6 @@ async def _run_trial_reminders(settings: object) -> dict[str, object]:
     from adcopilot.infrastructure.db.models import UserModel
 
     assert isinstance(settings, Settings)
-    if not settings.TELEGRAM_BOT_TOKEN:
-        return {"sent": 0, "skipped": 0, "reason": "no_bot_token"}
 
     now = datetime.now(UTC)
     # Day 12 = trial_ends_at is within 2 days from now
@@ -433,7 +423,6 @@ async def _handle_auth_failure(rec_id: str) -> None:
     from adcopilot.infrastructure.db.repositories.recommendation_repository import (
         SqlRecommendationRepository,
     )
-    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -461,62 +450,21 @@ async def _handle_auth_failure(rec_id: str) -> None:
                 account_id=account.id,
                 rec_id=rec_id,
             )
-
-            # TODO(phase-0.2): send reauth notification via new notifier
+            # TODO(phase-1): send reauth notification via new notifier
     finally:
         await engine.dispose()
 
-
-async def _notify_reauth_required(account_id: str, settings: object) -> None:
-    """Send a reauth notification for an account whose snapshot failed with an auth error.
-
-    The ``needs_reauth`` flag is already set by ``SnapshotAccountUseCase``; this
-    helper is responsible only for the Telegram notification.
-    """
-    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-
-    from adcopilot.config import Settings
-    from adcopilot.domain.entities import AccountId
-    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
-        SqlGoogleAdsAccountRepository,
-    )
-    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
-
-    assert isinstance(settings, Settings)
-    if not settings.TELEGRAM_BOT_TOKEN:
-        return
-
-    engine = create_async_engine(settings.DATABASE_URL)
-    try:
-        async with AsyncSession(engine) as session, session.begin():
-            account_repo = SqlGoogleAdsAccountRepository(session)
-            account = await account_repo.get(AccountId(account_id))
-            if account is None:
-                return
-
-            user_repo = SqlUserRepository(session)
-            user = await user_repo.get_by_id(account.user_id)
-            if user is None or user.telegram_chat_id is None or user.notifications_paused:
-                return
-
-            # TODO(phase-0.2): send reauth notification via new notifier
-    finally:
-        await engine.dispose()
 
 
 async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
-    """Mark the recommendation FAILED and send a Telegram notification to the user."""
+    """Mark the recommendation FAILED and log the failure (notification wired in Phase 1)."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import get_settings
     from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
-    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
-        SqlGoogleAdsAccountRepository,
-    )
     from adcopilot.infrastructure.db.repositories.recommendation_repository import (
         SqlRecommendationRepository,
     )
-    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -535,21 +483,7 @@ async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
                 kind=rec.kind.value,
                 error=error_message,
             )
-
-            if not settings.TELEGRAM_BOT_TOKEN:
-                return
-
-            account_repo = SqlGoogleAdsAccountRepository(session)
-            account = await account_repo.get(rec.account_id)
-            if account is None:
-                return
-
-            user_repo = SqlUserRepository(session)
-            user = await user_repo.get_by_id(account.user_id)
-            if user is None or user.telegram_chat_id is None or user.notifications_paused:
-                return
-
-            # TODO(phase-0.2): send execution failed notification via new notifier
+            # TODO(phase-1): send execution failed notification via new notifier
     finally:
         await engine.dispose()
 
@@ -564,24 +498,21 @@ async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
 def generate_campaign_task(
     brief_id: str,
     revision_text: str | None = None,
-    telegram_chat_id: int | None = None,
 ) -> dict[str, object]:
-    """Generate a campaign proposal and notify the user via Telegram.
+    """Generate a campaign proposal (log-only; notification wired in Phase 1).
 
-    Dispatched when the user clicks "🚀 Generate my campaign" in the interview
-    summary, or when they submit revision text after clicking "✏️ Make changes".
+    Dispatched when the user submits a campaign brief or revision.
     """
     import asyncio
 
-    return asyncio.run(_run_generate_campaign(brief_id, revision_text, telegram_chat_id))
+    return asyncio.run(_run_generate_campaign(brief_id, revision_text))
 
 
 async def _run_generate_campaign(
     brief_id: str,
     revision_text: str | None,
-    telegram_chat_id: int | None,
 ) -> dict[str, object]:
-    """Run the proposal-generation pipeline and notify the user."""
+    """Run the proposal-generation pipeline (log-only; notification wired in Phase 1)."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.application.use_cases.launch.generate_proposal import (
@@ -595,14 +526,12 @@ async def _run_generate_campaign(
     from adcopilot.infrastructure.db.repositories.launch_proposal_repository import (
         SqlCampaignProposalRepository,
     )
-    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
     from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
     from adcopilot.infrastructure.llm.campaign_generator import CampaignGenerator
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
 
-    chat_id = telegram_chat_id
     proposal_id: str | None = None
     error_text: str | None = None
 
@@ -615,12 +544,6 @@ async def _run_generate_campaign(
             if brief is None:
                 logger.error("generate_campaign_task: brief not found", brief_id=brief_id)
                 return {"error": "brief_not_found"}
-
-            # Resolve Telegram chat_id from user record if not provided
-            if chat_id is None:
-                user_repo = SqlUserRepository(session)
-                user = await user_repo.get_by_id(brief.user_id)
-                chat_id = user.telegram_chat_id if user else None
 
             if not settings.LLM_API_KEY:
                 from adcopilot.domain.launch.entities import LaunchStatus
@@ -657,17 +580,17 @@ async def _run_generate_campaign(
     retry_backoff=True,
     name="adcopilot.interfaces.worker.tasks.create_campaign_task",
 )
-def create_campaign_task(brief_id: str, telegram_chat_id: int) -> dict[str, object]:
-    """Create the full campaign in Google Ads (PAUSED) and notify user.
+def create_campaign_task(brief_id: str) -> dict[str, object]:
+    """Create the full campaign in Google Ads (PAUSED).
 
-    Dispatched when the user confirms "✅ Launch this campaign".
+    Dispatched when the user confirms campaign creation.
     """
     import asyncio
 
-    return asyncio.run(_run_create_campaign(brief_id, telegram_chat_id))
+    return asyncio.run(_run_create_campaign(brief_id))
 
 
-async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str, object]:
+async def _run_create_campaign(brief_id: str) -> dict[str, object]:
     import dataclasses
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -876,17 +799,17 @@ async def _run_create_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
     retry_backoff=True,
     name="adcopilot.interfaces.worker.tasks.enable_campaign_task",
 )
-def enable_campaign_task(brief_id: str, telegram_chat_id: int) -> dict[str, object]:
-    """Enable the paused campaign (second explicit confirmation) and start monitoring.
+def enable_campaign_task(brief_id: str) -> dict[str, object]:
+    """Enable the paused campaign and start monitoring.
 
-    Dispatched when the user clicks "🚀 Enable and go live".
+    Dispatched when the user confirms enabling.
     """
     import asyncio
 
-    return asyncio.run(_run_enable_campaign(brief_id, telegram_chat_id))
+    return asyncio.run(_run_enable_campaign(brief_id))
 
 
-async def _run_enable_campaign(brief_id: str, telegram_chat_id: int) -> dict[str, object]:
+async def _run_enable_campaign(brief_id: str) -> dict[str, object]:
     import dataclasses
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -961,7 +884,7 @@ async def _run_enable_campaign(brief_id: str, telegram_chat_id: int) -> dict[str
     # Schedule 48-hour high-alert monitoring (hourly checks)
     if not error_text and account_id_str:
         monitor_new_campaign_task.apply_async(
-            args=[brief_id, account_id_str, 1, telegram_chat_id],
+            args=[brief_id, account_id_str, 1],
             countdown=_MONITORING_INTERVAL_SECONDS,
         )
         logger.info(
@@ -984,17 +907,15 @@ def monitor_new_campaign_task(
     brief_id: str,
     account_id: str,
     hours_elapsed: int,
-    telegram_chat_id: int,
 ) -> dict[str, object]:
     """Run anomaly detection for a newly-enabled campaign, hourly for 48 hours.
 
-    Sends high-alert Telegram messages if new issues are detected.
     After 48 hours the monitoring window closes and nightly digests take over.
     """
     import asyncio
 
     return asyncio.run(
-        _run_monitor_new_campaign(brief_id, account_id, hours_elapsed, telegram_chat_id)
+        _run_monitor_new_campaign(brief_id, account_id, hours_elapsed)
     )
 
 
@@ -1002,7 +923,6 @@ async def _run_monitor_new_campaign(
     brief_id: str,
     account_id: str,
     hours_elapsed: int,
-    telegram_chat_id: int,
 ) -> dict[str, object]:
     from datetime import datetime, timedelta
 
@@ -1073,7 +993,7 @@ async def _run_monitor_new_campaign(
     # Schedule next check if still within the 48-hour window
     if hours_elapsed < _MONITORING_WINDOW_HOURS:
         monitor_new_campaign_task.apply_async(
-            args=[brief_id, account_id, hours_elapsed + 1, telegram_chat_id],
+            args=[brief_id, account_id, hours_elapsed + 1],
             countdown=_MONITORING_INTERVAL_SECONDS,
         )
         logger.info(
@@ -1100,18 +1020,17 @@ async def _run_monitor_new_campaign(
     retry_backoff=True,
     name="adcopilot.interfaces.worker.tasks.panic_pause_campaigns_task",
 )
-def panic_pause_campaigns_task(account_id: str, telegram_chat_id: int) -> dict[str, object]:
+def panic_pause_campaigns_task(account_id: str) -> dict[str, object]:
     """Pause all ENABLED campaigns in *account_id* immediately.
 
-    Dispatched by /panic command or the [🛑 Pause everything now] button.
     Target: complete within 30 seconds.
     """
     import asyncio
 
-    return asyncio.run(_run_panic_pause(account_id, telegram_chat_id))
+    return asyncio.run(_run_panic_pause(account_id))
 
 
-async def _run_panic_pause(account_id: str, telegram_chat_id: int) -> dict[str, object]:
+async def _run_panic_pause(account_id: str) -> dict[str, object]:
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import get_settings

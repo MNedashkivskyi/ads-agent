@@ -25,7 +25,7 @@ async def trigger_digest(
     user_id: str,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> DigestResponse:
-    """Manually trigger a daily digest for a user."""
+    """Manually trigger a daily digest for a user (log-only mode)."""
     from datetime import datetime
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -42,9 +42,6 @@ async def trigger_digest(
     from adcopilot.infrastructure.db.repositories.recommendation_repository import (
         SqlRecommendationRepository,
     )
-
-    if not settings.TELEGRAM_BOT_TOKEN:
-        raise HTTPException(status_code=503, detail="Telegram bot not configured")
 
     from sqlalchemy import select
 
@@ -65,17 +62,13 @@ async def trigger_digest(
             accounts = await account_repo.list_for_user(UserId(user_id))
             account_ids = [AccountId(a.id) for a in accounts]
 
-            # TODO(phase-0.2): wire new notifier implementation
-            raise HTTPException(status_code=503, detail="Digest notifier not configured")
             use_case = SendDailyDigestUseCase(
                 account_repo=account_repo,
                 rec_repo=rec_repo,
                 digest_log_repo=digest_log_repo,
-                notifier=notifier,
             )
             digest_result = await use_case.execute(
                 user_id=UserId(user_id),
-                telegram_chat_id=user_model.telegram_chat_id,
                 account_ids=account_ids,
                 today=datetime.now(UTC).date(),
             )

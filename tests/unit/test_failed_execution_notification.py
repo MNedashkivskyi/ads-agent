@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from adcopilot.infrastructure.fake_notifier import FakeTelegramNotifier
+from adcopilot.infrastructure.fake_notifier import FakeNotifier
 
 # ---------------------------------------------------------------------------
-# FakeTelegramNotifier
+# FakeNotifier
 # ---------------------------------------------------------------------------
 
 
@@ -40,7 +40,7 @@ async def test_fake_notifier_records_send_execution_failed() -> None:
         status=RecommendationStatus.FAILED,
     )
 
-    notifier = FakeTelegramNotifier()
+    notifier = FakeNotifier()
     await notifier.send_execution_failed(chat_id=42, recommendation=rec, error_message="boom")
 
     assert len(notifier.calls) == 1

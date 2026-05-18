@@ -1,11 +1,11 @@
-"""Fake TelegramNotifier for unit tests."""
+"""Fake notifier for unit tests."""
 
 from __future__ import annotations
 
 from adcopilot.domain.recommendation import Recommendation
 
 
-class FakeTelegramNotifier:
+class FakeNotifier:
     """Records send_digest calls without hitting the network."""
 
     def __init__(self) -> None:
