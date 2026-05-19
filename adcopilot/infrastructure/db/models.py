@@ -985,3 +985,21 @@ class NotificationModel(Base):
     __table_args__ = (
         Index("ix_notifications_user_created", "user_id", "created_at"),
     )
+
+
+class QaConversationModel(Base):
+    __tablename__ = "qa_conversations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    account_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    context_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_qa_conversations_user_created", "user_id", "created_at"),
+    )
