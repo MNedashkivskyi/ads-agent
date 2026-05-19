@@ -29,6 +29,13 @@ class CustomerInfo:
     is_manager: bool
 
 
+@dataclass(frozen=True)
+class MerchantCenterLink:
+    merchant_id: int
+    account_name: str
+    status: str  # e.g. "ENABLED", "PENDING"
+
+
 class GoogleAdsClientPort(Protocol):
     async def list_accessible_customers(self, refresh_token: str) -> list[str]: ...
 
@@ -107,3 +114,7 @@ class GoogleAdsClientPort(Protocol):
         days: int = 7,
         limit: int = 20,
     ) -> list[SearchTermSnapshot]: ...
+
+    async def get_merchant_center_link(
+        self, refresh_token: str, customer_id: str
+    ) -> "MerchantCenterLink | None": ...
