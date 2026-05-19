@@ -841,6 +841,49 @@ class TestRule06NoConversionTracking:
         recs = self.rule.detect(ctx)
         assert len(recs) == 1
 
+    # --- stale tracking (new scenario) ---
+
+    def test_stale_tracking_triggers_critical_when_enabled_actions_zero_conversions(self):
+        """ENABLED actions with zero 7-day conversions + overall conversions > 0 → stale."""
+        c = _campaign(cost_micros=150_000_000, conversions=2.0)
+        ca = _conv_action(status="ENABLED", all_conversions=0.0)
+        ctx = _ctx(campaigns=[c], conversion_actions=[ca])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].kind == RecommendationKind.ENABLE_CONVERSION_TRACKING
+        assert recs[0].severity == RecommendationSeverity.CRITICAL
+        assert recs[0].evidence["variant"] == "stale"
+
+    def test_stale_tracking_no_trigger_when_any_action_has_conversions(self):
+        """If at least one ENABLED action has conversions, no stale alert."""
+        c = _campaign(cost_micros=150_000_000, conversions=3.0)
+        ca1 = _conv_action(status="ENABLED", all_conversions=0.0)
+        ca2 = _conv_action(status="ENABLED", all_conversions=2.0)
+        ctx = _ctx(campaigns=[c], conversion_actions=[ca1, ca2])
+        assert self.rule.detect(ctx) == []
+
+    def test_stale_tracking_no_trigger_below_min_cost(self):
+        """Cost gate still applies for stale detection."""
+        c = _campaign(cost_micros=50_000_000, conversions=1.0)
+        ca = _conv_action(status="ENABLED", all_conversions=0.0)
+        ctx = _ctx(campaigns=[c], conversion_actions=[ca])
+        assert self.rule.detect(ctx) == []
+
+    def test_stale_tracking_ignores_removed_actions(self):
+        """REMOVED actions don't count toward stale detection."""
+        c = _campaign(cost_micros=150_000_000, conversions=2.0)
+        ca = _conv_action(status="REMOVED", all_conversions=0.0)
+        ctx = _ctx(campaigns=[c], conversion_actions=[ca])
+        assert self.rule.detect(ctx) == []
+
+    def test_stale_tracking_evidence_contains_action_names(self):
+        c = _campaign(cost_micros=150_000_000, conversions=1.0)
+        ca = _conv_action(name="Purchase", status="ENABLED", all_conversions=0.0)
+        ctx = _ctx(campaigns=[c], conversion_actions=[ca])
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert "Purchase" in recs[0].evidence["action_names"]
+
 
 # ===========================================================================
 # Rule 07 - BudgetCappedRule
