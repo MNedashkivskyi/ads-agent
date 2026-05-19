@@ -38,6 +38,7 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.billing import router as billing_router
     from adcopilot.interfaces.api.debug import router as debug_router
     from adcopilot.interfaces.api.digest import router as digest_router
+    from adcopilot.interfaces.api.ad_proposals import router as ad_proposals_router
     from adcopilot.interfaces.api.conversion_tracking import router as conversion_tracking_router
     from adcopilot.interfaces.api.search_terms import router as search_terms_router
     from adcopilot.interfaces.api.notifications import router as notifications_router
@@ -99,6 +100,7 @@ def create_app() -> FastAPI:
     application.include_router(notifications_router)
     application.include_router(conversion_tracking_router)
     application.include_router(search_terms_router)
+    application.include_router(ad_proposals_router)
 
     @application.get("/health")
     async def health() -> JSONResponse:
