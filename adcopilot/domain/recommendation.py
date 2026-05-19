@@ -107,11 +107,9 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         RecommendationKind.IMPRESSION_SHARE_EROSION,
         RecommendationKind.SPEND_ACCELERATION,
         RecommendationKind.QUALITY_SCORE_DETERIORATION,
-        # Module 2 — ad copy insights (informational)
+        # Module 2 — ad copy insights (informational; AD_FATIGUE/WEAK_RSA_STRENGTH now executable)
         RecommendationKind.AD_KEYWORD_MISMATCH,
         RecommendationKind.MISSING_CTA,
-        RecommendationKind.WEAK_RSA_STRENGTH,
-        RecommendationKind.AD_FATIGUE,
         RecommendationKind.REDUNDANT_HEADLINES,
         RecommendationKind.GENERIC_DESCRIPTION,
         # Module 3 — structural issues (informational)

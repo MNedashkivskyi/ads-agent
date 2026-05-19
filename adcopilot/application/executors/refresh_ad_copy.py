@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -11,6 +11,9 @@ from adcopilot.application.ports.llm import LLMClient
 from adcopilot.application.ports.prompt_version_repository import PromptVersionRepository
 from adcopilot.application.use_cases.refresh_ad_copy import AdCopyRefreshUseCase
 from adcopilot.domain.recommendation import Recommendation, RecommendationKind
+
+if TYPE_CHECKING:
+    pass
 
 logger = structlog.get_logger(__name__)
 
@@ -23,6 +26,13 @@ class AdCopyRefreshExecutor:
     def __init__(self, llm: LLMClient, prompt_repo: PromptVersionRepository) -> None:
         self._llm = llm
         self._prompt_repo = prompt_repo
+
+    @classmethod
+    def from_settings(cls, settings: Any) -> "AdCopyRefreshExecutor":
+        """Create executor with fresh LLM client and a lazy prompt repo (own session per call)."""
+        from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
+        from adcopilot.infrastructure.db.repositories.prompt_version_repository import _LazyPromptRepo
+        return cls(llm=AnthropicClient(api_key=settings.LLM_API_KEY), prompt_repo=_LazyPromptRepo(settings))  # type: ignore[arg-type]
 
     async def execute(
         self,
