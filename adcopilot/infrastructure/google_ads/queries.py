@@ -390,6 +390,9 @@ async def query_keywords(
             ad_group_criterion.keyword.match_type,
             ad_group_criterion.status,
             ad_group_criterion.quality_info.quality_score,
+            ad_group_criterion.quality_info.search_predicted_ctr,
+            ad_group_criterion.quality_info.creative_quality_score,
+            ad_group_criterion.quality_info.post_click_quality_score,
             metrics.impressions,
             metrics.clicks,
             metrics.cost_micros,
@@ -408,10 +411,16 @@ async def query_keywords(
             for row in batch.results:
                 agc = row.ad_group_criterion
                 m = row.metrics
-                qs = agc.quality_info.quality_score
+                qi = agc.quality_info
+                qs = qi.quality_score
                 # Extract ad_group_id from resource name customers/{cid}/adGroups/{id}
                 ag_resource = agc.ad_group
                 ag_id = int(ag_resource.split("/")[-1]) if ag_resource else 0
+
+                def _qs_enum(val: object) -> str | None:
+                    name = getattr(val, "name", None)
+                    return name if name and name != "UNKNOWN" else None
+
                 results.append(
                     KeywordSnapshot(
                         id=_make_id(),
@@ -423,6 +432,9 @@ async def query_keywords(
                         match_type=agc.keyword.match_type.name,
                         status=agc.status.name,
                         quality_score=int(qs) if qs else None,
+                        expected_ctr=_qs_enum(qi.search_predicted_ctr),
+                        ad_relevance=_qs_enum(qi.creative_quality_score),
+                        landing_page_experience=_qs_enum(qi.post_click_quality_score),
                         impressions=m.impressions,
                         clicks=m.clicks,
                         cost_micros=m.cost_micros,
