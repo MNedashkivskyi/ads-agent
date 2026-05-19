@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     LLM_API_KEY: str | None = None
     PAGESPEED_API_KEY: str | None = None
 
+    # Comma-separated list of user UUIDs that have admin access to /api/admin/* endpoints.
+    ADMIN_USER_IDS: str = ""
+
     # Supabase JWT secret — used to verify JWTs issued by Supabase auth.
     # Find it in Supabase project → Settings → API → JWT Secret.
     SUPABASE_JWT_SECRET: str | None = None
