@@ -8,6 +8,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from adcopilot.application.use_cases.detect_search_term_waste import detect_search_term_waste
 from adcopilot.config import Settings, get_settings
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
@@ -26,6 +27,7 @@ class SearchTermResponse(BaseModel):
     clicks: int
     impressions: int
     conversions: float
+    is_wasteful: bool = False
 
 
 class BlockSearchTermRequest(BaseModel):
@@ -97,6 +99,9 @@ async def list_search_terms(
     finally:
         await engine.dispose()
 
+    waste_recs = detect_search_term_waste(account.id, snapshots)
+    waste_terms = {r.evidence["search_term"] for r in waste_recs}
+
     return [
         SearchTermResponse(
             search_term=s.search_term,
@@ -106,6 +111,7 @@ async def list_search_terms(
             clicks=s.clicks,
             impressions=s.impressions,
             conversions=s.conversions,
+            is_wasteful=s.search_term in waste_terms,
         )
         for s in snapshots
     ]
@@ -203,11 +209,18 @@ async def block_search_term(
         await engine.dispose()
 
     n = len(campaign_ids)
-    return BlockSearchTermResponse(
-        term=body.term,
-        campaigns_affected=n,
-        message=f"Zablokowano: '{body.term}'. Dodano jako negatyw do {n} kampanii.",
-    )
+    message = f"Zablokowano: '{body.term}'. Dodano jako negatyw do {n} kampanii."
+
+    try:
+        from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+
+        async with AsyncSession(create_async_engine(settings.DATABASE_URL)) as notif_session, notif_session.begin():
+            notifier = SqlWebNotifier(notif_session)
+            await notifier.send_alert(user_id=user_id, title="Zablokowano frazę", body=message)
+    except Exception:
+        logger.warning("search_term_block.notification_failed", user_id=user_id, term=body.term)
+
+    return BlockSearchTermResponse(term=body.term, campaigns_affected=n, message=message)
 
 
 def _new_uuid() -> str:
