@@ -105,9 +105,20 @@ from adcopilot.application.ports.recommendation_repository import Recommendation
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
 
+# Rules that require working conversion tracking to produce meaningful results.
+# When tracking is broken/missing, these rules are skipped to avoid noise.
+_CONVERSION_DEPENDENT_RULES = frozenset({
+    "ZeroConversionKeywordRule",
+    "CpaSpikeRule",
+    "ConversionRateDropRule",
+    "RelaxTargetCpaRule",
+})
+
+
 def build_rule_engine(
     rec_repo: RecommendationRepository,
     snooze_repo: SnoozeRepository | None = None,
+    has_working_tracking: bool = True,
 ) -> RuleEngine:
     """Instantiate all detection rules and return a configured RuleEngine."""
     rules: list[DetectionRule] = [
@@ -173,4 +184,7 @@ def build_rule_engine(
         PMaxLowRoasRule(),
         PMaxAssetDisapprovedRule(),
     ]
+    if not has_working_tracking:
+        rules = [r for r in rules if type(r).__name__ not in _CONVERSION_DEPENDENT_RULES]
+
     return RuleEngine(rules=rules, rec_repo=rec_repo, snooze_repo=snooze_repo)
