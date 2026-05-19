@@ -1835,6 +1835,9 @@ def generate_weekly_insight_task() -> dict[str, object]:
         from adcopilot.infrastructure.db.repositories.snapshot_repository import (
             SqlSnapshotRepository,
         )
+        from adcopilot.infrastructure.db.repositories.weekly_insight_repository import (
+            SqlWeeklyInsightRepository,
+        )
         from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
         from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
         from sqlalchemy.ext.asyncio import AsyncSession
@@ -1853,6 +1856,7 @@ def generate_weekly_insight_task() -> dict[str, object]:
                 audit_repo = SqlAuditLogRepository(session)
                 prompt_repo = SqlPromptVersionRepository(session)
                 notifier = SqlWebNotifier(session)
+                insight_repo = SqlWeeklyInsightRepository(session)
 
                 accounts = await account_repo.list_active()
                 llm = AnthropicClient(api_key=settings.LLM_API_KEY)
@@ -1870,6 +1874,21 @@ def generate_weekly_insight_task() -> dict[str, object]:
                             continue  # no data — skip
 
                         insight_text = await insight_uc.execute(ctx)
+
+                        import datetime as _dt
+                        today = _dt.date.today()
+                        week_start = today - _dt.timedelta(days=today.weekday())
+
+                        await insight_repo.save(
+                            user_id=str(account.user_id),
+                            account_id=str(account.id),
+                            week_start=week_start,
+                            insight_text=insight_text,
+                            context_snapshot={
+                                "snapshot_date": ctx.get("snapshot_date"),
+                                "summary": ctx.get("summary"),
+                            },
+                        )
                         await notifier.send_insight(
                             user_id=str(account.user_id),
                             title="Tygodniowy raport strategiczny",
