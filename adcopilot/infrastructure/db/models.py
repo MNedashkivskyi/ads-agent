@@ -37,6 +37,7 @@ __all__ = [
     "GeoPerformanceSnapshotModel",
     "GoogleAdsAccountModel",
     "HourPerformanceSnapshotModel",
+    "KeywordQSHistoryModel",
     "KeywordSnapshotModel",
     "LaunchAdGroupModel",
     "LaunchAdModel",
@@ -218,6 +219,24 @@ class KeywordSnapshotModel(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class KeywordQSHistoryModel(Base):
+    __tablename__ = "keyword_qs_history"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    criterion_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    recorded_date: Mapped[date] = mapped_column(Date, nullable=False)
+    keyword_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    match_type: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    quality_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    expected_ctr: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    ad_relevance: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    landing_page_experience: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
 
