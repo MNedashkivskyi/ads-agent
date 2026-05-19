@@ -60,6 +60,9 @@ class KeywordSnapshot:
     match_type: str
     status: str
     quality_score: int | None
+    expected_ctr: str | None
+    ad_relevance: str | None
+    landing_page_experience: str | None
     impressions: int
     clicks: int
     cost_micros: int
