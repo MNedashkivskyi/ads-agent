@@ -1700,3 +1700,105 @@ def aggregate_benchmarks_task() -> dict[str, object]:
             await engine.dispose()
 
     return _asyncio.run(_run())
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.monthly_landing_page_audit_task",
+    max_retries=2,
+    default_retry_delay=300,
+)
+def monthly_landing_page_audit_task() -> dict[str, object]:
+    """Score all active landing pages monthly; alert users via WebNotifier if score < 50."""
+    import asyncio as _asyncio
+
+    async def _run() -> dict[str, object]:
+        import asyncio
+        import json
+
+        import structlog
+
+        from adcopilot.application.use_cases.score_landing_page import LandingPageScoreUseCase
+        from adcopilot.config import Settings
+        from adcopilot.domain.exceptions import PageAnalyzerError
+        from adcopilot.infrastructure.db.engine import build_async_engine
+        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+            SqlGoogleAdsAccountRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
+            SqlPromptVersionRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.snapshot_repository import (
+            SqlSnapshotRepository,
+        )
+        from adcopilot.infrastructure.landing_page.pagespeed_adapter import PageSpeedAdapter
+        from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
+        from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        _log = structlog.get_logger(__name__)
+        settings = Settings()
+        engine = build_async_engine(settings)
+        scored = 0
+        alerted = 0
+        errors = 0
+
+        try:
+            async with AsyncSession(engine) as session:
+                account_repo = SqlGoogleAdsAccountRepository(session)
+                snapshot_repo = SqlSnapshotRepository(session)
+                prompt_repo = SqlPromptVersionRepository(session)
+                notifier = SqlWebNotifier(session)
+
+                accounts = await account_repo.list_active()
+                llm = AnthropicClient(api_key=settings.LLM_API_KEY)
+                psi_adapter = PageSpeedAdapter(api_key=settings.PAGESPEED_API_KEY)
+                use_case = LandingPageScoreUseCase(
+                    page_analyzer=psi_adapter, llm=llm, prompt_repo=prompt_repo
+                )
+
+                for account in accounts:
+                    latest_date = await snapshot_repo.get_latest_snapshot_date(account.id)
+                    if latest_date is None:
+                        continue
+                    ads = await snapshot_repo.get_ads_by_date(account.id, latest_date)
+                    urls: set[str] = set()
+                    for ad in ads:
+                        try:
+                            parsed = json.loads(ad.final_urls_json or "[]")
+                            urls.update(u for u in parsed if u and u.startswith("http"))
+                        except (json.JSONDecodeError, AttributeError):
+                            pass
+
+                    for url in sorted(urls):
+                        try:
+                            score = await use_case.execute(url)
+                            scored += 1
+                            if score.performance_score < 50:
+                                await notifier.send_alert(
+                                    user_id=str(account.user_id),
+                                    title="Niska ocena strony docelowej",
+                                    body=(
+                                        f"Strona {url} uzyskała wynik wydajności "
+                                        f"{score.performance_score}/100. "
+                                        f"Rekomendacje: {'; '.join(score.recommendations_pl[:2])}."
+                                    ),
+                                )
+                                alerted += 1
+                        except PageAnalyzerError as exc:
+                            _log.warning("monthly_audit.pagespeed_error", url=url, error=str(exc))
+                            errors += 1
+                        except Exception as exc:
+                            _log.error("monthly_audit.unexpected_error", url=url, error=str(exc))
+                            errors += 1
+
+                        # 1-second delay per PSI quota mitigation (CCR-1)
+                        await asyncio.sleep(1)
+
+                await session.commit()
+        finally:
+            await engine.dispose()
+
+        _log.info("monthly_landing_page_audit.done", scored=scored, alerted=alerted, errors=errors)
+        return {"scored": scored, "alerted": alerted, "errors": errors}
+
+    return _asyncio.run(_run())

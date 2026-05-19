@@ -84,6 +84,11 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.aggregate_benchmarks_task",
                     "schedule": crontab(hour=5, minute=0, day_of_week="wednesday"),
                 },
+                "monthly-landing-page-audit": {
+                    # 2nd of month 7:00 AM UTC — score all active landing pages.
+                    "task": "adcopilot.interfaces.worker.tasks.monthly_landing_page_audit_task",
+                    "schedule": crontab(hour=7, minute=0, day_of_month="2"),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},
