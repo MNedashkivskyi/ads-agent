@@ -71,6 +71,7 @@ class RecommendationKind(Enum):
     LANDING_PAGE_KEYWORD_MISMATCH = "LANDING_PAGE_KEYWORD_MISMATCH"
     # Module 9 — Search term mining
     PROMOTE_SEARCH_TERM = "PROMOTE_SEARCH_TERM"
+    SEARCH_TERM_WASTE = "SEARCH_TERM_WASTE"
     # Module 10 — Benchmarking
     ABOVE_VERTICAL_BENCHMARK = "ABOVE_VERTICAL_BENCHMARK"
 
@@ -133,6 +134,8 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         RecommendationKind.LANDING_PAGE_KEYWORD_MISMATCH,
         # Module 10 — benchmarking (informational)
         RecommendationKind.ABOVE_VERTICAL_BENCHMARK,
+        # Module 9 — search term waste (advisory; blocked via UI)
+        RecommendationKind.SEARCH_TERM_WASTE,
     }
 )
 
