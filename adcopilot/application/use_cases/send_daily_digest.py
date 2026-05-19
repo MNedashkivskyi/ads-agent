@@ -9,6 +9,7 @@ import structlog
 
 from adcopilot.application.ports.digest_sent_log_repository import DigestSentLogRepository
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
+from adcopilot.application.ports.web_notifier import WebNotifier
 from adcopilot.domain.entities import AccountId, UserId
 from adcopilot.domain.recommendation import Recommendation, RecommendationSeverity
 
@@ -41,10 +42,12 @@ class SendDailyDigestUseCase:
         account_repo: object,  # GoogleAdsAccountRepository Protocol
         rec_repo: RecommendationRepository,
         digest_log_repo: DigestSentLogRepository,
+        notifier: WebNotifier | None = None,
     ) -> None:
         self._account_repo = account_repo
         self._rec_repo = rec_repo
         self._digest_log_repo = digest_log_repo
+        self._notifier = notifier
 
     async def execute(
         self,
@@ -92,4 +95,13 @@ class SendDailyDigestUseCase:
             count=len(top_recs),
             date=today,
         )
+
+        if self._notifier:
+            await self._notifier.send_digest(
+                user_id=str(user_id),
+                title="Dzienny raport rekomendacji",
+                body=f"Masz {len(top_recs)} nowych rekomendacji do przejrzenia.",
+                metadata={"recommendation_ids": rec_ids},
+            )
+
         return DigestResult(sent=True, count=len(top_recs), reason="sent")
