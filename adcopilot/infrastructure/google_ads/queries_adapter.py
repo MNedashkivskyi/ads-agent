@@ -148,3 +148,14 @@ class GoogleAdsQueriesAdapter:
         return await queries.list_conversion_actions(
             refresh_token, customer_id, self._settings
         )
+
+    async def list_recent_search_terms(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        days: int = 7,
+        limit: int = 20,
+    ) -> list[SearchTermSnapshot]:
+        return await queries.list_recent_search_terms(
+            refresh_token, customer_id, self._settings, days=days, limit=limit
+        )

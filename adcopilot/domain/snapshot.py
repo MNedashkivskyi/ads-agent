@@ -80,6 +80,7 @@ class SearchTermSnapshot:
     cost_micros: int
     conversions: float
     matched_keyword_id: int | None
+    campaign_name: str = ""
 
 
 @dataclass(frozen=True)

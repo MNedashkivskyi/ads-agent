@@ -255,6 +255,70 @@ async def list_conversion_actions(
         raise _wrap_exc(exc) from exc
 
 
+async def list_recent_search_terms(
+    refresh_token: str,
+    customer_id: str,
+    settings: Settings,
+    days: int = 7,
+    limit: int = 20,
+) -> list[SearchTermSnapshot]:
+    """Fetch top search terms by cost for the last *days* days (CCR-1: single bounded query).
+
+    Results are ordered by cost_micros descending, capped at *limit* rows.
+    Returns an empty list for accounts with no search term data.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    today = datetime.now(timezone.utc).date()
+    start = today - timedelta(days=days)
+    date_range = f"'{start}' AND '{today}'"
+
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    query = f"""
+        SELECT
+            search_term_view.search_term,
+            campaign.name,
+            metrics.cost_micros,
+            metrics.clicks,
+            metrics.impressions,
+            metrics.conversions
+        FROM search_term_view
+        WHERE segments.date BETWEEN {date_range}
+        ORDER BY metrics.cost_micros DESC
+        LIMIT {limit}
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[SearchTermSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                stv = row.search_term_view
+                m = row.metrics
+                results.append(
+                    SearchTermSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=today,
+                        search_term=stv.search_term,
+                        ad_group_id=0,
+                        impressions=m.impressions,
+                        clicks=m.clicks,
+                        cost_micros=m.cost_micros,
+                        conversions=m.conversions,
+                        matched_keyword_id=None,
+                        campaign_name=row.campaign.name,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
 async def query_ad_groups(
     refresh_token: str,
     customer_id: str,

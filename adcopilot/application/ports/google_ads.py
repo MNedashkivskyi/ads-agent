@@ -99,3 +99,11 @@ class GoogleAdsClientPort(Protocol):
     async def list_conversion_actions(
         self, refresh_token: str, customer_id: str
     ) -> list[ConversionActionSnapshot]: ...
+
+    async def list_recent_search_terms(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        days: int = 7,
+        limit: int = 20,
+    ) -> list[SearchTermSnapshot]: ...
