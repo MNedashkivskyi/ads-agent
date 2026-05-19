@@ -1802,3 +1802,90 @@ def monthly_landing_page_audit_task() -> dict[str, object]:
         return {"scored": scored, "alerted": alerted, "errors": errors}
 
     return _asyncio.run(_run())
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.generate_weekly_insight_task",
+    max_retries=2,
+    default_retry_delay=120,
+)
+def generate_weekly_insight_task() -> dict[str, object]:
+    """Generate and deliver weekly strategic insights to all active users (Monday 8:30 AM UTC)."""
+    import asyncio as _asyncio
+
+    async def _run() -> dict[str, object]:
+        import structlog
+
+        from adcopilot.application.services.account_context_builder import AccountContextBuilder
+        from adcopilot.application.use_cases.generate_weekly_insight import GenerateWeeklyInsightUseCase
+        from adcopilot.config import Settings
+        from adcopilot.infrastructure.db.engine import build_async_engine
+        from adcopilot.infrastructure.db.repositories.audit_log_repository import (
+            SqlAuditLogRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+            SqlGoogleAdsAccountRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
+            SqlPromptVersionRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+            SqlRecommendationRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.snapshot_repository import (
+            SqlSnapshotRepository,
+        )
+        from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
+        from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        _log = structlog.get_logger(__name__)
+        settings = Settings()
+        engine = build_async_engine(settings)
+        delivered = 0
+        errors = 0
+
+        try:
+            async with AsyncSession(engine) as session:
+                account_repo = SqlGoogleAdsAccountRepository(session)
+                snapshot_repo = SqlSnapshotRepository(session)
+                rec_repo = SqlRecommendationRepository(session)
+                audit_repo = SqlAuditLogRepository(session)
+                prompt_repo = SqlPromptVersionRepository(session)
+                notifier = SqlWebNotifier(session)
+
+                accounts = await account_repo.list_active()
+                llm = AnthropicClient(api_key=settings.LLM_API_KEY)
+                insight_uc = GenerateWeeklyInsightUseCase(llm=llm, prompt_repo=prompt_repo)
+
+                for account in accounts:
+                    try:
+                        builder = AccountContextBuilder(
+                            snapshot_repo=snapshot_repo,
+                            rec_repo=rec_repo,
+                            audit_log_repo=audit_repo,
+                        )
+                        ctx = await builder.build(account.id)
+                        if ctx.get("summary") is None:
+                            continue  # no data — skip
+
+                        insight_text = await insight_uc.execute(ctx)
+                        await notifier.send_insight(
+                            user_id=str(account.user_id),
+                            title="Tygodniowy raport strategiczny",
+                            body=insight_text,
+                            metadata={"account_id": str(account.id), "context_snapshot": ctx},
+                        )
+                        delivered += 1
+                    except Exception as exc:
+                        _log.error("weekly_insight.error", account_id=str(account.id), error=str(exc))
+                        errors += 1
+
+                await session.commit()
+        finally:
+            await engine.dispose()
+
+        _log.info("generate_weekly_insight.done", delivered=delivered, errors=errors)
+        return {"delivered": delivered, "errors": errors}
+
+    return _asyncio.run(_run())

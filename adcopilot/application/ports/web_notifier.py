@@ -21,3 +21,7 @@ class WebNotifier(Protocol):
     async def send_reauth_required(
         self, user_id: str, title: str, body: str, metadata: dict | None = None
     ) -> None: ...
+
+    async def send_insight(
+        self, user_id: str, title: str, body: str, metadata: dict | None = None
+    ) -> None: ...
