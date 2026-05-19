@@ -89,6 +89,11 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.monthly_landing_page_audit_task",
                     "schedule": crontab(hour=7, minute=0, day_of_month="2"),
                 },
+                "weekly-proactive-insights": {
+                    # Mondays 8:30 AM UTC — generate strategic weekly insight per user.
+                    "task": "adcopilot.interfaces.worker.tasks.generate_weekly_insight_task",
+                    "schedule": crontab(hour=8, minute=30, day_of_week="monday"),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},

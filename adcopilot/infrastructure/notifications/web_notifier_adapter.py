@@ -50,3 +50,8 @@ class SqlWebNotifier:
         self, user_id: str, title: str, body: str, metadata: dict | None = None
     ) -> None:
         await self._send(user_id, NotificationType.REAUTH_REQUIRED, title, body, metadata)
+
+    async def send_insight(
+        self, user_id: str, title: str, body: str, metadata: dict | None = None
+    ) -> None:
+        await self._send(user_id, NotificationType.INSIGHT, title, body, metadata)
