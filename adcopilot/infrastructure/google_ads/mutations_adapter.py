@@ -840,3 +840,71 @@ class GoogleAdsMutationsAdapter:
             raise
         except Exception as exc:
             raise _wrap_mutation_exc("pause_ad_group_keyword_by_text", exc) from exc
+
+    async def get_ad_group_resource_name(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+    ) -> str:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            ad_group_service = client.get_service("AdGroupService")
+            resource_name = ad_group_service.ad_group_path(cid, ad_group_id)
+            logger.info("ad_group_resource_name", customer_id=customer_id, ad_group_id=ad_group_id, resource_name=resource_name)
+            return resource_name
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("get_ad_group_resource_name", exc) from exc
+
+    async def create_rsa(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        headlines: list[str],
+        descriptions: list[str],
+        final_url: str,
+        path1: str | None = None,
+        path2: str | None = None,
+    ) -> int:
+        """Create a PAUSED Responsive Search Ad in the given ad group; return new ad_id."""
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            ad_group_ad_service = client.get_service("AdGroupAdService")
+            ad_group_service = client.get_service("AdGroupService")
+
+            op = client.get_type("AdGroupAdOperation")
+            ad_group_ad = op.create
+            ad_group_ad.status = client.enums.AdGroupAdStatusEnum.PAUSED
+            ad_group_ad.ad_group = ad_group_service.ad_group_path(cid, ad_group_id)
+
+            rsa = ad_group_ad.ad.responsive_search_ad
+            for text in headlines:
+                asset = client.get_type("AdTextAsset")
+                asset.text = text
+                rsa.headlines.append(asset)
+            for text in descriptions:
+                asset = client.get_type("AdTextAsset")
+                asset.text = text
+                rsa.descriptions.append(asset)
+            if path1:
+                rsa.path1 = path1
+            if path2:
+                rsa.path2 = path2
+
+            ad_group_ad.ad.final_urls.append(final_url)
+
+            response = ad_group_ad_service.mutate_ad_group_ads(customer_id=cid, operations=[op])
+            new_rn = response.results[0].resource_name
+            # resource_name format: customers/{cid}/adGroupAds/{ad_group_id}~{ad_id}
+            ad_id = int(new_rn.split("~")[-1])
+            logger.info("rsa created", customer_id=customer_id, ad_group_id=ad_group_id, ad_id=ad_id)
+            return ad_id
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("create_rsa", exc) from exc
