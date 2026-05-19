@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # Find it in Supabase project → Settings → API → JWT Secret.
     SUPABASE_JWT_SECRET: str | None = None
 
+    # Telegram Bot API token — used to send proactive reminders to users.
+    # Optional; when not set, Telegram notifications are skipped.
+    TELEGRAM_BOT_TOKEN: str | None = None
+
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_WEBHOOK_SECRET: str | None = None
     STRIPE_STARTER_PRICE_ID: str | None = None

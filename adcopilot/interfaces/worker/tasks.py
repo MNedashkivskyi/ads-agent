@@ -142,12 +142,28 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
             from adcopilot.infrastructure.db.repositories.snooze_repository import (
                 SqlSnoozeRepository,
             )
+            from adcopilot.domain.snapshot import ConversionActionSnapshot
 
             rec_repo = SqlRecommendationRepository(session)
             snooze_repo = SqlSnoozeRepository(session)
-            rule_engine = build_rule_engine(rec_repo, snooze_repo)
+
+            # Check if conversion tracking is working — load conversion actions
+            # from the snapshot repository to determine if any are healthy.
+            snapshot_repo = SqlSnapshotRepository(session)
+            conversion_actions = await snapshot_repo.get_conversion_actions(AccountId(str(account_id)))
+            has_working_tracking = any(
+                a.status == "ENABLED" and a.all_conversions > 0
+                for a in conversion_actions
+            )
+            if not has_working_tracking:
+                logger.info(
+                    "detection.conversion_tracking_missing — skipping conversion-dependent rules",
+                    account_id=str(account_id),
+                )
+
+            rule_engine = build_rule_engine(rec_repo, snooze_repo, has_working_tracking=has_working_tracking)
             use_case = RunDetectionUseCase(
-                snapshot_repo=SqlSnapshotRepository(session),
+                snapshot_repo=snapshot_repo,
                 rec_repo=rec_repo,
                 rule_engine=rule_engine,
                 account_repo=SqlGoogleAdsAccountRepository(session),
@@ -1995,3 +2011,89 @@ def generate_weekly_insight_task() -> dict[str, object]:
         return {"delivered": delivered, "errors": errors}
 
     return _asyncio.run(_run())
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.send_conversion_tracking_reminders_task",
+)
+def send_conversion_tracking_reminders_task() -> dict[str, object]:
+    """Send weekly Telegram reminders to accounts with broken/missing conversion tracking."""
+    import asyncio as _asyncio
+
+    from adcopilot.config import get_settings
+
+    _settings = get_settings()
+    return _asyncio.run(_run_conversion_reminders(_settings))
+
+
+async def _run_conversion_reminders(settings: object) -> dict[str, object]:
+    import httpx
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from sqlalchemy import select
+
+    from adcopilot.config import Settings
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.infrastructure.db.models import UserModel
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.snapshot_repository import SqlSnapshotRepository
+
+    assert isinstance(settings, Settings)
+
+    if not settings.TELEGRAM_BOT_TOKEN:
+        logger.debug("conversion_reminders.skipped — TELEGRAM_BOT_TOKEN not set")
+        return {"sent": 0, "skipped_no_token": True}
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    sent = 0
+    skipped = 0
+    try:
+        async with AsyncSession(engine) as session:
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            snapshot_repo = SqlSnapshotRepository(session)
+
+            result = await session.execute(
+                select(UserModel).where(
+                    UserModel.notifications_paused.is_(False),
+                    UserModel.telegram_chat_id.isnot(None),
+                )
+            )
+            users = result.scalars().all()
+
+            for user in users:
+                try:
+                    accounts = await account_repo.list_for_user(user.id)  # type: ignore[arg-type]
+                    for account in accounts:
+                        conversion_actions = await snapshot_repo.get_conversion_actions(
+                            AccountId(str(account.id))
+                        )
+                        has_working_tracking = any(
+                            a.status == "ENABLED" and a.all_conversions > 0
+                            for a in conversion_actions
+                        )
+                        if not has_working_tracking and user.telegram_chat_id:
+                            message = (
+                                "⚠️ Twoje śledzenie konwersji Google Ads nie jest skonfigurowane lub nie działa. "
+                                "Optymalizacja kampanii jest ograniczona — brakuje danych o konwersjach.\n\n"
+                                "Przejdź do panelu Adswise → Śledzenie Konwersji, aby skonfigurować."
+                            )
+                            async with httpx.AsyncClient(timeout=10.0) as client:
+                                await client.post(
+                                    f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage",
+                                    json={"chat_id": user.telegram_chat_id, "text": message},
+                                )
+                            sent += 1
+                        else:
+                            skipped += 1
+                except Exception as exc:
+                    logger.warning(
+                        "conversion_reminders.user_error",
+                        user_id=str(user.id),
+                        error=str(exc),
+                    )
+    finally:
+        await engine.dispose()
+
+    logger.info("conversion_reminders.done", sent=sent, skipped=skipped)
+    return {"sent": sent, "skipped": skipped}
