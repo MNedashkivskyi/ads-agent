@@ -185,3 +185,11 @@ class GoogleAdsQueriesAdapter:
                     status=str(link.get("status", "")),
                 )
         return None
+
+    async def fetch_auction_insights(
+        self, refresh_token: str, customer_id: str, snapshot_date: "date"
+    ) -> list[dict]:
+        from datetime import date
+        return await queries.fetch_auction_insights(
+            refresh_token, customer_id, self._settings, snapshot_date
+        )

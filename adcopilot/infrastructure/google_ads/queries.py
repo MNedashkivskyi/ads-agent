@@ -1154,3 +1154,49 @@ async def query_merchant_center_feed(
         raise
     except Exception as exc:
         raise _wrap_exc(exc) from exc
+
+
+async def fetch_auction_insights(
+    refresh_token: str,
+    customer_id: str,
+    settings: "Settings",
+    snapshot_date: "date",
+) -> list[dict]:
+    """Fetch Auction Insights report for all enabled campaigns.
+
+    Returns a list of dicts with keys:
+        campaign_id, competitor_domain, impression_share, overlap_rate, position_above_rate
+    """
+    from datetime import date as _date
+    import asyncio
+
+    def _sync() -> list[dict]:
+        client = _build_client(refresh_token, customer_id, settings)
+        service = client.get_service("GoogleAdsService")
+        query = """
+            SELECT
+                campaign.id,
+                auction_insight.domain,
+                metrics.auction_insight_search_impression_share,
+                metrics.auction_insight_search_overlap_rate,
+                metrics.auction_insight_search_position_above_rate
+            FROM auction_insight
+            WHERE campaign.status = 'ENABLED'
+              AND segments.date DURING LAST_7_DAYS
+        """
+        results = []
+        try:
+            response = service.search(customer_id=customer_id, query=query)
+            for row in response:
+                results.append({
+                    "campaign_id": row.campaign.id,
+                    "competitor_domain": row.auction_insight.domain,
+                    "impression_share": row.metrics.auction_insight_search_impression_share or None,
+                    "overlap_rate": row.metrics.auction_insight_search_overlap_rate or None,
+                    "position_above_rate": row.metrics.auction_insight_search_position_above_rate or None,
+                })
+        except Exception as exc:
+            raise _wrap_exc(exc) from exc
+        return results
+
+    return await asyncio.get_event_loop().run_in_executor(None, _sync)

@@ -160,6 +160,7 @@ class AccountContextBuilder:
             "top_campaigns": campaign_breakdown,
             "active_alerts": alerts,
             "recent_executions": top_executed,
+            "competitors": await self._build_competitor_context(account_id, latest_date),
         }
 
         # Enforce token budget
@@ -171,6 +172,32 @@ class AccountContextBuilder:
 
         return ctx
 
+    async def _build_competitor_context(self, account_id: AccountId, snapshot_date) -> list[dict]:
+        """Return top competitors by impression share for LLM context (best-effort)."""
+        from datetime import timedelta
+        try:
+            rows = await self._snapshot_repo.get_auction_insights(
+                account_id,
+                snapshot_date - timedelta(days=7),
+                snapshot_date,
+            )
+        except Exception:
+            return []
+
+        # Aggregate by domain: pick max impression_share across campaigns
+        domain_is: dict[str, float] = {}
+        for r in rows:
+            domain = r["competitor_domain"]
+            is_val = r.get("impression_share") or 0.0
+            if is_val > domain_is.get(domain, 0.0):
+                domain_is[domain] = is_val
+
+        top = sorted(domain_is.items(), key=lambda x: -x[1])[:5]
+        return [
+            {"domain": d, "impression_share": round(is_val, 4)}
+            for d, is_val in top
+        ]
+
 
 def _empty_context(account_id: AccountId) -> dict[str, Any]:
     return {
@@ -181,5 +208,6 @@ def _empty_context(account_id: AccountId) -> dict[str, Any]:
         "top_campaigns": [],
         "active_alerts": [],
         "recent_executions": [],
+        "competitors": [],
         "note": "Brak danych — konto nie posiada żadnych migawek.",
     }

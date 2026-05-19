@@ -103,6 +103,8 @@ from adcopilot.application.detection.rules.rule_46_promote_search_term import Pr
 from adcopilot.application.detection.rules.rule_48_above_vertical_benchmark import AboveVerticalBenchmarkRule
 from adcopilot.application.detection.rules.rule_49_pmax_low_roas import PMaxLowRoasRule
 from adcopilot.application.detection.rules.rule_50_pmax_asset_disapproved import PMaxAssetDisapprovedRule
+from adcopilot.application.detection.rules.new_competitor import NewCompetitorRule
+from adcopilot.application.detection.rules.competitor_aggression import CompetitorAggressionRule
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -187,6 +189,9 @@ def build_rule_engine(
         # Module 11 — Performance Max
         PMaxLowRoasRule(),
         PMaxAssetDisapprovedRule(),
+        # Module 12 — Competitive monitoring
+        NewCompetitorRule(),
+        CompetitorAggressionRule(),
     ]
     if not has_working_tracking:
         rules = [r for r in rules if type(r).__name__ not in _CONVERSION_DEPENDENT_RULES]

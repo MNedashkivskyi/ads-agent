@@ -151,3 +151,7 @@ class SnapshotRepository(Protocol):
     async def get_sitelink_performance(
         self, account_id: AccountId, start_date: date, end_date: date
     ) -> list[SitelinkPerformanceSnapshot]: ...
+
+    async def get_auction_insights(
+        self, account_id: AccountId, start_date: date, end_date: date
+    ) -> list[dict]: ...

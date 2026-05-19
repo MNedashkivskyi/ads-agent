@@ -79,6 +79,9 @@ class RecommendationKind(Enum):
     # Module 11 — Performance Max
     PMAX_LOW_ROAS = "PMAX_LOW_ROAS"
     PMAX_ASSET_DISAPPROVED = "PMAX_ASSET_DISAPPROVED"
+    # Module 12 — Competitive monitoring
+    NEW_COMPETITOR = "NEW_COMPETITOR"
+    COMPETITOR_AGGRESSION = "COMPETITOR_AGGRESSION"
 
 
 class RecommendationSeverity(Enum):
@@ -144,6 +147,9 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         # Module 11 — PMax alerts (informational; no executor)
         RecommendationKind.PMAX_LOW_ROAS,
         RecommendationKind.PMAX_ASSET_DISAPPROVED,
+        # Module 12 — competitive monitoring (informational)
+        RecommendationKind.NEW_COMPETITOR,
+        RecommendationKind.COMPETITOR_AGGRESSION,
     }
 )
 
