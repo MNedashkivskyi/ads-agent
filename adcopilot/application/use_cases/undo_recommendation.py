@@ -341,4 +341,29 @@ class UndoRecommendationUseCase:
                 "action": "promoted_keyword_paused",
             }
 
+        if kind in (RecommendationKind.AD_FATIGUE, RecommendationKind.WEAK_RSA_STRENGTH):
+            ad_group_id = int(payload["ad_group_id"])
+            created_ad_ids: list[int] = payload.get("created_ad_ids", [])
+            paused_ad_id: int | None = payload.get("paused_ad_id")
+            for ad_id in created_ad_ids:
+                await self._mutations.pause_ad(
+                    refresh_token=refresh_token,
+                    customer_id=customer_id,
+                    ad_group_id=ad_group_id,
+                    ad_id=ad_id,
+                )
+            if paused_ad_id:
+                await self._mutations.enable_ad(
+                    refresh_token=refresh_token,
+                    customer_id=customer_id,
+                    ad_group_id=ad_group_id,
+                    ad_id=paused_ad_id,
+                )
+            return {
+                "ad_group_id": ad_group_id,
+                "paused_new_ad_ids": created_ad_ids,
+                "re_enabled_ad_id": paused_ad_id,
+                "action": "ad_copy_refresh_undone",
+            }
+
         raise ValueError(f"No undo logic for {kind.value}")
