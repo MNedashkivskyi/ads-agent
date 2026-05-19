@@ -31,3 +31,7 @@ class GoogleAdsTokenNotApproved(AdCopilotError):
 
 class LLMError(AdCopilotError):
     """Raised when the LLM backend fails (rate limit, timeout, API error)."""
+
+
+class PageAnalyzerError(AdCopilotError):
+    """Raised when the PageSpeed Insights API call fails."""
