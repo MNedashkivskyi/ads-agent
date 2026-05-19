@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from adcopilot.application.ports.google_ads import CustomerInfo
+from adcopilot.application.ports.google_ads import CustomerInfo, MerchantCenterLink
 from adcopilot.config import Settings
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
@@ -159,3 +159,18 @@ class GoogleAdsQueriesAdapter:
         return await queries.list_recent_search_terms(
             refresh_token, customer_id, self._settings, days=days, limit=limit
         )
+
+    async def get_merchant_center_link(
+        self, refresh_token: str, customer_id: str
+    ) -> MerchantCenterLink | None:
+        links = await queries.query_merchant_center_feed(
+            refresh_token, customer_id, self._settings
+        )
+        for link in links:
+            if str(link.get("status", "")).upper() in ("ENABLED", "PENDING"):
+                return MerchantCenterLink(
+                    merchant_id=int(link["feed_id"]),
+                    account_name=str(link.get("name", "")),
+                    status=str(link.get("status", "")),
+                )
+        return None
