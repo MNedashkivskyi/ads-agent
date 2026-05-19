@@ -95,3 +95,7 @@ class GoogleAdsClientPort(Protocol):
     async def query_remarketing_lists(
         self, refresh_token: str, customer_id: str
     ) -> list[RemarketingListInfo]: ...
+
+    async def list_conversion_actions(
+        self, refresh_token: str, customer_id: str
+    ) -> list[ConversionActionSnapshot]: ...

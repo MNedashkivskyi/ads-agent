@@ -196,6 +196,65 @@ async def query_conversion_actions(
         raise _wrap_exc(exc) from exc
 
 
+async def list_conversion_actions(
+    refresh_token: str,
+    customer_id: str,
+    settings: Settings,
+) -> list[ConversionActionSnapshot]:
+    """Fetch all conversion actions with 7-day all_conversions metric.
+
+    Uses a single GAQL query with a 7-day date range (CCR-1).
+    Returns an empty list for accounts with zero conversion actions.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    today = datetime.now(timezone.utc).date()
+    seven_days_ago = today - timedelta(days=7)
+    date_range = f"'{seven_days_ago}' AND '{today}'"
+
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    query = f"""
+        SELECT
+            conversion_action.id,
+            conversion_action.name,
+            conversion_action.category,
+            conversion_action.counting_type,
+            conversion_action.status,
+            conversion_action.include_in_conversions_metric,
+            metrics.all_conversions
+        FROM conversion_action
+        WHERE segments.date BETWEEN {date_range}
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[ConversionActionSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                ca = row.conversion_action
+                results.append(
+                    ConversionActionSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=today,
+                        conversion_action_id=ca.id,
+                        name=ca.name,
+                        category=ca.category.name,
+                        counting_type=ca.counting_type.name,
+                        status=ca.status.name,
+                        include_in_conversions_metric=ca.include_in_conversions_metric,
+                        all_conversions=float(row.metrics.all_conversions),
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
 async def query_ad_groups(
     refresh_token: str,
     customer_id: str,

@@ -141,3 +141,10 @@ class GoogleAdsQueriesAdapter:
         return await queries.query_remarketing_lists(
             refresh_token, customer_id, self._settings
         )
+
+    async def list_conversion_actions(
+        self, refresh_token: str, customer_id: str
+    ) -> list[ConversionActionSnapshot]:
+        return await queries.list_conversion_actions(
+            refresh_token, customer_id, self._settings
+        )

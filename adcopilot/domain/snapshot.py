@@ -214,6 +214,8 @@ class ConversionActionSnapshot:
     status: str
     # True = counts toward the "Conversions" column; False = "All conversions" only
     include_in_conversions_metric: bool
+    # all_conversions metric over the last 7 days (0.0 when queried without metrics)
+    all_conversions: float = 0.0
 
 
 @dataclass(frozen=True)
