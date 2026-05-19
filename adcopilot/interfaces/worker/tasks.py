@@ -153,10 +153,97 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
                 account_repo=SqlGoogleAdsAccountRepository(session),
             )
             await use_case.execute(AccountId(str(account_id)), snap_date)
+            await _notify_pmax_alerts(session, settings, AccountId(str(account_id)), snap_date)
     except Exception:
         logger.exception("detection failed (non-fatal)", account_id=str(account_id))
     finally:
         await engine.dispose()
+
+
+async def _notify_pmax_alerts(
+    session: object,
+    settings: object,
+    account_id: object,
+    snap_date: "date",
+) -> None:
+    """Send WebNotifier alerts for freshly-detected PMax anomalies."""
+    import uuid as _uuid_mod
+    from datetime import datetime, timezone
+
+    from adcopilot.domain.recommendation import RecommendationKind, RecommendationStatus
+    from adcopilot.infrastructure.db.models import RecommendationModel
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
+    from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from sqlalchemy import select
+
+    _PMAX_KINDS = {
+        RecommendationKind.PMAX_LOW_ROAS.value,
+        RecommendationKind.PMAX_ASSET_DISAPPROVED.value,
+    }
+
+    from adcopilot.config import Settings
+    assert isinstance(settings, Settings)
+    assert isinstance(session, AsyncSession)
+
+    today = datetime.now(tz=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    acct_uuid = _uuid_mod.UUID(str(account_id))
+
+    result = await session.execute(
+        select(RecommendationModel)
+        .where(
+            RecommendationModel.account_id == acct_uuid,
+            RecommendationModel.kind.in_(_PMAX_KINDS),
+            RecommendationModel.status == RecommendationStatus.PENDING.value,
+            RecommendationModel.created_at >= today,
+        )
+    )
+    pmax_recs = result.scalars().all()
+    if not pmax_recs:
+        return
+
+    account_repo = SqlGoogleAdsAccountRepository(session)
+    account = await account_repo.get(account_id)
+    if account is None:
+        return
+
+    user_repo = SqlUserRepository(session)
+    user = await user_repo.get(account.user_id)
+    if user is None:
+        return
+
+    notifier = SqlWebNotifier(session)
+
+    _TITLES = {
+        RecommendationKind.PMAX_LOW_ROAS.value: "Niski ROAS kampanii Performance Max",
+        RecommendationKind.PMAX_ASSET_DISAPPROVED.value: "Odrzucone zasoby kampanii Performance Max",
+    }
+    _BODIES = {
+        RecommendationKind.PMAX_LOW_ROAS.value: (
+            "Twoja kampania Performance Max ma niski zwrot z wydatków reklamowych (ROAS). "
+            "Sprawdź ustawienia grupy zasobów i stawki konwersji."
+        ),
+        RecommendationKind.PMAX_ASSET_DISAPPROVED.value: (
+            "Zasoby w Twojej kampanii Performance Max mogły zostać odrzucone przez Google. "
+            "Wejdź w Google Ads i sprawdź status zasobów w grupie zasobów."
+        ),
+    }
+
+    for rec in pmax_recs:
+        await notifier.send_alert(
+            user_id=str(user.id),
+            title=_TITLES.get(rec.kind, "Alert PMax"),
+            body=_BODIES.get(rec.kind, "Wykryto anomalię w kampanii Performance Max."),
+            metadata={
+                "recommendation_id": str(rec.id),
+                "account_id": str(account_id),
+                "kind": rec.kind,
+            },
+        )
+    logger.info("pmax_alerts.sent", count=len(pmax_recs), account_id=str(account_id))
 
 
 def _save_run(session: object, result: SnapshotResult) -> None:

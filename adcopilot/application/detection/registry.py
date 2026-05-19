@@ -99,6 +99,8 @@ from adcopilot.application.detection.rules.rule_44_refresh_sitelink import Refre
 from adcopilot.application.detection.rules.rule_45_landing_page_keyword_mismatch import LandingPageKeywordMismatchRule
 from adcopilot.application.detection.rules.rule_46_promote_search_term import PromoteSearchTermRule
 from adcopilot.application.detection.rules.rule_48_above_vertical_benchmark import AboveVerticalBenchmarkRule
+from adcopilot.application.detection.rules.rule_49_pmax_low_roas import PMaxLowRoasRule
+from adcopilot.application.detection.rules.rule_50_pmax_asset_disapproved import PMaxAssetDisapprovedRule
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -167,5 +169,8 @@ def build_rule_engine(
         PromoteSearchTermRule(),
         # Module 10 — Benchmarking
         AboveVerticalBenchmarkRule(),
+        # Module 11 — Performance Max
+        PMaxLowRoasRule(),
+        PMaxAssetDisapprovedRule(),
     ]
     return RuleEngine(rules=rules, rec_repo=rec_repo, snooze_repo=snooze_repo)
