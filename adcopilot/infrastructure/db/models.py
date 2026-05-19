@@ -21,6 +21,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Re-export for convenience
 __all__ = [
+    "AdExperimentModel",
     "AdGroupSnapshotModel",
     "AdSnapshotModel",
     "AlertModel",
@@ -1002,6 +1003,33 @@ class QaConversationModel(Base):
 
     __table_args__ = (
         Index("ix_qa_conversations_user_created", "user_id", "created_at"),
+    )
+
+
+class AdExperimentModel(Base):
+    __tablename__ = "ad_experiments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("google_ads_accounts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    campaign_resource_name: Mapped[str] = mapped_column(Text, nullable=False)
+    ad_group_resource_name: Mapped[str] = mapped_column(Text, nullable=False)
+    control_ad_resource_name: Mapped[str] = mapped_column(Text, nullable=False)
+    variant_ad_resource_name: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="running", index=True)
+    min_impressions: Mapped[int] = mapped_column(Integer, nullable=False, default=1000)
+    confidence_threshold: Mapped[float] = mapped_column(Float, nullable=False, default=0.95)
+    winner: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    control_metrics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    variant_metrics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    concluded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
 

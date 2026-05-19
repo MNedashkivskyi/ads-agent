@@ -169,11 +169,109 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
                 account_repo=SqlGoogleAdsAccountRepository(session),
             )
             await use_case.execute(AccountId(str(account_id)), snap_date)
+            await _update_experiment_metrics(session, settings, AccountId(str(account_id)))
             await _notify_pmax_alerts(session, settings, AccountId(str(account_id)), snap_date)
     except Exception:
         logger.exception("detection failed (non-fatal)", account_id=str(account_id))
     finally:
         await engine.dispose()
+
+
+async def _update_experiment_metrics(
+    session: object,
+    settings: object,
+    account_id: object,
+) -> None:
+    """Update per-ad metrics for running experiments and conclude if significant."""
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from adcopilot.application.use_cases.evaluate_experiment import evaluate_experiment
+    from adcopilot.config import Settings
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.infrastructure.db.repositories.ad_experiment_repository import (
+        AdExperimentRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
+    )
+    from adcopilot.infrastructure.google_ads.mutations_adapter import GoogleAdsMutationsAdapter
+    from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+    from datetime import UTC, datetime
+
+    assert isinstance(settings, Settings)
+    assert isinstance(session, AsyncSession)
+
+    acct_id = AccountId(str(account_id))
+
+    account_repo = SqlGoogleAdsAccountRepository(session)
+    credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
+    exp_repo = AdExperimentRepository(session)
+
+    accounts = await account_repo.get_by_id(acct_id)
+    if accounts is None:
+        return
+    credentials = await credentials_repo.get(acct_id)
+    if credentials is None:
+        return
+
+    running = await exp_repo.list_running(str(account_id))
+    if not running:
+        return
+
+    google_ads = GoogleAdsQueriesAdapter(settings)
+    mutations = GoogleAdsMutationsAdapter(settings)
+
+    for exp in running:
+        try:
+            ctrl_metrics = await google_ads.fetch_ad_metrics(
+                credentials.refresh_token,
+                accounts.customer_id,
+                exp.control_ad_resource_name,
+            )
+            var_metrics = await google_ads.fetch_ad_metrics(
+                credentials.refresh_token,
+                accounts.customer_id,
+                exp.variant_ad_resource_name,
+            )
+            await exp_repo.update_metrics(str(exp.id), ctrl_metrics, var_metrics)
+
+            result = evaluate_experiment(
+                control_metrics=ctrl_metrics,
+                variant_metrics=var_metrics,
+                min_impressions=exp.min_impressions,
+                confidence_threshold=exp.confidence_threshold,
+                started_at=exp.started_at,
+            )
+
+            if result.should_conclude:
+                now = datetime.now(UTC)
+                await exp_repo.conclude(str(exp.id), result.winner, now)
+
+                # Pause losing ad
+                ad_group_id = int(exp.ad_group_resource_name.split("/")[-1])
+                loser_rn = exp.variant_ad_resource_name if result.winner == "control" else exp.control_ad_resource_name
+                loser_ad_id = int(loser_rn.split("~")[-1])
+                try:
+                    await mutations.pause_ad(
+                        refresh_token=credentials.refresh_token,
+                        customer_id=accounts.customer_id,
+                        ad_group_id=ad_group_id,
+                        ad_id=loser_ad_id,
+                    )
+                except Exception as pause_exc:
+                    logger.warning("experiment.pause_loser_failed", error=str(pause_exc))
+
+                logger.info(
+                    "experiment.concluded",
+                    experiment_id=str(exp.id),
+                    winner=result.winner,
+                    reason=result.reason,
+                )
+        except Exception as exc:
+            logger.warning("experiment.metrics_update_failed", experiment_id=str(exp.id), error=str(exc))
 
 
 async def _notify_pmax_alerts(
@@ -435,7 +533,7 @@ async def _run_trial_reminders(settings: object) -> dict[str, object]:
     retry_backoff_max=300,
     name="adcopilot.interfaces.worker.tasks.execute_recommendation_task",
 )
-def execute_recommendation_task(self: object, rec_id: str) -> dict[str, object]:
+def execute_recommendation_task(self: object, rec_id: str, options: dict | None = None) -> dict[str, object]:
     """Execute a single APPROVED recommendation against the Google Ads API.
 
     Auth errors (revoked/expired refresh token) are caught immediately and

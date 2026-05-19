@@ -160,6 +160,17 @@ class GoogleAdsQueriesAdapter:
             refresh_token, customer_id, self._settings, days=days, limit=limit
         )
 
+    async def fetch_ad_metrics(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_resource_name: str,
+        days: int = 7,
+    ) -> dict:
+        return await queries.fetch_ad_metrics(
+            refresh_token, customer_id, ad_resource_name, self._settings, days=days
+        )
+
     async def get_merchant_center_link(
         self, refresh_token: str, customer_id: str
     ) -> MerchantCenterLink | None:

@@ -88,6 +88,11 @@ async def get_ad_proposals(
     ]
 
 
+class ApproveProposalRequest(BaseModel):
+    variant_index: int = 0
+    force_replace: bool = False
+
+
 @router.post(
     "/{user_id}/recommendations/{rec_id}/ad-proposals/approve",
     response_model=ApproveProposalResponse,
@@ -97,8 +102,13 @@ async def approve_ad_proposal(
     rec_id: str,
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    body: ApproveProposalRequest = ApproveProposalRequest(),
 ) -> ApproveProposalResponse:
-    """Approve a recommendation and queue the ad copy refresh execution task."""
+    """Approve an ad copy proposal.
+
+    Default behaviour: run as A/B experiment (keeps control ad, adds variant).
+    Pass force_replace=true to immediately replace the control ad (e.g., disapproved ad).
+    """
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -136,11 +146,20 @@ async def approve_ad_proposal(
 
     from adcopilot.interfaces.worker.tasks import execute_recommendation_task
 
-    execute_recommendation_task.delay(rec_id)
-    logger.info("ad_proposal.approved", user_id=user_id, rec_id=rec_id)
+    # Store experiment mode flag in the task payload for the executor to handle.
+    # The executor checks payload["run_as_experiment"] to decide whether to
+    # replace the ad or create an A/B experiment.
+    execute_recommendation_task.delay(rec_id, {"run_as_experiment": not body.force_replace, "variant_index": body.variant_index})
+    logger.info(
+        "ad_proposal.approved",
+        user_id=user_id,
+        rec_id=rec_id,
+        run_as_experiment=not body.force_replace,
+    )
 
+    mode = "test A/B" if not body.force_replace else "zastąpienie reklamy"
     return ApproveProposalResponse(
         rec_id=rec_id,
         status="APPROVED",
-        message="Rekomendacja zatwierdzona. Odświeżanie reklam zostało zakolejkowane.",
+        message=f"Rekomendacja zatwierdzona. Zostanie uruchomiony {mode}.",
     )
