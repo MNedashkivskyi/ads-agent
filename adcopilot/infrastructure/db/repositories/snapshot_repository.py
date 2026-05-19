@@ -1164,3 +1164,30 @@ class SqlSnapshotRepository:
             )
             for m in res.scalars().all()
         ]
+
+    async def get_auction_insights(
+        self, account_id: AccountId, start_date: date, end_date: date
+    ) -> list[dict]:
+        """Return raw auction insights rows as dicts for competitive rules."""
+        from adcopilot.infrastructure.db.models import AuctionInsightsSnapshotModel
+        from sqlalchemy import select
+
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(AuctionInsightsSnapshotModel).where(
+                AuctionInsightsSnapshotModel.account_id == acct_uuid,
+                AuctionInsightsSnapshotModel.snapshot_date >= start_date,
+                AuctionInsightsSnapshotModel.snapshot_date <= end_date,
+            )
+        )
+        return [
+            {
+                "campaign_id": m.campaign_id,
+                "competitor_domain": m.competitor_domain,
+                "impression_share": m.impression_share,
+                "overlap_rate": m.overlap_rate,
+                "position_above_rate": m.position_above_rate,
+                "snapshot_date": m.snapshot_date,
+            }
+            for m in res.scalars().all()
+        ]

@@ -73,6 +73,7 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
             asyncio.run(_record_qs_history(settings, account_id, snap_date))
             # Pull GA4 metrics if credentials are configured
             snapshot_ga4_data_task.delay(account_id, snap_date.isoformat())
+            snapshot_auction_insights_task.delay(account_id, snap_date.isoformat())
         return {
             "account_id": account_id,
             "snapshot_date": snapshot_date_iso,
@@ -2300,6 +2301,91 @@ async def _run_ga4_snapshot(account_id: str, snap_date) -> dict:
         return {"rows": len(rows)}
     except Exception as exc:
         logger.warning("ga4_snapshot_failed", account_id=account_id, error=str(exc))
+        return {"error": str(exc)}
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.snapshot_auction_insights_task")  # type: ignore[untyped-decorator]
+def snapshot_auction_insights_task(account_id: str, snapshot_date_iso: str) -> dict:
+    """Fetch and store Auction Insights for one account (weekly)."""
+    import asyncio
+    from datetime import date as date_type
+
+    snap_date = date_type.fromisoformat(snapshot_date_iso)
+    return asyncio.run(_run_auction_insights_snapshot(account_id, snap_date))
+
+
+async def _run_auction_insights_snapshot(account_id: str, snap_date) -> dict:
+    import uuid as _uuid
+    from sqlalchemy import select
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.infrastructure.db.models import AuctionInsightsSnapshotModel
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+    from cryptography.fernet import Fernet
+    import base64, hashlib
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            account = await account_repo.get(_uuid.UUID(account_id))
+            if account is None or not account.refresh_token:
+                return {"skipped": True, "reason": "no_account"}
+
+            key = base64.urlsafe_b64encode(
+                hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest()
+            )
+            fernet = Fernet(key)
+            refresh_token = fernet.decrypt(account.refresh_token.encode()).decode()
+            customer_id = account.customer_id
+
+        adapter = GoogleAdsQueriesAdapter(settings)
+        rows_data = await adapter.fetch_auction_insights(refresh_token, customer_id, snap_date)
+
+        if not rows_data:
+            return {"rows": 0}
+
+        rows = [
+            {
+                "id": _uuid.uuid4(),
+                "account_id": _uuid.UUID(account_id),
+                "campaign_id": r["campaign_id"],
+                "competitor_domain": r["competitor_domain"],
+                "impression_share": r["impression_share"],
+                "overlap_rate": r["overlap_rate"],
+                "position_above_rate": r["position_above_rate"],
+                "snapshot_date": snap_date,
+            }
+            for r in rows_data
+            if r.get("competitor_domain")
+        ]
+        if not rows:
+            return {"rows": 0}
+
+        async with AsyncSession(engine) as session, session.begin():
+            stmt = pg_insert(AuctionInsightsSnapshotModel).values(rows)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_auction_insights_per_day",
+                set_={
+                    "impression_share": stmt.excluded.impression_share,
+                    "overlap_rate": stmt.excluded.overlap_rate,
+                    "position_above_rate": stmt.excluded.position_above_rate,
+                },
+            )
+            await session.execute(stmt)
+
+        logger.info("auction_insights_snapshot_done", account_id=account_id, rows=len(rows))
+        return {"rows": len(rows)}
+    except Exception as exc:
+        logger.warning("auction_insights_snapshot_failed", account_id=account_id, error=str(exc))
         return {"error": str(exc)}
     finally:
         await engine.dispose()

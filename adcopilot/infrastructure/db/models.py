@@ -1110,3 +1110,29 @@ class GA4PageSnapshotModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class AuctionInsightsSnapshotModel(Base):
+    __tablename__ = "auction_insights_snapshots"
+    __table_args__ = (
+        Index(
+            "uq_auction_insights_per_day",
+            "account_id",
+            "campaign_id",
+            "competitor_domain",
+            "snapshot_date",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    campaign_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    competitor_domain: Mapped[str] = mapped_column(Text, nullable=False)
+    impression_share: Mapped[float | None] = mapped_column(Float, nullable=True)
+    overlap_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    position_above_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )

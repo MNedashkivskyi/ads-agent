@@ -111,6 +111,16 @@ class RunDetectionUseCase:
         # 3f. Load GA4 page metrics if available (best-effort)
         ga4_page_metrics = await _load_ga4_metrics(str(account_id), snapshot_date, self._snapshot_repo)
 
+        # 3g. Load 14-day auction insights for competitive rules (best-effort)
+        try:
+            auction_insights = await self._snapshot_repo.get_auction_insights(
+                account_id,
+                snapshot_date - timedelta(days=14),
+                snapshot_date,
+            )
+        except Exception:
+            auction_insights = []
+
         # 5. Build context
         ctx = DetectionContext(
             account=account,
@@ -136,6 +146,7 @@ class RunDetectionUseCase:
             sitelink_performance=sitelink_performance,
             landing_page_results=landing_page_results,
             ga4_page_metrics=ga4_page_metrics,
+            auction_insights=auction_insights,
         )
 
         # 6. Run rule engine
