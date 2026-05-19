@@ -1063,6 +1063,45 @@ async def query_remarketing_lists(
         raise _wrap_exc(exc) from exc
 
 
+async def fetch_ad_metrics(
+    refresh_token: str,
+    customer_id: str,
+    ad_resource_name: str,
+    settings: Settings,
+    days: int = 7,
+) -> dict:
+    """Return impressions, clicks, and conversions for a specific ad over the last N days."""
+    query = f"""
+        SELECT
+            ad_group_ad.resource_name,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.conversions
+        FROM ad_group_ad
+        WHERE ad_group_ad.resource_name = '{ad_resource_name}'
+          AND segments.date DURING LAST_{days}_DAYS
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        impressions = clicks = conversions = 0.0
+        stream = service.search_stream(customer_id=customer_id.replace("-", ""), query=query)
+        for batch in stream:
+            for row in batch.results:
+                impressions += row.metrics.impressions
+                clicks += row.metrics.clicks
+                conversions += row.metrics.conversions
+        return {
+            "impressions": impressions,
+            "clicks": clicks,
+            "conversions": conversions,
+        }
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
 async def query_merchant_center_feed(
     refresh_token: str,
     customer_id: str,
