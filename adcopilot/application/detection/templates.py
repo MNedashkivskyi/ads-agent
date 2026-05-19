@@ -69,13 +69,14 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
     RecommendationKind.ENABLE_CONVERSION_TRACKING: {
         "pl": (
             "Twoje konto wydaje {cost}/miesiąc na reklamy, ale nie masz skonfigurowanego"
-            " śledzenia konwersji. Bez tego nie wiesz, co działa. Wyjaśnij dlaczego to ważne,"
+            " śledzenia konwersji (lub tagi są uszkodzone — zero konwersji w ostatnich 7 dniach)."
+            " Bez tego nie wiesz, co działa. Wyjaśnij krótko, co należy sprawdzić i naprawić,"
             " po polsku."
         ),
         "en": (
-            "Your account is spending {cost}/month on ads but has no conversion tracking"
-            " configured. Without it you're flying blind. Explain why this matters in plain"
-            " English."
+            "Your account is spending {cost}/month on ads but has no working conversion tracking"
+            " (conversion actions are enabled but recorded zero conversions in the last 7 days)."
+            " Without it you're flying blind. Explain what to check and fix in plain English."
         ),
     },
     RecommendationKind.FIX_DISAPPROVED_AD: {
