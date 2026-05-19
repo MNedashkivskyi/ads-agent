@@ -217,3 +217,26 @@ class GoogleAdsMutationsPort(Protocol):
         match_type: str,
     ) -> None: ...
 
+    async def get_ad_group_resource_name(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+    ) -> str:
+        """Return the canonical resource name for an ad group."""
+        ...
+
+    async def create_rsa(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        ad_group_id: int,
+        headlines: list[str],
+        descriptions: list[str],
+        final_url: str,
+        path1: str | None = None,
+        path2: str | None = None,
+    ) -> int:
+        """Create a PAUSED Responsive Search Ad; return new ad_id."""
+        ...
+
