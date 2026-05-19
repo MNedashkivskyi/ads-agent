@@ -49,6 +49,8 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
     from adcopilot.application.executors.pause_ad import PauseAdExecutor
     from adcopilot.application.executors.pause_keyword import PauseKeywordExecutor
     from adcopilot.application.executors.promote_search_term import PromoteSearchTermExecutor
+    from adcopilot.application.executors.refresh_ad_copy import AdCopyRefreshExecutor
+    from adcopilot.config import get_settings
 
     execs: list[RecommendationExecutor] = [
         PauseKeywordExecutor(),
@@ -70,7 +72,13 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
         AddStructuredSnippetsExecutor(),
         PromoteSearchTermExecutor(),
     ]
-    return {e.kind: e for e in execs}
+    result = {e.kind: e for e in execs}
+
+    # Ad copy refresh — shared instance registered for both AD_FATIGUE and WEAK_RSA_STRENGTH
+    ad_copy_executor = AdCopyRefreshExecutor.from_settings(get_settings())
+    result[RecommendationKind.AD_FATIGUE] = ad_copy_executor
+    result[RecommendationKind.WEAK_RSA_STRENGTH] = ad_copy_executor
+    return result
 
 
 class ExecuteRecommendationUseCase:
