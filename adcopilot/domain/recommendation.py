@@ -53,6 +53,8 @@ class RecommendationKind(Enum):
     AD_SCHEDULE_ADJUSTMENT = "AD_SCHEDULE_ADJUSTMENT"
     DAY_OF_WEEK_BID_ADJUSTMENT = "DAY_OF_WEEK_BID_ADJUSTMENT"
     ADD_AUDIENCE_SIGNALS = "ADD_AUDIENCE_SIGNALS"
+    AUDIENCE_BID_ADJUSTMENT = "AUDIENCE_BID_ADJUSTMENT"
+    AUDIENCE_EXPANSION = "AUDIENCE_EXPANSION"
     # Module 5 — Budget & bidding strategy
     REALLOCATE_BUDGET = "REALLOCATE_BUDGET"
     IMPROVE_QUALITY_SCORE = "IMPROVE_QUALITY_SCORE"
@@ -122,6 +124,8 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         # Module 4 — targeting insights (informational)
         RecommendationKind.DAY_OF_WEEK_BID_ADJUSTMENT,
         RecommendationKind.ADD_AUDIENCE_SIGNALS,
+        RecommendationKind.AUDIENCE_BID_ADJUSTMENT,
+        RecommendationKind.AUDIENCE_EXPANSION,
         # Module 5 — budget/bidding insights (informational)
         RecommendationKind.IMPROVE_QUALITY_SCORE,
         RecommendationKind.DIVERSIFY_CHANNELS,

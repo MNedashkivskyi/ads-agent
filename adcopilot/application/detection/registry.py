@@ -76,6 +76,8 @@ from adcopilot.application.detection.rules.rule_31_day_of_week_bid_adjustment im
 from adcopilot.application.detection.rules.rule_32_add_audience_signals import (
     AddAudienceSignalsRule,
 )
+from adcopilot.application.detection.rules.audience_bid_adjustment import AudienceBidAdjustmentRule
+from adcopilot.application.detection.rules.audience_expansion import AudienceExpansionRule
 from adcopilot.application.detection.rules.rule_33_reallocate_budget import ReallocateBudgetRule
 from adcopilot.application.detection.rules.rule_34_is_lost_to_budget import IsLostToBudgetRule
 from adcopilot.application.detection.rules.rule_35_is_lost_to_rank import IsLostToRankRule
@@ -159,6 +161,8 @@ def build_rule_engine(
         AdScheduleAdjustmentRule(),
         DayOfWeekBidAdjustmentRule(),
         AddAudienceSignalsRule(),
+        AudienceBidAdjustmentRule(),
+        AudienceExpansionRule(),
         # Module 5 — Budget & bidding strategy
         ReallocateBudgetRule(),
         IsLostToBudgetRule(),
