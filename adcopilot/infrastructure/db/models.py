@@ -47,6 +47,7 @@ __all__ = [
     "LaunchStructuredSnippetModel",
     "NegativeKeywordSnapshotModel",
     "OAuthCredentialsModel",
+    "PromptVersionModel",
     "RecommendationModel",
     "RecommendationSnoozeModel",
     "SearchTermSnapshotModel",
@@ -947,4 +948,20 @@ class VerticalBenchmarkSnapshotModel(Base):
 
     __table_args__ = (
         Index("ix_vbs_vertical_tier_week", "vertical", "city_tier", "snapshot_week"),
+    )
+
+
+class PromptVersionModel(Base):
+    __tablename__ = "prompt_versions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    prompt_key: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint("prompt_key", "version", name="uq_prompt_versions_key_version"),
     )
