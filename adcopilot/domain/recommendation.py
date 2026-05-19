@@ -74,6 +74,9 @@ class RecommendationKind(Enum):
     SEARCH_TERM_WASTE = "SEARCH_TERM_WASTE"
     # Module 10 — Benchmarking
     ABOVE_VERTICAL_BENCHMARK = "ABOVE_VERTICAL_BENCHMARK"
+    # Module 11 — Performance Max
+    PMAX_LOW_ROAS = "PMAX_LOW_ROAS"
+    PMAX_ASSET_DISAPPROVED = "PMAX_ASSET_DISAPPROVED"
 
 
 class RecommendationSeverity(Enum):
@@ -134,6 +137,9 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         RecommendationKind.ABOVE_VERTICAL_BENCHMARK,
         # Module 9 — search term waste (advisory; blocked via UI)
         RecommendationKind.SEARCH_TERM_WASTE,
+        # Module 11 — PMax alerts (informational; no executor)
+        RecommendationKind.PMAX_LOW_ROAS,
+        RecommendationKind.PMAX_ASSET_DISAPPROVED,
     }
 )
 
