@@ -22,6 +22,7 @@ _PLN_DIVISOR = 1_000_000  # micros → PLN
 class SearchTermResponse(BaseModel):
     search_term: str
     account_id: str
+    account_name: str = ""
     campaign_name: str
     cost_pln: float
     clicks: int
@@ -52,7 +53,7 @@ async def list_search_terms(
     limit: int = Query(default=20, ge=1, le=100),
     account_id: str | None = Query(default=None),
 ) -> list[SearchTermResponse]:
-    """Return top search terms by cost for one account."""
+    """Return top search terms by cost. Use account_id=all to aggregate across all accounts."""
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -68,53 +69,64 @@ async def list_search_terms(
     from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
 
     engine = create_async_engine(settings.DATABASE_URL)
+    multi_account = account_id == "all"
     try:
         async with AsyncSession(engine) as session, session.begin():
             account_repo = SqlGoogleAdsAccountRepository(session)
             credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
 
-            if account_id:
+            if account_id and not multi_account:
                 account = await account_repo.get(AccountId(account_id))
                 if account is None or str(account.user_id) != user_id:
                     raise HTTPException(status_code=404, detail="Account not found")
-                accounts = [account]
+                target_accounts = [account]
             else:
-                accounts = await account_repo.list_for_user(UserId(user_id))
-                if not accounts:
+                target_accounts = await account_repo.list_for_user(UserId(user_id))
+                if not target_accounts:
                     raise HTTPException(status_code=404, detail="No Google Ads accounts found")
-                accounts = accounts[:1]  # single-account mode; multi-account in Task 2.4
-
-            account = accounts[0]
-            credentials = await credentials_repo.get(AccountId(account.id))
-            if credentials is None:
-                raise HTTPException(status_code=422, detail="Account not connected")
+                if not multi_account:
+                    target_accounts = target_accounts[:1]
 
             google_ads = GoogleAdsQueriesAdapter(settings)
-            snapshots = await google_ads.list_recent_search_terms(
-                credentials.refresh_token,
-                account.customer_id,
-                days=days,
-                limit=limit,
-            )
+            results: list[SearchTermResponse] = []
+
+            for acct in target_accounts:
+                credentials = await credentials_repo.get(AccountId(acct.id))
+                if credentials is None:
+                    continue
+
+                snapshots = await google_ads.list_recent_search_terms(
+                    credentials.refresh_token,
+                    acct.customer_id,
+                    days=days,
+                    limit=limit,
+                )
+
+                waste_recs = detect_search_term_waste(acct.id, snapshots)
+                waste_terms = {r.evidence["search_term"] for r in waste_recs}
+
+                for s in snapshots:
+                    results.append(
+                        SearchTermResponse(
+                            search_term=s.search_term,
+                            account_id=str(acct.id),
+                            account_name=getattr(acct, "name", str(acct.id)),
+                            campaign_name=s.campaign_name,
+                            cost_pln=round(s.cost_micros / _PLN_DIVISOR, 2),
+                            clicks=s.clicks,
+                            impressions=s.impressions,
+                            conversions=s.conversions,
+                            is_wasteful=s.search_term in waste_terms,
+                        )
+                    )
+
+            if not results and not multi_account:
+                raise HTTPException(status_code=422, detail="Account not connected")
     finally:
         await engine.dispose()
 
-    waste_recs = detect_search_term_waste(account.id, snapshots)
-    waste_terms = {r.evidence["search_term"] for r in waste_recs}
-
-    return [
-        SearchTermResponse(
-            search_term=s.search_term,
-            account_id=str(account.id),
-            campaign_name=s.campaign_name,
-            cost_pln=round(s.cost_micros / _PLN_DIVISOR, 2),
-            clicks=s.clicks,
-            impressions=s.impressions,
-            conversions=s.conversions,
-            is_wasteful=s.search_term in waste_terms,
-        )
-        for s in snapshots
-    ]
+    results.sort(key=lambda r: r.cost_pln, reverse=True)
+    return results[:limit]
 
 
 @router.post("/{user_id}/search-terms/block", response_model=BlockSearchTermResponse)
