@@ -85,9 +85,20 @@ class DetectionContext:
     # Pre-fetched landing page content for Module 8 rule 45.
     # Keys are final_url strings; missing URL = rule skips that ad.
     landing_page_results: dict[str, "LandingPageData"] = field(default_factory=dict)
+    # GA4 page metrics keyed by page_path — populated when GA4 is connected.
+    ga4_page_metrics: dict[str, "GA4PageMetrics"] = field(default_factory=dict)
     # Latest vertical benchmark snapshot for Module 10 rule 48.
     # None when no benchmark exists yet for this account's vertical × city_tier.
     vertical_benchmark: "VerticalBenchmarkSnapshot | None" = field(default=None)
+
+
+@dataclass
+class GA4PageMetrics:
+    page_path: str
+    sessions: int
+    bounce_rate: float | None
+    avg_session_duration_sec: float | None
+    pages_per_session: float | None
 
 
 class DetectionRule(Protocol):

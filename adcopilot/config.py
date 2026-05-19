@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     # Optional; when not set, Telegram notifications are skipped.
     TELEGRAM_BOT_TOKEN: str | None = None
 
+    # Google Analytics 4 — Data API (read-only).
+    # Uses the same OAuth client as Google Ads.
+    GA4_OAUTH_REDIRECT_URI: str = "http://localhost:8000/oauth/ga4/callback"
+
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_WEBHOOK_SECRET: str | None = None
     STRIPE_STARTER_PRICE_ID: str | None = None

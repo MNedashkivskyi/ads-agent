@@ -91,6 +91,20 @@ class LandingPageKeywordMismatchRule:
                 continue
 
             missing = sorted(kw_tokens - page_tokens)[:5]
+
+            # Enrich evidence with GA4 bounce rate when available
+            from urllib.parse import urlparse
+            page_path = urlparse(url).path or "/"
+            ga4 = ctx.ga4_page_metrics.get(page_path)
+            ga4_evidence: dict = {}
+            if ga4:
+                ga4_evidence = {
+                    "ga4_sessions": ga4.sessions,
+                    "ga4_bounce_rate": ga4.bounce_rate,
+                    "ga4_avg_session_duration_sec": ga4.avg_session_duration_sec,
+                    "ga4_pages_per_session": ga4.pages_per_session,
+                }
+
             recs.append(
                 Recommendation(
                     id=RecommendationId(str(uuid.uuid4())),
@@ -105,11 +119,13 @@ class LandingPageKeywordMismatchRule:
                         "overlap_ratio": round(ratio, 3),
                         "missing_tokens": missing,
                         "top_keywords": kws,
+                        **ga4_evidence,
                     },
                     evidence={
                         "overlap_ratio": round(ratio, 3),
                         "missing_tokens": missing,
                         "top_keywords": kws,
+                        **ga4_evidence,
                     },
                     estimated_monthly_savings_micros=0,
                     created_at=datetime.now(tz=UTC),

@@ -34,6 +34,8 @@ __all__ = [
     "DayOfWeekPerformanceSnapshotModel",
     "DevicePerformanceSnapshotModel",
     "DigestSentLogModel",
+    "GA4CredentialsModel",
+    "GA4PageSnapshotModel",
     "GeoPerformanceSnapshotModel",
     "GoogleAdsAccountModel",
     "HourPerformanceSnapshotModel",
@@ -1064,6 +1066,47 @@ class WeeklyInsightModel(Base):
     week_start: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     insight_text: Mapped[str] = mapped_column(Text, nullable=False)
     context_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class GA4CredentialsModel(Base):
+    __tablename__ = "ga4_credentials"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, unique=True, index=True)
+    property_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    refresh_token_enc: Mapped[str] = mapped_column(Text, nullable=False)
+    access_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class GA4PageSnapshotModel(Base):
+    __tablename__ = "ga4_page_snapshots"
+    __table_args__ = (
+        Index(
+            "uq_ga4_page_snapshots_account_date_path",
+            "account_id",
+            "snapshot_date",
+            "page_path",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    page_path: Mapped[str] = mapped_column(Text, nullable=False)
+    sessions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    bounce_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_session_duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pages_per_session: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

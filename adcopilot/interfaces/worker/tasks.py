@@ -71,6 +71,8 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
             asyncio.run(_run_detection(settings, AccountId(account_id), snap_date))
             # Record QS history for trend tracking
             asyncio.run(_record_qs_history(settings, account_id, snap_date))
+            # Pull GA4 metrics if credentials are configured
+            snapshot_ga4_data_task.delay(account_id, snap_date.isoformat())
         return {
             "account_id": account_id,
             "snapshot_date": snapshot_date_iso,
@@ -2215,3 +2217,89 @@ async def _run_conversion_reminders(settings: object) -> dict[str, object]:
 
     logger.info("conversion_reminders.done", sent=sent, skipped=skipped)
     return {"sent": sent, "skipped": skipped}
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.snapshot_ga4_data_task")  # type: ignore[untyped-decorator]
+def snapshot_ga4_data_task(account_id: str, snapshot_date_iso: str) -> dict:
+    """Pull GA4 page metrics for a given account and store in ga4_page_snapshots."""
+    import asyncio
+    from datetime import date as date_type
+
+    snap_date = date_type.fromisoformat(snapshot_date_iso)
+    result = asyncio.run(_run_ga4_snapshot(account_id, snap_date))
+    return result
+
+
+async def _run_ga4_snapshot(account_id: str, snap_date) -> dict:
+    import uuid as _uuid
+    from sqlalchemy import select
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.infrastructure.db.models import GA4CredentialsModel, GA4PageSnapshotModel
+    from adcopilot.infrastructure.ga4.queries_adapter import fetch_page_metrics
+    from cryptography.fernet import Fernet
+    import base64, hashlib
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            result = await session.execute(
+                select(GA4CredentialsModel).where(
+                    GA4CredentialsModel.account_id == _uuid.UUID(account_id)
+                )
+            )
+            creds = result.scalar_one_or_none()
+            if creds is None or not creds.property_id:
+                return {"skipped": True, "reason": "no_ga4_credentials"}
+
+            key = base64.urlsafe_b64encode(
+                hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest()
+            )
+            fernet = Fernet(key)
+            refresh_token = fernet.decrypt(creds.refresh_token_enc.encode()).decode()
+
+        metrics = await fetch_page_metrics(
+            property_id=creds.property_id,
+            refresh_token=refresh_token,
+            client_id=settings.GOOGLE_ADS_CLIENT_ID or "",
+            client_secret=settings.GOOGLE_ADS_CLIENT_SECRET or "",
+            snapshot_date=snap_date,
+        )
+        if not metrics:
+            return {"rows": 0}
+
+        rows = [
+            {
+                "id": _uuid.uuid4(),
+                "account_id": _uuid.UUID(account_id),
+                "snapshot_date": snap_date,
+                "page_path": m.page_path,
+                "sessions": m.sessions,
+                "bounce_rate": m.bounce_rate,
+                "avg_session_duration_sec": m.avg_session_duration_sec,
+                "pages_per_session": m.pages_per_session,
+            }
+            for m in metrics
+        ]
+        async with AsyncSession(engine) as session, session.begin():
+            stmt = pg_insert(GA4PageSnapshotModel).values(rows)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_ga4_page_snapshots_account_date_path",
+                set_={
+                    "sessions": stmt.excluded.sessions,
+                    "bounce_rate": stmt.excluded.bounce_rate,
+                    "avg_session_duration_sec": stmt.excluded.avg_session_duration_sec,
+                    "pages_per_session": stmt.excluded.pages_per_session,
+                },
+            )
+            await session.execute(stmt)
+        logger.info("ga4_snapshot_done", account_id=account_id, rows=len(rows))
+        return {"rows": len(rows)}
+    except Exception as exc:
+        logger.warning("ga4_snapshot_failed", account_id=account_id, error=str(exc))
+        return {"error": str(exc)}
+    finally:
+        await engine.dispose()
