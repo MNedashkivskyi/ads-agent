@@ -908,3 +908,87 @@ class GoogleAdsMutationsAdapter:
             raise
         except Exception as exc:
             raise _wrap_mutation_exc("create_rsa", exc) from exc
+
+    async def create_customer_match_user_list(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        list_name: str,
+        hashed_emails: list[str],
+    ) -> str:
+        """Create a Customer Match UserList and upload hashed members. Returns user_list resource name."""
+        import asyncio
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None,
+            self._create_customer_match_user_list_sync,
+            refresh_token,
+            customer_id,
+            list_name,
+            hashed_emails,
+        )
+
+    def _create_customer_match_user_list_sync(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        list_name: str,
+        hashed_emails: list[str],
+    ) -> str:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+
+            user_list_service = client.get_service("UserListService")
+            user_list_op = client.get_type("UserListOperation")
+            user_list = user_list_op.create
+            user_list.name = list_name
+            user_list.description = f"Customer Match list: {list_name}"
+            user_list.membership_status = (
+                client.enums.UserListMembershipStatusEnum.OPEN
+            )
+            user_list.membership_life_span = 540
+            user_list.crm_based_user_list.upload_key_type = (
+                client.enums.CustomerMatchUploadKeyTypeEnum.CONTACT_INFO
+            )
+
+            response = user_list_service.mutate_user_lists(
+                customer_id=cid, operations=[user_list_op]
+            )
+            user_list_rn = response.results[0].resource_name
+            logger.info("customer_match_list_created", resource_name=user_list_rn)
+
+            # Upload members
+            if hashed_emails:
+                offline_service = client.get_service("OfflineUserDataJobService")
+                job_op = client.get_type("OfflineUserDataJobOperation")
+                job = job_op.create
+                job.type_ = client.enums.OfflineUserDataJobTypeEnum.CUSTOMER_MATCH_USER_LIST
+                job.customer_match_user_list_metadata.user_list = user_list_rn
+
+                create_response = offline_service.create_offline_user_data_job(
+                    customer_id=cid, job=job
+                )
+                job_rn = create_response.resource_name
+
+                data_ops = []
+                for email_hash in hashed_emails:
+                    data_op = client.get_type("OfflineUserDataJobOperation")
+                    user_data = data_op.create
+                    identifier = client.get_type("UserIdentifier")
+                    identifier.hashed_email = email_hash
+                    user_data.user_identifiers.append(identifier)
+                    data_ops.append(data_op)
+
+                offline_service.add_offline_user_data_job_operations(
+                    resource_name=job_rn, operations=data_ops
+                )
+                offline_service.run_offline_user_data_job(resource_name=job_rn)
+                logger.info("customer_match_upload_started", job=job_rn, count=len(hashed_emails))
+
+            return user_list_rn
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("create_customer_match_user_list", exc) from exc
