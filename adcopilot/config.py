@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # Example (local):    http://localhost:8000/oauth/google/callback
     OAUTH_REDIRECT_URI: str = "http://localhost:8000/oauth/google/callback"
     LLM_API_KEY: str | None = None
+    PAGESPEED_API_KEY: str | None = None
 
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_WEBHOOK_SECRET: str | None = None
