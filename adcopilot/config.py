@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     LLM_API_KEY: str | None = None
     PAGESPEED_API_KEY: str | None = None
 
+    # Supabase JWT secret — used to verify JWTs issued by Supabase auth.
+    # Find it in Supabase project → Settings → API → JWT Secret.
+    SUPABASE_JWT_SECRET: str | None = None
+
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_WEBHOOK_SECRET: str | None = None
     STRIPE_STARTER_PRICE_ID: str | None = None
