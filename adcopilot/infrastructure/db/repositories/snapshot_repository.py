@@ -319,6 +319,44 @@ class SqlSnapshotRepository:
             for m in res.scalars().all()
         ]
 
+    async def get_campaigns_date_range(
+        self, account_id: AccountId, start_date: date, end_date: date
+    ) -> list[CampaignSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        res = await self._session.execute(
+            select(CampaignSnapshotModel)
+            .where(
+                CampaignSnapshotModel.account_id == acct_uuid,
+                CampaignSnapshotModel.snapshot_date >= start_date,
+                CampaignSnapshotModel.snapshot_date <= end_date,
+            )
+            .order_by(CampaignSnapshotModel.snapshot_date)
+        )
+        return [
+            CampaignSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                campaign_id=m.campaign_id,
+                name=m.name,
+                status=m.status,
+                channel_type=m.channel_type,
+                budget_micros=m.budget_micros,
+                bidding_strategy=m.bidding_strategy,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+                conv_value=m.conv_value,
+                search_impression_share=m.search_impression_share,
+                search_budget_lost_impression_share=m.search_budget_lost_impression_share,
+                search_rank_lost_impression_share=m.search_rank_lost_impression_share,
+                target_cpa_micros=m.target_cpa_micros,
+                all_conversions=m.all_conversions,
+            )
+            for m in res.scalars().all()
+        ]
+
     async def get_ad_groups_by_date(
         self, account_id: AccountId, snapshot_date: date
     ) -> list[AdGroupSnapshot]:

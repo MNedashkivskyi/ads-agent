@@ -362,3 +362,128 @@ async def get_pmax_status(
         await engine.dispose()
 
     return PMaxStatusResponse(campaigns=campaigns)
+
+
+# ---------------------------------------------------------------------------
+# Performance time-series
+# ---------------------------------------------------------------------------
+
+class PMaxDailyDataPoint(BaseModel):
+    date: str
+    impressions: int
+    clicks: int
+    cost_pln: float
+    conversions: float
+    conv_value_pln: float
+    roas: float | None
+    campaign_id: int
+    campaign_name: str
+    status: str
+
+
+class AssetGroupHealth(BaseModel):
+    campaign_id: int
+    campaign_name: str
+    status: str
+    has_disapproved_assets: bool
+
+
+class PMaxPerformanceResponse(BaseModel):
+    time_series: list[PMaxDailyDataPoint]
+    asset_group_health: list[AssetGroupHealth]
+    days: int
+
+
+@router.get("/{user_id}/pmax/performance", response_model=PMaxPerformanceResponse)
+async def get_pmax_performance(
+    user_id: str,
+    account_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+    days: int = 30,
+) -> PMaxPerformanceResponse:
+    """Return PMax time-series metrics for Recharts visualisation (last N days)."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Brak dostępu")
+    if days < 1 or days > 90:
+        raise HTTPException(status_code=400, detail="days must be between 1 and 90")
+
+    session, engine, account, creds = await _get_session_and_account(user_id, account_id, settings)
+    try:
+        import datetime as _dt
+        from adcopilot.domain.entities import AccountId
+        from adcopilot.domain.recommendation import RecommendationKind, RecommendationStatus
+        from adcopilot.infrastructure.db.repositories.snapshot_repository import SqlSnapshotRepository
+        from adcopilot.infrastructure.db.models import RecommendationModel
+        from sqlalchemy import select
+
+        end_date = _dt.date.today()
+        start_date = end_date - _dt.timedelta(days=days - 1)
+
+        snapshot_repo = SqlSnapshotRepository(session)
+        all_snaps = await snapshot_repo.get_campaigns_date_range(
+            AccountId(str(account.id)), start_date, end_date
+        )
+        pmax_snaps = [s for s in all_snaps if s.channel_type == "PERFORMANCE_MAX"]
+
+        # Build time-series data points
+        time_series: list[PMaxDailyDataPoint] = []
+        for snap in pmax_snaps:
+            roas = None
+            if snap.cost_micros and snap.cost_micros > 0 and snap.conv_value:
+                roas = round(snap.conv_value / (snap.cost_micros / 1_000_000), 2)
+            time_series.append(
+                PMaxDailyDataPoint(
+                    date=snap.snapshot_date.isoformat(),
+                    impressions=snap.impressions,
+                    clicks=snap.clicks,
+                    cost_pln=round(snap.cost_micros / 1_000_000, 2) if snap.cost_micros else 0.0,
+                    conversions=snap.conversions,
+                    conv_value_pln=round(snap.conv_value, 2) if snap.conv_value else 0.0,
+                    roas=roas,
+                    campaign_id=snap.campaign_id,
+                    campaign_name=snap.name,
+                    status=snap.status or "UNKNOWN",
+                )
+            )
+
+        # Asset group health: check for recent PMAX_ASSET_DISAPPROVED recommendations
+        disapproved_campaign_ids: set[int] = set()
+        result = await session.execute(
+            select(RecommendationModel).where(
+                RecommendationModel.account_id == __import__("uuid").UUID(str(account.id)),
+                RecommendationModel.kind == RecommendationKind.PMAX_ASSET_DISAPPROVED.value,
+                RecommendationModel.status == RecommendationStatus.PENDING.value,
+            )
+        )
+        for rec in result.scalars().all():
+            if rec.target and isinstance(rec.target, dict):
+                cid = rec.target.get("campaign_id")
+                if cid:
+                    disapproved_campaign_ids.add(int(cid))
+
+        # Get unique PMax campaigns from the time series
+        seen: dict[int, str] = {}
+        for snap in pmax_snaps:
+            seen[snap.campaign_id] = snap.name
+
+        asset_group_health = [
+            AssetGroupHealth(
+                campaign_id=cid,
+                campaign_name=cname,
+                status="REVIEW_REQUIRED" if cid in disapproved_campaign_ids else "OK",
+                has_disapproved_assets=cid in disapproved_campaign_ids,
+            )
+            for cid, cname in seen.items()
+        ]
+
+    finally:
+        await session.rollback()
+        await session.close()
+        await engine.dispose()
+
+    return PMaxPerformanceResponse(
+        time_series=time_series,
+        asset_group_health=asset_group_health,
+        days=days,
+    )
