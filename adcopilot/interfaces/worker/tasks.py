@@ -69,6 +69,8 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
         if result.success:
             # Run detection asynchronously after a successful snapshot
             asyncio.run(_run_detection(settings, AccountId(account_id), snap_date))
+            # Record QS history for trend tracking
+            asyncio.run(_record_qs_history(settings, account_id, snap_date))
         return {
             "account_id": account_id,
             "snapshot_date": snapshot_date_iso,
@@ -173,6 +175,24 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
             await _notify_pmax_alerts(session, settings, AccountId(str(account_id)), snap_date)
     except Exception:
         logger.exception("detection failed (non-fatal)", account_id=str(account_id))
+    finally:
+        await engine.dispose()
+
+
+async def _record_qs_history(settings: object, account_id: str, snap_date: date) -> None:
+    """Upsert daily QS values into keyword_qs_history for trend tracking."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.record_qs_history import record_qs_history
+    from adcopilot.config import Settings
+
+    assert isinstance(settings, Settings)
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            await record_qs_history(account_id, snap_date, session)
+    except Exception as exc:
+        logger.warning("record_qs_history_failed", account_id=account_id, error=str(exc))
     finally:
         await engine.dispose()
 
