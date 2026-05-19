@@ -73,6 +73,7 @@ class UserMeResponse(BaseModel):
     user_id: str
     email: str
     telegram_chat_id: int | None
+    role: str  # "admin" | "client"
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +84,7 @@ class UserMeResponse(BaseModel):
 @router.get("/{user_id}/me", response_model=UserMeResponse)
 async def get_user_me(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> UserMeResponse:
     """Return basic user info including Telegram connection status."""
@@ -95,10 +97,13 @@ async def get_user_me(
             user = await repo.get_by_id(UserId(user_id))
             if user is None:
                 raise HTTPException(status_code=404, detail="User not found")
+            admin_ids = {uid.strip() for uid in settings.ADMIN_USER_IDS.split(",") if uid.strip()}
+            role = "admin" if user_id in admin_ids else "client"
             return UserMeResponse(
                 user_id=str(user.id),
                 email=user.email,
                 telegram_chat_id=user.telegram_chat_id,
+                role=role,
             )
     finally:
         await engine.dispose()
