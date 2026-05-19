@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import Settings, get_settings
 from adcopilot.domain.entities import UserId
+from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
 
@@ -292,6 +293,82 @@ async def list_audit_log(
         )
         for e in entries
     ]
+
+
+@router.post("/{user_id}/recommendations/{rec_id}/approve")
+async def approve_recommendation(
+    user_id: str,
+    rec_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, str]:
+    """Approve a recommendation and enqueue the Celery execution task."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            repo = SqlRecommendationRepository(session)
+            rec = await repo.get(RecommendationId(rec_id))
+            if rec is None:
+                raise HTTPException(status_code=404, detail="Recommendation not found")
+            if rec.status != RecommendationStatus.PENDING:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Recommendation is already {rec.status.value}",
+                )
+            await repo.update_status(RecommendationId(rec_id), RecommendationStatus.APPROVED)
+    finally:
+        await engine.dispose()
+
+    from adcopilot.interfaces.worker.tasks import execute_recommendation_task
+
+    execute_recommendation_task.delay(rec_id)
+    logger.info("recommendation.approved", user_id=user_id, rec_id=rec_id)
+
+    return {"status": "approved", "rec_id": rec_id}
+
+
+@router.post("/{user_id}/recommendations/{rec_id}/decline")
+async def decline_recommendation(
+    user_id: str,
+    rec_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, str]:
+    """Decline a recommendation without executing it."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            repo = SqlRecommendationRepository(session)
+            rec = await repo.get(RecommendationId(rec_id))
+            if rec is None:
+                raise HTTPException(status_code=404, detail="Recommendation not found")
+            if rec.status != RecommendationStatus.PENDING:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Recommendation is already {rec.status.value}",
+                )
+            await repo.update_status(RecommendationId(rec_id), RecommendationStatus.DECLINED)
+    finally:
+        await engine.dispose()
+
+    logger.info("recommendation.declined", user_id=user_id, rec_id=rec_id)
+    return {"status": "declined", "rec_id": rec_id}
 
 
 @router.put("/{user_id}/settings")
