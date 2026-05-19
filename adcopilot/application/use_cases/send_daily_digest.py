@@ -97,11 +97,25 @@ class SendDailyDigestUseCase:
         )
 
         if self._notifier:
+            from adcopilot.domain.recommendation import RecommendationKind
+
+            ad_fatigue_recs = [
+                r for r in top_recs
+                if r.kind in (RecommendationKind.AD_FATIGUE, RecommendationKind.WEAK_RSA_STRENGTH)
+            ]
+            body = f"Masz {len(top_recs)} nowych rekomendacji do przejrzenia."
+            if ad_fatigue_recs:
+                sample = ad_fatigue_recs[0]
+                body += (
+                    f" W tym {len(ad_fatigue_recs)} dotyczących zmęczenia reklam — "
+                    f"sprawdź propozycje nowych tekstów w panelu. "
+                    f"(rec_id: {sample.id})"
+                )
             await self._notifier.send_digest(
                 user_id=str(user_id),
                 title="Dzienny raport rekomendacji",
-                body=f"Masz {len(top_recs)} nowych rekomendacji do przejrzenia.",
-                metadata={"recommendation_ids": rec_ids},
+                body=body,
+                metadata={"recommendation_ids": rec_ids, "ad_fatigue_count": len(ad_fatigue_recs)},
             )
 
         return DigestResult(sent=True, count=len(top_recs), reason="sent")
