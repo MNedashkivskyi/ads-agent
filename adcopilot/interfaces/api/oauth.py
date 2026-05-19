@@ -267,3 +267,96 @@ async def oauth_google_callback(
             redirect_url = f"{base}/app?connected={len(linked_ids)}"
         return RedirectResponse(url=redirect_url, status_code=302)
     return {"user_id": user_id, "linked_customer_ids": linked_ids}
+
+
+GA4_SCOPE = "https://www.googleapis.com/auth/analytics.readonly"
+GA4_TOKEN_URL = "https://oauth2.googleapis.com/token"
+
+
+@router.get("/ga4/start")
+async def oauth_ga4_start(
+    user_id: str,
+    account_id: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> RedirectResponse:
+    """Redirect to Google OAuth consent for GA4 Data API (read-only)."""
+    if not settings.GOOGLE_ADS_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
+    state = issue_state_jwt(f"{user_id}:{account_id}", settings.SECRET_KEY)
+    params = {
+        "client_id": settings.GOOGLE_ADS_CLIENT_ID,
+        "redirect_uri": settings.GA4_OAUTH_REDIRECT_URI,
+        "response_type": "code",
+        "scope": GA4_SCOPE,
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
+    }
+    return RedirectResponse(url=f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
+
+
+@router.get("/ga4/callback", response_model=None)
+async def oauth_ga4_callback(
+    code: Annotated[str, Query()],
+    state: Annotated[str, Query()],
+    property_id: Annotated[str | None, Query()] = None,
+    settings: Annotated[Settings, Depends(get_settings)] = None,
+    session: Annotated[AsyncSession, Depends(_get_db_session)] = None,
+    redis_client: Annotated[redis_sync.Redis, Depends(_get_redis_client)] = None,
+) -> dict:
+    """Exchange GA4 code for tokens, store credentials."""
+    if not settings.GOOGLE_ADS_CLIENT_ID or not settings.GOOGLE_ADS_CLIENT_SECRET:
+        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
+    try:
+        payload = consume_state_jwt(state, settings.SECRET_KEY, redis_client=redis_client)
+        user_id, account_id = payload.split(":", 1)
+    except (StateAlreadyUsedError, StateTokenInvalidError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state") from exc
+
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            GA4_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": settings.GOOGLE_ADS_CLIENT_ID,
+                "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
+                "redirect_uri": settings.GA4_OAUTH_REDIRECT_URI,
+                "grant_type": "authorization_code",
+            },
+        )
+    token_data = token_resp.json()
+    refresh_token = token_data.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail="No refresh token returned")
+
+    from adcopilot.infrastructure.db.models import GA4CredentialsModel
+    from cryptography.fernet import Fernet
+    import base64, hashlib
+    key = base64.urlsafe_b64encode(hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest())
+    fernet = Fernet(key)
+    enc_refresh = fernet.encrypt(refresh_token.encode()).decode()
+    pid = property_id or ""
+
+    # Upsert into ga4_credentials
+    from sqlalchemy import select
+    result = await session.execute(
+        select(GA4CredentialsModel).where(GA4CredentialsModel.account_id == uuid.UUID(account_id))
+    )
+    existing = result.scalar_one_or_none()
+    if existing:
+        existing.property_id = pid
+        existing.refresh_token_enc = enc_refresh
+    else:
+        session.add(GA4CredentialsModel(
+            account_id=uuid.UUID(account_id),
+            property_id=pid,
+            refresh_token_enc=enc_refresh,
+        ))
+    await session.commit()
+    logger.info("ga4 oauth complete", user_id=user_id, account_id=account_id)
+
+    if settings.APP_URL:
+        return RedirectResponse(url=f"{settings.APP_URL.rstrip('/')}/app/audiences?ga4=connected", status_code=302)
+    return {"status": "ok", "account_id": account_id}

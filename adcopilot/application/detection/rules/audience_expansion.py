@@ -26,7 +26,6 @@ class AudienceExpansionRule:
         if not ctx.audience_performance:
             return []
 
-        # Build campaign impression share from campaign snapshots
         campaign_impression_share: dict[int, float] = {}
         for c in ctx.campaigns:
             if c.search_impression_share is not None:
@@ -49,23 +48,22 @@ class AudienceExpansionRule:
             recs.append(
                 Recommendation(
                     id=RecommendationId(str(uuid.uuid4())),
-                    account_id=aud.account_id,
+                    account_id=ctx.account.id,  # type: ignore[arg-type]
                     kind=self.kind,
                     severity=self.severity,
-                    status=RecommendationStatus.PENDING,
-                    title=f"Rozszerz grupę odbiorców w kampanii {aud.campaign_id}",
-                    description=(
-                        f"Udział w wyświetleniach kampanii {aud.campaign_id} przekroczył "
-                        f"{is_val:.0%}. Istniejące grupy odbiorców są bliskie nasycenia — "
-                        f"rozważ dodanie podobnych grup odbiorców (similar audiences) lub "
-                        f"rozszerzenie targetowania na pokrewne zainteresowania."
-                    ),
-                    created_at=datetime.now(UTC),
-                    metadata={
+                    target={"campaign_id": aud.campaign_id},
+                    payload={
+                        "impression_share": round(is_val, 4),
+                        "suggestion": "add_similar_audiences",
+                    },
+                    evidence={
                         "campaign_id": aud.campaign_id,
                         "impression_share": round(is_val, 4),
                         "audience_impressions": aud.impressions,
                     },
+                    estimated_monthly_savings_micros=0,
+                    created_at=datetime.now(tz=UTC),
+                    status=RecommendationStatus.PENDING,
                 )
             )
 
