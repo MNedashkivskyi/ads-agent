@@ -299,3 +299,270 @@ async def validate_conversion_tracking(
             ValidationActionDetail(**a) for a in result.failing_actions
         ],
     )
+
+
+# ---------------------------------------------------------------------------
+# GTM Container download
+# ---------------------------------------------------------------------------
+
+class GTMContainerResponse(BaseModel):
+    platform: str
+    filename: str
+    container: dict
+
+
+@router.get(
+    "/{user_id}/conversion-tracking/gtm-container",
+    response_model=GTMContainerResponse,
+)
+async def get_gtm_container(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+    conversion_id: str = "",
+    conversion_label: str = "",
+) -> GTMContainerResponse:
+    """Generate and return a GTM container JSON for the user's detected platform."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from adcopilot.application.use_cases.detect_website_platform import detect_platform_from_final_urls
+    from adcopilot.application.use_cases.generate_gtm_container import generate_gtm_container
+    from adcopilot.domain.entities import UserId
+    from adcopilot.infrastructure.db.models import KeywordSnapshotModel
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import SqlGoogleAdsAccountRepository
+    from sqlalchemy import select, text
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            accounts = await account_repo.list_for_user(UserId(user_id))
+            if not accounts:
+                raise HTTPException(status_code=404, detail="No accounts found")
+            account = accounts[0]
+
+            stmt = (
+                select(KeywordSnapshotModel.final_urls)
+                .where(KeywordSnapshotModel.account_id == account.id)
+                .order_by(text("snapshot_date DESC"))
+                .limit(1)
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+    finally:
+        await engine.dispose()
+
+    final_urls_json = row or "[]"
+    platform = await detect_platform_from_final_urls(final_urls_json)
+    container = generate_gtm_container(
+        conversion_id=conversion_id or "AW-XXXXXXXXX/YYYYYYYYYYYYYYY",
+        conversion_label=conversion_label or "YYYYYYYYYYYYYYY",
+        platform=platform,
+    )
+    return GTMContainerResponse(
+        platform=platform,
+        filename=f"adswise_gtm_{platform}.json",
+        container=container,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Implementation partner marketplace
+# ---------------------------------------------------------------------------
+
+class PartnerResponse(BaseModel):
+    id: str
+    name: str
+    email: str
+    website: str | None
+    city: str
+    voivodeship: str
+    platforms_supported: list[str]
+    fixed_price_pln: int
+    avg_turnaround_hours: int
+    rating: float
+    completed_jobs: int
+
+
+class RequestImplementationBody(BaseModel):
+    partner_id: str | None = None
+    auto_match: bool = True
+
+
+class ImplementationRequestResponse(BaseModel):
+    id: str
+    client_id: str
+    partner_id: str
+    account_id: str
+    status: str
+    platform: str
+    created_at: str
+
+
+class ImplementationStatusResponse(BaseModel):
+    has_active_request: bool
+    request: ImplementationRequestResponse | None
+
+
+@router.get(
+    "/{user_id}/conversion-tracking/partners",
+    response_model=list[PartnerResponse],
+)
+async def list_implementation_partners(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+    platform: str = "",
+) -> list[PartnerResponse]:
+    """List active implementation partners, optionally filtered by platform."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from adcopilot.infrastructure.db.models import ImplementationPartnerModel
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            stmt = select(ImplementationPartnerModel).where(
+                ImplementationPartnerModel.is_active == True  # noqa: E712
+            ).order_by(ImplementationPartnerModel.rating.desc())
+            result = await session.execute(stmt)
+            partners = list(result.scalars().all())
+    finally:
+        await engine.dispose()
+
+    if platform:
+        partners = [p for p in partners if platform in (p.platforms_supported or [])]
+
+    return [
+        PartnerResponse(
+            id=str(p.id),
+            name=p.name,
+            email=p.email,
+            website=p.website,
+            city=p.city,
+            voivodeship=p.voivodeship,
+            platforms_supported=p.platforms_supported or [],
+            fixed_price_pln=p.fixed_price_pln,
+            avg_turnaround_hours=p.avg_turnaround_hours,
+            rating=p.rating,
+            completed_jobs=p.completed_jobs,
+        )
+        for p in partners
+    ]
+
+
+@router.post(
+    "/{user_id}/conversion-tracking/request-implementation",
+    response_model=ImplementationRequestResponse,
+)
+async def request_implementation_endpoint(
+    user_id: str,
+    body: RequestImplementationBody,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ImplementationRequestResponse:
+    """Create an implementation request and notify the partner."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from adcopilot.application.use_cases.request_implementation import request_implementation
+    from adcopilot.application.use_cases.detect_website_platform import detect_platform_from_final_urls
+    from adcopilot.domain.entities import UserId
+    from adcopilot.infrastructure.db.models import KeywordSnapshotModel
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import SqlGoogleAdsAccountRepository
+    from sqlalchemy import select, text
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            accounts = await account_repo.list_for_user(UserId(user_id))
+            if not accounts:
+                raise HTTPException(status_code=404, detail="No accounts found")
+            account = accounts[0]
+
+            stmt = (
+                select(KeywordSnapshotModel.final_urls)
+                .where(KeywordSnapshotModel.account_id == account.id)
+                .order_by(text("snapshot_date DESC"))
+                .limit(1)
+            )
+            row = (await session.execute(stmt)).scalar_one_or_none()
+            platform = await detect_platform_from_final_urls(row or "[]")
+
+            try:
+                req = await request_implementation(
+                    user_id=user_id,
+                    account_id=str(account.id),
+                    platform=platform,
+                    session=session,
+                    partner_id=body.partner_id,
+                )
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=str(e))
+            await session.commit()
+    finally:
+        await engine.dispose()
+
+    return ImplementationRequestResponse(
+        id=req.id,
+        client_id=req.client_id,
+        partner_id=req.partner_id,
+        account_id=req.account_id,
+        status=req.status.value,
+        platform=req.platform,
+        created_at=req.created_at.isoformat(),
+    )
+
+
+@router.get(
+    "/{user_id}/conversion-tracking/implementation-status",
+    response_model=ImplementationStatusResponse,
+)
+async def get_implementation_status(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ImplementationStatusResponse:
+    """Check if the user has an active implementation request."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+    from adcopilot.infrastructure.db.models import ImplementationRequestModel
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            result = await session.execute(
+                select(ImplementationRequestModel)
+                .where(ImplementationRequestModel.client_id == user_id)
+                .where(ImplementationRequestModel.status.in_(["requested", "accepted"]))
+                .order_by(ImplementationRequestModel.created_at.desc())
+                .limit(1)
+            )
+            req = result.scalar_one_or_none()
+    finally:
+        await engine.dispose()
+
+    if not req:
+        return ImplementationStatusResponse(has_active_request=False, request=None)
+
+    return ImplementationStatusResponse(
+        has_active_request=True,
+        request=ImplementationRequestResponse(
+            id=str(req.id),
+            client_id=req.client_id,
+            partner_id=str(req.partner_id),
+            account_id=str(req.account_id),
+            status=req.status,
+            platform=req.platform,
+            created_at=req.created_at.isoformat(),
+        ),
+    )

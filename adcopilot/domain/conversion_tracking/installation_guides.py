@@ -11,6 +11,8 @@ class GuideStep:
     title: str
     description: str
     is_verify: bool = False
+    screenshot_hint_pl: str | None = None
+    gtm_import_instruction_pl: str | None = None
 
 
 @dataclass
@@ -19,6 +21,7 @@ class InstallationGuide:
     platform_label: str
     steps: list[GuideStep] = field(default_factory=list)
     gtm_container_hint: str | None = None
+    gtm_container_download_url: str | None = None
 
 
 _GUIDES: dict[str, InstallationGuide] = {
@@ -28,33 +31,40 @@ _GUIDES: dict[str, InstallationGuide] = {
         steps=[
             GuideStep(
                 step=1,
+                title="Pobierz gotowy kontener GTM",
+                description=(
+                    "Kliknij przycisk 'Pobierz kontener GTM' powyżej. "
+                    "Plik JSON zawiera skonfigurowane tagi konwersji Google Ads."
+                ),
+                screenshot_hint_pl="Przycisk pobierania znajduje się w sekcji 'Instalacja' powyżej.",
+                gtm_import_instruction_pl=(
+                    "W GTM: Administrator → Importuj kontener → wybierz pobrany plik JSON → "
+                    "Scal → Potwierdź import."
+                ),
+            ),
+            GuideStep(
+                step=2,
                 title="Zainstaluj wtyczkę Google Tag Manager",
                 description=(
                     "W panelu WordPress przejdź do Wtyczki → Dodaj nową. "
                     "Wyszukaj 'Google Tag Manager for WordPress' (autor: Thomas Geiger) i zainstaluj."
                 ),
+                screenshot_hint_pl="Szukaj 'GTM4WP' w katalogu wtyczek WordPress.",
             ),
             GuideStep(
-                step=2,
+                step=3,
                 title="Wklej ID kontenera GTM",
                 description=(
                     "Przejdź do Ustawienia → Google Tag Manager. "
                     "Wklej ID kontenera GTM (format: GTM-XXXXXXX) i zapisz."
                 ),
-            ),
-            GuideStep(
-                step=3,
-                title="Skonfiguruj tag konwersji Google Ads w GTM",
-                description=(
-                    "W Google Tag Manager dodaj nowy tag typu 'Konwersja Google Ads'. "
-                    "Ustaw ID konwersji i etykietę z konta Google Ads. "
-                    "Wyzwalacz: wszystkie strony (lub strona potwierdzenia zamówienia)."
-                ),
+                screenshot_hint_pl="ID kontenera znajdziesz w nagłówku panelu GTM obok nazwy konta.",
             ),
             GuideStep(
                 step=4,
                 title="Opublikuj kontener GTM",
                 description="W GTM kliknij 'Opublikuj' i nadaj wersji nazwę np. 'Śledzenie konwersji Google Ads'.",
+                screenshot_hint_pl="Przycisk 'Prześlij' (Submit) jest w prawym górnym rogu GTM.",
             ),
             GuideStep(
                 step=5,
@@ -64,6 +74,7 @@ _GUIDES: dict[str, InstallationGuide] = {
                     "czy tag GTM jest aktywny. Następnie kliknij 'Zweryfikuj' poniżej."
                 ),
                 is_verify=True,
+                screenshot_hint_pl="Tag Assistant pokaże zielony znacznik przy tagu GTM.",
             ),
         ],
         gtm_container_hint="Zainstaluj GTM przez wtyczkę, nie przez ręczną edycję motywu.",
@@ -154,29 +165,36 @@ _GUIDES: dict[str, InstallationGuide] = {
         steps=[
             GuideStep(
                 step=1,
-                title="Przejdź do integracji w Shoper",
-                description="W panelu Shoper przejdź do Panel → Integracje → Google Tag Manager.",
+                title="Pobierz gotowy kontener GTM",
+                description=(
+                    "Kliknij przycisk 'Pobierz kontener GTM'. "
+                    "Plik zawiera tagi konwersji skonfigurowane dla e-commerce Shoper."
+                ),
+                gtm_import_instruction_pl=(
+                    "W GTM: Administrator → Importuj kontener → wybierz pobrany plik → "
+                    "Scal → Potwierdź. Uzupełnij ID konwersji w tagu."
+                ),
             ),
             GuideStep(
                 step=2,
+                title="Przejdź do integracji w Shoper",
+                description="W panelu Shoper przejdź do Panel → Integracje → Google Tag Manager.",
+                screenshot_hint_pl="Sekcja 'Integracje' w lewym menu panelu administracyjnego Shoper.",
+            ),
+            GuideStep(
+                step=3,
                 title="Wklej ID kontenera GTM",
                 description=(
                     "W polu 'ID kontenera GTM' wklej swój identyfikator (format: GTM-XXXXXXX). "
                     "Zapisz ustawienia."
                 ),
-            ),
-            GuideStep(
-                step=3,
-                title="Skonfiguruj tag konwersji w GTM",
-                description=(
-                    "W Google Tag Manager dodaj tag 'Konwersja Google Ads'. "
-                    "Wyzwalacz: strona potwierdzenia zamówienia Shoper."
-                ),
+                screenshot_hint_pl="ID kontenera GTM znajdziesz na stronie tagmanager.google.com.",
             ),
             GuideStep(
                 step=4,
                 title="Opublikuj kontener GTM",
                 description="W GTM kliknij 'Opublikuj' i nadaj wersji nazwę.",
+                screenshot_hint_pl="Przycisk 'Prześlij' w prawym górnym rogu GTM.",
             ),
             GuideStep(
                 step=5,
