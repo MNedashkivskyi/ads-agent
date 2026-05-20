@@ -51,12 +51,11 @@ def upgrade() -> None:
 
     op.execute(
         """
-        INSERT INTO prompt_versions (prompt_key, content, version, is_active)
+        INSERT INTO prompt_versions (prompt_key, content, version)
         VALUES (
             'performance_report_v1',
             'Napisz 2-akapitowy raport zarzadczy w jezyku polskim na podstawie ponizszych danych konta Google Ads. Akapit 1: wyniki vs poprzedni okres. Akapit 2: najwazniejsze dzialania i rekomendacje na nastepny miesiac.\n\nDane:\n{account_context}',
-            1,
-            true
+            1
         )
         ON CONFLICT DO NOTHING
         """

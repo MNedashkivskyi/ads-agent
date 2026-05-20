@@ -18,12 +18,11 @@ depends_on = None
 def upgrade() -> None:
     op.execute(
         """
-        INSERT INTO prompt_versions (prompt_key, content, version, is_active)
+        INSERT INTO prompt_versions (prompt_key, content, version)
         VALUES (
             'seasonality_v1',
             'Napisz rekomendację sezonową w języku polskim dla konta Google Ads na podstawie poniższych danych. Wskaż konkretne daty, kwoty budżetu i działania do podjęcia.\n\nDane sezonowe:\n{seasonal_data}',
-            1,
-            true
+            1
         )
         ON CONFLICT DO NOTHING
         """
