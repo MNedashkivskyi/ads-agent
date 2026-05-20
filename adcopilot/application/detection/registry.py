@@ -109,6 +109,9 @@ from adcopilot.application.detection.rules.rule_51_qs_improvement_opportunity im
 from adcopilot.application.detection.rules.rule_52_campaign_fragmentation import CampaignFragmentationRule
 from adcopilot.application.detection.rules.rule_53_campaign_bloat import CampaignBloatRule
 from adcopilot.application.detection.rules.rule_54_device_campaign_split import DeviceCampaignSplitRule
+from adcopilot.application.detection.rules.rule_55_audience_opportunity import AudienceOpportunityRule
+from adcopilot.application.detection.rules.rule_56_audience_underperforming import AudienceUnderperformingRule
+from adcopilot.application.detection.rules.rule_57_customer_match_lookalike import CustomerMatchLookalikeRule
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -202,6 +205,10 @@ def build_rule_engine(
         CampaignFragmentationRule(),
         CampaignBloatRule(),
         DeviceCampaignSplitRule(),
+        # Module 15 — Advanced audience strategy
+        AudienceOpportunityRule(),
+        AudienceUnderperformingRule(),
+        CustomerMatchLookalikeRule(),
     ]
     if not has_working_tracking:
         rules = [r for r in rules if type(r).__name__ not in _CONVERSION_DEPENDENT_RULES]
