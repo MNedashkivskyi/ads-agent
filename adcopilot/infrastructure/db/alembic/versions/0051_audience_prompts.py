@@ -18,12 +18,11 @@ depends_on = None
 def upgrade() -> None:
     op.execute(
         """
-        INSERT INTO prompt_versions (prompt_key, content, version, is_active)
+        INSERT INTO prompt_versions (prompt_key, content, version)
         VALUES (
             'audience_strategy_v1',
             'Przeanalizuj poniższe dane o wydajności grup odbiorców Google Ads i napisz 3–5 konkretnych rekomendacji strategicznych w języku polskim. Skup się na: (1) grupach odbiorców wartych zwiększenia stawki, (2) grupach wartych zmniejszenia stawki lub wykluczenia, (3) możliwościach rozszerzenia zasięgu.\n\nDane:\n{audience_context}',
-            1,
-            true
+            1
         )
         ON CONFLICT DO NOTHING
         """
@@ -31,12 +30,11 @@ def upgrade() -> None:
 
     op.execute(
         """
-        INSERT INTO prompt_versions (prompt_key, content, version, is_active)
+        INSERT INTO prompt_versions (prompt_key, content, version)
         VALUES (
             'custom_intent_v1',
             'Pogrupuj poniższe frazy wyszukiwania w klastry tematyczne (max 5 klastrów). Dla każdego klastra podaj: nazwę (max 5 słów) i listę fraz. Następnie napisz krótką rekomendację (2–3 zdania) jak wykorzystać te klastry w niestandardowych listach odbiorców Google Ads.\n\nOdpowiedz w formacie JSON:\n{{"clusters": [{{"name": "...", "terms": ["..."]}}], "recommendations_pl": "..."}}\n\nFrazy:\n{search_terms}',
-            1,
-            true
+            1
         )
         ON CONFLICT DO NOTHING
         """
