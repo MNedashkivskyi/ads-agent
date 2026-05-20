@@ -57,6 +57,8 @@ __all__ = [
     "SitelinkPerformanceSnapshotModel",
     "SnapshotRunModel",
     "UserModel",
+        "ImplementationPartnerModel",
+    "ImplementationRequestModel",
     "VerticalBenchmarkSnapshotModel",
 ]
 
@@ -1067,3 +1069,40 @@ class WeeklyInsightModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class ImplementationPartnerModel(Base):
+    __tablename__ = "implementation_partners"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    website: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    city: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    voivodeship: Mapped[str] = mapped_column(String(100), nullable=False)
+    platforms_supported: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    fixed_price_pln: Mapped[int] = mapped_column(Integer, nullable=False, default=120)
+    avg_turnaround_hours: Mapped[int] = mapped_column(Integer, nullable=False, default=48)
+    rating: Mapped[float] = mapped_column(Float, nullable=False, default=5.0)
+    completed_jobs: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ImplementationRequestModel(Base):
+    __tablename__ = "implementation_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    client_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    partner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="requested", index=True)
+    platform: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
