@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
@@ -62,6 +63,7 @@ __all__ = [
     "ImplementationPartnerModel",
     "ImplementationRequestModel",
     "QSImprovementPlanModel",
+    "PerformanceReportModel",
     "VerticalBenchmarkSnapshotModel",
 ]
 
@@ -1199,3 +1201,19 @@ class QSImprovementPlanModel(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     measurement_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class PerformanceReportModel(Base):
+    __tablename__ = "performance_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    period_start: Mapped[date] = mapped_column(Date, nullable=False)
+    period_end: Mapped[date] = mapped_column(Date, nullable=False)
+    report_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    summary_pl: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pdf_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
