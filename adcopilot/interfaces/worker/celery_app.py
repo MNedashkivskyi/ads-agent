@@ -100,6 +100,11 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.weekly_qs_improvement_check_task",
                     "schedule": crontab(hour=5, minute=0, day_of_week=3),
                 },
+                "monthly-performance-reports": {
+                    # 1st of month 8:00 AM UTC — generate PDF performance reports for all active accounts.
+                    "task": "adcopilot.interfaces.worker.tasks.monthly_performance_reports_task",
+                    "schedule": crontab(hour=8, minute=0, day_of_month="1"),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},

@@ -2457,3 +2457,99 @@ async def _weekly_qs_improvement_check() -> dict:
 
     logger.info("weekly_qs_improvement_check_done", created=created, evaluated=evaluated)
     return {"created": created, "evaluated": evaluated}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.monthly_performance_reports_task"
+)
+def monthly_performance_reports_task() -> None:
+    """Generate monthly performance reports for all active accounts."""
+    import asyncio
+
+    asyncio.run(_monthly_performance_reports())
+
+
+async def _monthly_performance_reports() -> None:
+    """For all active accounts, generate last-month performance report."""
+    from datetime import date, timedelta
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient as AnthropicLLMClient
+    from adcopilot.infrastructure.reporting.pdf_renderer import render_performance_report_pdf
+    from adcopilot.application.use_cases.generate_performance_report import generate_performance_report
+    from adcopilot.infrastructure.db.repositories.prompt_version_repository import SqlPromptVersionRepository
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+
+    today = date.today()
+    period_end = date(today.year, today.month, 1) - timedelta(days=1)
+    period_start = date(period_end.year, period_end.month, 1)
+
+    try:
+        async with AsyncSession(engine) as session:
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            accounts = await account_repo.list_active()
+
+        for account in accounts:
+            account_id = str(account.id)
+            user_id = str(account.user_id)
+            try:
+                async with AsyncSession(engine) as session:
+                    prompt_repo = SqlPromptVersionRepository(session)
+                    llm = AnthropicLLMClient(api_key=settings.LLM_API_KEY or "")
+                    report_data = await generate_performance_report(
+                        user_id=user_id,
+                        account_id=account_id,
+                        period_start=period_start,
+                        period_end=period_end,
+                        session=session,
+                        llm=llm,
+                        prompt_repo=prompt_repo,
+                    )
+                    pdf_bytes = render_performance_report_pdf(report_data)
+
+                    import json as _json
+                    import uuid as _uuid
+                    from sqlalchemy import text as _text
+
+                    await session.execute(
+                        _text(
+                            """
+                            INSERT INTO performance_reports
+                                (id, user_id, account_id, period_start, period_end, report_data, summary_pl, pdf_bytes)
+                            VALUES
+                                (:id, :user_id, :account_id, :period_start, :period_end, :report_data::jsonb, :summary_pl, :pdf_bytes)
+                            """
+                        ),
+                        {
+                            "id": str(_uuid.uuid4()),
+                            "user_id": user_id,
+                            "account_id": account_id,
+                            "period_start": period_start,
+                            "period_end": period_end,
+                            "report_data": _json.dumps(report_data),
+                            "summary_pl": report_data.get("summary_pl"),
+                            "pdf_bytes": pdf_bytes,
+                        },
+                    )
+                    await session.commit()
+                    logger.info(
+                        "monthly_performance_report.generated",
+                        account_id=account_id,
+                        period_start=period_start.isoformat(),
+                        period_end=period_end.isoformat(),
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "monthly_performance_report.failed",
+                    account_id=account_id,
+                    error=str(exc),
+                )
+    finally:
+        await engine.dispose()
