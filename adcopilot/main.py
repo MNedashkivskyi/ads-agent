@@ -57,6 +57,7 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.qs_improvement import router as qs_improvement_router
     from adcopilot.interfaces.api.reports import router as reports_router
     from adcopilot.interfaces.api.account_structure import router as account_structure_router
+    from adcopilot.interfaces.api.seasonality import router as seasonality_router
     from adcopilot.rate_limit import limiter
     from adcopilot.security import PathPrefixRateLimitMiddleware
 
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     application.include_router(audiences_router)
     application.include_router(reports_router)
     application.include_router(account_structure_router)
+    application.include_router(seasonality_router)
 
     @application.get("/health")
     async def health() -> JSONResponse:
