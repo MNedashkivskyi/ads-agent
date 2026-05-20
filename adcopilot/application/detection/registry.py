@@ -106,6 +106,9 @@ from adcopilot.application.detection.rules.rule_50_pmax_asset_disapproved import
 from adcopilot.application.detection.rules.new_competitor import NewCompetitorRule
 from adcopilot.application.detection.rules.competitor_aggression import CompetitorAggressionRule
 from adcopilot.application.detection.rules.rule_51_qs_improvement_opportunity import QSImprovementOpportunityRule
+from adcopilot.application.detection.rules.rule_52_campaign_fragmentation import CampaignFragmentationRule
+from adcopilot.application.detection.rules.rule_53_campaign_bloat import CampaignBloatRule
+from adcopilot.application.detection.rules.rule_54_device_campaign_split import DeviceCampaignSplitRule
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -195,6 +198,10 @@ def build_rule_engine(
         CompetitorAggressionRule(),
         # Module 13 — QS improvement orchestration
         QSImprovementOpportunityRule(),
+        # Module 14 — Account restructuring
+        CampaignFragmentationRule(),
+        CampaignBloatRule(),
+        DeviceCampaignSplitRule(),
     ]
     if not has_working_tracking:
         rules = [r for r in rules if type(r).__name__ not in _CONVERSION_DEPENDENT_RULES]
