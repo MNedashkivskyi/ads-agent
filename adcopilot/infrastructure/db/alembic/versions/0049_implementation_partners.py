@@ -88,7 +88,7 @@ def upgrade() -> None:
                 "INSERT INTO implementation_partners "
                 "(name, email, website, city, voivodeship, platforms_supported, "
                 "fixed_price_pln, avg_turnaround_hours, rating, completed_jobs, is_active) "
-                "VALUES (:name, :email, :website, :city, :voivodeship, :platforms, "
+                "VALUES (:name, :email, :website, :city, :voivodeship, CAST(:platforms AS json), "
                 ":price, :hours, :rating, :jobs, true)"
             ).bindparams(
                 name=name, email=email, website=website, city=city,
