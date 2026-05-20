@@ -2389,3 +2389,71 @@ async def _run_auction_insights_snapshot(account_id: str, snap_date) -> dict:
         return {"error": str(exc)}
     finally:
         await engine.dispose()
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.weekly_qs_improvement_check_task")
+def weekly_qs_improvement_check_task() -> dict:
+    """Weekly QS improvement check: auto-create plans and evaluate measuring ones."""
+    import asyncio
+    return asyncio.get_event_loop().run_until_complete(_weekly_qs_improvement_check())
+
+
+async def _weekly_qs_improvement_check() -> dict:
+    from datetime import UTC, datetime
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.qs_improvement_plan_repository import (
+        QSImprovementPlanRepository,
+    )
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    created = 0
+    evaluated = 0
+    try:
+        async with AsyncSession(engine) as session:
+            # 1. Auto-create plans for accounts with low-QS keywords and no active plan
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            all_accounts = await account_repo.list_active()
+            qs_repo = QSImprovementPlanRepository(session)
+            for account in all_accounts:
+                try:
+                    active = await qs_repo.list_active_for_account(str(account.id))
+                    if active:
+                        continue
+                    from adcopilot.application.use_cases.create_qs_improvement_plan import (
+                        create_qs_improvement_plan,
+                    )
+                    plan = await create_qs_improvement_plan(
+                        account_id=str(account.id), session=session
+                    )
+                    await qs_repo.save(plan)
+                    created += 1
+                except ValueError:
+                    pass
+                except Exception as exc:
+                    logger.warning("qs_auto_create_failed", account_id=str(account.id), error=str(exc))
+
+            # 2. Evaluate plans past their measurement window
+            now = datetime.now(UTC)
+            measuring = await qs_repo.list_measuring_past_window(now)
+            for plan in measuring:
+                try:
+                    from adcopilot.application.use_cases.evaluate_qs_improvement_plan import (
+                        evaluate_qs_improvement_plan,
+                    )
+                    await evaluate_qs_improvement_plan(plan_id=plan.id, session=session)
+                    evaluated += 1
+                except Exception as exc:
+                    logger.warning("qs_eval_failed", plan_id=plan.id, error=str(exc))
+
+            await session.commit()
+    finally:
+        await engine.dispose()
+
+    logger.info("weekly_qs_improvement_check_done", created=created, evaluated=evaluated)
+    return {"created": created, "evaluated": evaluated}

@@ -94,6 +94,12 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.generate_weekly_insight_task",
                     "schedule": crontab(hour=8, minute=30, day_of_week="monday"),
                 },
+                "weekly-qs-improvement-check": {
+                    # Wednesday 5:00 AM UTC — auto-create plans for low-QS keywords,
+                    # evaluate plans past their measurement window, and digest results.
+                    "task": "adcopilot.interfaces.worker.tasks.weekly_qs_improvement_check_task",
+                    "schedule": crontab(hour=5, minute=0, day_of_week=3),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},
