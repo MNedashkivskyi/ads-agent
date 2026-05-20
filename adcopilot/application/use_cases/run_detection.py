@@ -108,6 +108,19 @@ class RunDetectionUseCase:
         # 3e. Pre-fetch landing pages for Rule 45 (best-effort, non-blocking)
         landing_page_results = await _fetch_landing_pages(snapshot.ads)
 
+        # 3f. Load GA4 page metrics if available (best-effort)
+        ga4_page_metrics = await _load_ga4_metrics(str(account_id), snapshot_date, self._snapshot_repo)
+
+        # 3g. Load 14-day auction insights for competitive rules (best-effort)
+        try:
+            auction_insights = await self._snapshot_repo.get_auction_insights(
+                account_id,
+                snapshot_date - timedelta(days=14),
+                snapshot_date,
+            )
+        except Exception:
+            auction_insights = []
+
         # 5. Build context
         ctx = DetectionContext(
             account=account,
@@ -132,6 +145,8 @@ class RunDetectionUseCase:
             campaign_extensions=campaign_extensions,
             sitelink_performance=sitelink_performance,
             landing_page_results=landing_page_results,
+            ga4_page_metrics=ga4_page_metrics,
+            auction_insights=auction_insights,
         )
 
         # 6. Run rule engine
@@ -260,3 +275,42 @@ async def _fetch_landing_pages(
             logger.warning("landing_page_prefetch_failed", url=url)
 
     return results
+
+
+async def _load_ga4_metrics(
+    account_id: str,
+    snapshot_date,
+    snapshot_repo,
+) -> dict:
+    """Load GA4 page metrics from DB for the detection context (best-effort)."""
+    try:
+        from sqlalchemy import select
+        from adcopilot.application.detection.base import GA4PageMetrics as GA4Metrics
+        from adcopilot.infrastructure.db.models import GA4PageSnapshotModel
+        import uuid
+
+        # snapshot_repo may not expose GA4 directly; use the underlying session
+        session = getattr(snapshot_repo, "_session", None)
+        if session is None:
+            return {}
+
+        result = await session.execute(
+            select(GA4PageSnapshotModel).where(
+                GA4PageSnapshotModel.account_id == uuid.UUID(account_id),
+                GA4PageSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        rows = list(result.scalars().all())
+        return {
+            r.page_path: GA4Metrics(
+                page_path=r.page_path,
+                sessions=r.sessions,
+                bounce_rate=r.bounce_rate,
+                avg_session_duration_sec=r.avg_session_duration_sec,
+                pages_per_session=r.pages_per_session,
+            )
+            for r in rows
+        }
+    except Exception as exc:
+        logger.warning("ga4_metrics_load_failed", account_id=account_id, error=str(exc))
+        return {}

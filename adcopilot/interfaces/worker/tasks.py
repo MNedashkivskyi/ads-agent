@@ -71,6 +71,9 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
             asyncio.run(_run_detection(settings, AccountId(account_id), snap_date))
             # Record QS history for trend tracking
             asyncio.run(_record_qs_history(settings, account_id, snap_date))
+            # Pull GA4 metrics if credentials are configured
+            snapshot_ga4_data_task.delay(account_id, snap_date.isoformat())
+            snapshot_auction_insights_task.delay(account_id, snap_date.isoformat())
         return {
             "account_id": account_id,
             "snapshot_date": snapshot_date_iso,
@@ -2215,3 +2218,242 @@ async def _run_conversion_reminders(settings: object) -> dict[str, object]:
 
     logger.info("conversion_reminders.done", sent=sent, skipped=skipped)
     return {"sent": sent, "skipped": skipped}
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.snapshot_ga4_data_task")  # type: ignore[untyped-decorator]
+def snapshot_ga4_data_task(account_id: str, snapshot_date_iso: str) -> dict:
+    """Pull GA4 page metrics for a given account and store in ga4_page_snapshots."""
+    import asyncio
+    from datetime import date as date_type
+
+    snap_date = date_type.fromisoformat(snapshot_date_iso)
+    result = asyncio.run(_run_ga4_snapshot(account_id, snap_date))
+    return result
+
+
+async def _run_ga4_snapshot(account_id: str, snap_date) -> dict:
+    import uuid as _uuid
+    from sqlalchemy import select
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.infrastructure.db.models import GA4CredentialsModel, GA4PageSnapshotModel
+    from adcopilot.infrastructure.ga4.queries_adapter import fetch_page_metrics
+    from cryptography.fernet import Fernet
+    import base64, hashlib
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            result = await session.execute(
+                select(GA4CredentialsModel).where(
+                    GA4CredentialsModel.account_id == _uuid.UUID(account_id)
+                )
+            )
+            creds = result.scalar_one_or_none()
+            if creds is None or not creds.property_id:
+                return {"skipped": True, "reason": "no_ga4_credentials"}
+
+            key = base64.urlsafe_b64encode(
+                hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest()
+            )
+            fernet = Fernet(key)
+            refresh_token = fernet.decrypt(creds.refresh_token_enc.encode()).decode()
+
+        metrics = await fetch_page_metrics(
+            property_id=creds.property_id,
+            refresh_token=refresh_token,
+            client_id=settings.GOOGLE_ADS_CLIENT_ID or "",
+            client_secret=settings.GOOGLE_ADS_CLIENT_SECRET or "",
+            snapshot_date=snap_date,
+        )
+        if not metrics:
+            return {"rows": 0}
+
+        rows = [
+            {
+                "id": _uuid.uuid4(),
+                "account_id": _uuid.UUID(account_id),
+                "snapshot_date": snap_date,
+                "page_path": m.page_path,
+                "sessions": m.sessions,
+                "bounce_rate": m.bounce_rate,
+                "avg_session_duration_sec": m.avg_session_duration_sec,
+                "pages_per_session": m.pages_per_session,
+            }
+            for m in metrics
+        ]
+        async with AsyncSession(engine) as session, session.begin():
+            stmt = pg_insert(GA4PageSnapshotModel).values(rows)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_ga4_page_snapshots_account_date_path",
+                set_={
+                    "sessions": stmt.excluded.sessions,
+                    "bounce_rate": stmt.excluded.bounce_rate,
+                    "avg_session_duration_sec": stmt.excluded.avg_session_duration_sec,
+                    "pages_per_session": stmt.excluded.pages_per_session,
+                },
+            )
+            await session.execute(stmt)
+        logger.info("ga4_snapshot_done", account_id=account_id, rows=len(rows))
+        return {"rows": len(rows)}
+    except Exception as exc:
+        logger.warning("ga4_snapshot_failed", account_id=account_id, error=str(exc))
+        return {"error": str(exc)}
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.snapshot_auction_insights_task")  # type: ignore[untyped-decorator]
+def snapshot_auction_insights_task(account_id: str, snapshot_date_iso: str) -> dict:
+    """Fetch and store Auction Insights for one account (weekly)."""
+    import asyncio
+    from datetime import date as date_type
+
+    snap_date = date_type.fromisoformat(snapshot_date_iso)
+    return asyncio.run(_run_auction_insights_snapshot(account_id, snap_date))
+
+
+async def _run_auction_insights_snapshot(account_id: str, snap_date) -> dict:
+    import uuid as _uuid
+    from sqlalchemy import select
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.infrastructure.db.models import AuctionInsightsSnapshotModel
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+    from cryptography.fernet import Fernet
+    import base64, hashlib
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            account = await account_repo.get(_uuid.UUID(account_id))
+            if account is None or not account.refresh_token:
+                return {"skipped": True, "reason": "no_account"}
+
+            key = base64.urlsafe_b64encode(
+                hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest()
+            )
+            fernet = Fernet(key)
+            refresh_token = fernet.decrypt(account.refresh_token.encode()).decode()
+            customer_id = account.customer_id
+
+        adapter = GoogleAdsQueriesAdapter(settings)
+        rows_data = await adapter.fetch_auction_insights(refresh_token, customer_id, snap_date)
+
+        if not rows_data:
+            return {"rows": 0}
+
+        rows = [
+            {
+                "id": _uuid.uuid4(),
+                "account_id": _uuid.UUID(account_id),
+                "campaign_id": r["campaign_id"],
+                "competitor_domain": r["competitor_domain"],
+                "impression_share": r["impression_share"],
+                "overlap_rate": r["overlap_rate"],
+                "position_above_rate": r["position_above_rate"],
+                "snapshot_date": snap_date,
+            }
+            for r in rows_data
+            if r.get("competitor_domain")
+        ]
+        if not rows:
+            return {"rows": 0}
+
+        async with AsyncSession(engine) as session, session.begin():
+            stmt = pg_insert(AuctionInsightsSnapshotModel).values(rows)
+            stmt = stmt.on_conflict_do_update(
+                constraint="uq_auction_insights_per_day",
+                set_={
+                    "impression_share": stmt.excluded.impression_share,
+                    "overlap_rate": stmt.excluded.overlap_rate,
+                    "position_above_rate": stmt.excluded.position_above_rate,
+                },
+            )
+            await session.execute(stmt)
+
+        logger.info("auction_insights_snapshot_done", account_id=account_id, rows=len(rows))
+        return {"rows": len(rows)}
+    except Exception as exc:
+        logger.warning("auction_insights_snapshot_failed", account_id=account_id, error=str(exc))
+        return {"error": str(exc)}
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.weekly_qs_improvement_check_task")
+def weekly_qs_improvement_check_task() -> dict:
+    """Weekly QS improvement check: auto-create plans and evaluate measuring ones."""
+    import asyncio
+    return asyncio.get_event_loop().run_until_complete(_weekly_qs_improvement_check())
+
+
+async def _weekly_qs_improvement_check() -> dict:
+    from datetime import UTC, datetime
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.qs_improvement_plan_repository import (
+        QSImprovementPlanRepository,
+    )
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    created = 0
+    evaluated = 0
+    try:
+        async with AsyncSession(engine) as session:
+            # 1. Auto-create plans for accounts with low-QS keywords and no active plan
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            all_accounts = await account_repo.list_active()
+            qs_repo = QSImprovementPlanRepository(session)
+            for account in all_accounts:
+                try:
+                    active = await qs_repo.list_active_for_account(str(account.id))
+                    if active:
+                        continue
+                    from adcopilot.application.use_cases.create_qs_improvement_plan import (
+                        create_qs_improvement_plan,
+                    )
+                    plan = await create_qs_improvement_plan(
+                        account_id=str(account.id), session=session
+                    )
+                    await qs_repo.save(plan)
+                    created += 1
+                except ValueError:
+                    pass
+                except Exception as exc:
+                    logger.warning("qs_auto_create_failed", account_id=str(account.id), error=str(exc))
+
+            # 2. Evaluate plans past their measurement window
+            now = datetime.now(UTC)
+            measuring = await qs_repo.list_measuring_past_window(now)
+            for plan in measuring:
+                try:
+                    from adcopilot.application.use_cases.evaluate_qs_improvement_plan import (
+                        evaluate_qs_improvement_plan,
+                    )
+                    await evaluate_qs_improvement_plan(plan_id=plan.id, session=session)
+                    evaluated += 1
+                except Exception as exc:
+                    logger.warning("qs_eval_failed", plan_id=plan.id, error=str(exc))
+
+            await session.commit()
+    finally:
+        await engine.dispose()
+
+    logger.info("weekly_qs_improvement_check_done", created=created, evaluated=evaluated)
+    return {"created": created, "evaluated": evaluated}

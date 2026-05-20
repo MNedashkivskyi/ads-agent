@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from collections import defaultdict
+from typing import Any
 
 from adcopilot.application.detection.base import DetectionContext
 from adcopilot.domain.recommendation import (
@@ -27,7 +27,6 @@ class AudienceBidAdjustmentRule:
         if not ctx.audience_performance:
             return []
 
-        # Compute account-wide conversion rate as baseline
         total_clicks = sum(k.clicks for k in ctx.keywords)
         total_convs = sum(k.conversions for k in ctx.keywords)
         if total_clicks == 0:
@@ -40,45 +39,48 @@ class AudienceBidAdjustmentRule:
         for aud in ctx.audience_performance:
             if aud.criterion_id in seen:
                 continue
-            if aud.impressions < _MIN_IMPRESSIONS:
+            if aud.impressions < _MIN_IMPRESSIONS or aud.clicks == 0:
                 continue
-            if aud.clicks == 0:
-                continue
-
-            aud_conv_rate = aud.conversions / aud.clicks
             if account_conv_rate == 0:
                 continue
 
+            aud_conv_rate = aud.conversions / aud.clicks
             lift = (aud_conv_rate - account_conv_rate) / account_conv_rate
             if lift < _MIN_CONV_RATE_LIFT:
                 continue
 
             seen.add(aud.criterion_id)
-            suggested_modifier = min(round(lift * 100), 150)  # cap at +150%
+            suggested_modifier = min(round(lift * 100), 150)
 
             recs.append(
                 Recommendation(
                     id=RecommendationId(str(uuid.uuid4())),
-                    account_id=aud.account_id,
+                    account_id=ctx.account.id,  # type: ignore[arg-type]
                     kind=self.kind,
                     severity=self.severity,
-                    status=RecommendationStatus.PENDING,
-                    title=f"Zwiększ stawkę dla grupy odbiorców (kryterium {aud.criterion_id})",
-                    description=(
-                        f"Ta grupa odbiorców osiąga współczynnik konwersji o {lift:.0%} wyższy "
-                        f"od średniej konta ({aud_conv_rate:.2%} vs {account_conv_rate:.2%}). "
-                        f"Sugerowane zwiększenie stawki: +{suggested_modifier}%."
-                    ),
-                    created_at=datetime.now(UTC),
-                    metadata={
+                    target={
                         "criterion_id": aud.criterion_id,
                         "campaign_id": aud.campaign_id,
                         "ad_group_id": aud.ad_group_id,
+                    },
+                    payload={
+                        "suggested_bid_modifier_pct": suggested_modifier,
                         "audience_conv_rate": round(aud_conv_rate, 4),
                         "account_conv_rate": round(account_conv_rate, 4),
                         "lift_pct": round(lift * 100, 1),
-                        "suggested_bid_modifier_pct": suggested_modifier,
                     },
+                    evidence={
+                        "criterion_id": aud.criterion_id,
+                        "impressions": aud.impressions,
+                        "clicks": aud.clicks,
+                        "conversions": aud.conversions,
+                        "audience_conv_rate": round(aud_conv_rate, 4),
+                        "account_conv_rate": round(account_conv_rate, 4),
+                        "lift_pct": round(lift * 100, 1),
+                    },
+                    estimated_monthly_savings_micros=0,
+                    created_at=datetime.now(tz=UTC),
+                    status=RecommendationStatus.PENDING,
                 )
             )
 

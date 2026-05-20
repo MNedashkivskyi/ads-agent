@@ -34,6 +34,8 @@ __all__ = [
     "DayOfWeekPerformanceSnapshotModel",
     "DevicePerformanceSnapshotModel",
     "DigestSentLogModel",
+    "GA4CredentialsModel",
+    "GA4PageSnapshotModel",
     "GeoPerformanceSnapshotModel",
     "GoogleAdsAccountModel",
     "HourPerformanceSnapshotModel",
@@ -57,8 +59,9 @@ __all__ = [
     "SitelinkPerformanceSnapshotModel",
     "SnapshotRunModel",
     "UserModel",
-        "ImplementationPartnerModel",
+    "ImplementationPartnerModel",
     "ImplementationRequestModel",
+    "QSImprovementPlanModel",
     "VerticalBenchmarkSnapshotModel",
 ]
 
@@ -1106,3 +1109,93 @@ class ImplementationRequestModel(Base):
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class GA4CredentialsModel(Base):
+    __tablename__ = "ga4_credentials"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, unique=True, index=True)
+    property_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    refresh_token_enc: Mapped[str] = mapped_column(Text, nullable=False)
+    access_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class GA4PageSnapshotModel(Base):
+    __tablename__ = "ga4_page_snapshots"
+    __table_args__ = (
+        Index(
+            "uq_ga4_page_snapshots_account_date_path",
+            "account_id",
+            "snapshot_date",
+            "page_path",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    page_path: Mapped[str] = mapped_column(Text, nullable=False)
+    sessions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    bounce_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_session_duration_sec: Mapped[float | None] = mapped_column(Float, nullable=True)
+    pages_per_session: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class AuctionInsightsSnapshotModel(Base):
+    __tablename__ = "auction_insights_snapshots"
+    __table_args__ = (
+        Index(
+            "uq_auction_insights_per_day",
+            "account_id",
+            "campaign_id",
+            "competitor_domain",
+            "snapshot_date",
+            unique=True,
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    campaign_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    competitor_domain: Mapped[str] = mapped_column(Text, nullable=False)
+    impression_share: Mapped[float | None] = mapped_column(Float, nullable=True)
+    overlap_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    position_above_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class QSImprovementPlanModel(Base):
+    __tablename__ = "qs_improvement_plans"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    keyword_criterion_ids: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    target_ad_group_resource_name: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    current_avg_qs: Mapped[float | None] = mapped_column(Float, nullable=True)
+    target_qs: Mapped[float] = mapped_column(Float, nullable=False, default=7.0)
+    bottleneck_component: Mapped[str] = mapped_column(String(64), nullable=False)
+    prescribed_actions: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="PROPOSED", index=True)
+    baseline_metrics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    current_metrics: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    evaluation_summary_pl: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    measurement_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
