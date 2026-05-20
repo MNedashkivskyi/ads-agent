@@ -105,6 +105,7 @@ from adcopilot.application.detection.rules.rule_49_pmax_low_roas import PMaxLowR
 from adcopilot.application.detection.rules.rule_50_pmax_asset_disapproved import PMaxAssetDisapprovedRule
 from adcopilot.application.detection.rules.new_competitor import NewCompetitorRule
 from adcopilot.application.detection.rules.competitor_aggression import CompetitorAggressionRule
+from adcopilot.application.detection.rules.rule_51_qs_improvement_opportunity import QSImprovementOpportunityRule
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
@@ -192,6 +193,8 @@ def build_rule_engine(
         # Module 12 — Competitive monitoring
         NewCompetitorRule(),
         CompetitorAggressionRule(),
+        # Module 13 — QS improvement orchestration
+        QSImprovementOpportunityRule(),
     ]
     if not has_working_tracking:
         rules = [r for r in rules if type(r).__name__ not in _CONVERSION_DEPENDENT_RULES]
