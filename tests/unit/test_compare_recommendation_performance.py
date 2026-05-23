@@ -71,7 +71,12 @@ async def test_creates_comparison_for_7_and_14_days() -> None:
     comparison_repo.save = AsyncMock()
 
     async def _fetcher(account_id, entity_type, entity_id):
-        return {"cost_micros": 400_000_000, "clicks": 200, "impressions": 10_000, "conversions": 10.0}
+        return {
+            "cost_micros": 400_000_000,
+            "clicks": 200,
+            "impressions": 10_000,
+            "conversions": 10.0,
+        }
 
     use_case = CompareRecommendationPerformanceUseCase(
         rec_repo=rec_repo,

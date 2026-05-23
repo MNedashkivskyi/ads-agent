@@ -3,25 +3,24 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from adcopilot.application.ports.campaign_writer import CreatedPMaxResources
 from adcopilot.application.ports.google_ads import MerchantCenterLink
 from adcopilot.application.use_cases.create_pmax_campaign import (
     CreatePMaxCampaignInput,
     CreatePMaxCampaignUseCase,
-    _parse_assets,
     _audience_signal_names,
+    _parse_assets,
     _truncate,
 )
-from adcopilot.application.ports.campaign_writer import CreatedPMaxResources
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_prompt_repo(content: str = "system prompt") -> AsyncMock:
     repo = AsyncMock()
@@ -53,7 +52,9 @@ def _make_input(**kwargs) -> CreatePMaxCampaignInput:
     defaults = dict(
         customer_id="1234567890",
         refresh_token="rt",
-        merchant_center_link=MerchantCenterLink(merchant_id=42, account_name="Sklep", status="ENABLED"),
+        merchant_center_link=MerchantCenterLink(
+            merchant_id=42, account_name="Sklep", status="ENABLED"
+        ),
         monthly_budget_pln=1500.0,
         product_focus="all",
         campaign_name="Testowy Sklep",
@@ -68,11 +69,17 @@ def _make_input(**kwargs) -> CreatePMaxCampaignInput:
 # Unit tests — _parse_assets
 # ---------------------------------------------------------------------------
 
+
 def test_parse_assets_valid_json():
-    raw = json.dumps({
-        "headlines": ["Świetne produkty", "Sprawdź ofertę", "Kup teraz taniej"],
-        "descriptions": ["Szeroki wybór produktów dla całej rodziny.", "Zamów teraz i odbierz szybko."],
-    })
+    raw = json.dumps(
+        {
+            "headlines": ["Świetne produkty", "Sprawdź ofertę", "Kup teraz taniej"],
+            "descriptions": [
+                "Szeroki wybór produktów dla całej rodziny.",
+                "Zamów teraz i odbierz szybko.",
+            ],
+        }
+    )
     h, d = _parse_assets(raw, "fallback", "https://x.pl")
     assert h == ["Świetne produkty", "Sprawdź ofertę", "Kup teraz taniej"]
     assert len(d) == 2
@@ -80,10 +87,12 @@ def test_parse_assets_valid_json():
 
 def test_parse_assets_truncates_long_headlines():
     long_headline = "A" * 50
-    raw = json.dumps({
-        "headlines": [long_headline, "B" * 50, "C" * 50],
-        "descriptions": ["Opis jeden wystarczająco długi tekst.", "Opis dwa."],
-    })
+    raw = json.dumps(
+        {
+            "headlines": [long_headline, "B" * 50, "C" * 50],
+            "descriptions": ["Opis jeden wystarczająco długi tekst.", "Opis dwa."],
+        }
+    )
     h, d = _parse_assets(raw, "fallback", "https://x.pl")
     assert all(len(hl) <= 30 for hl in h)
 
@@ -112,6 +121,7 @@ def test_truncate():
 # Unit tests — _audience_signal_names
 # ---------------------------------------------------------------------------
 
+
 def test_audience_signal_names_ecommerce():
     names = _audience_signal_names("ecommerce", "111")
     assert len(names) > 0
@@ -127,12 +137,18 @@ def test_audience_signal_names_unknown_vertical_falls_back_to_ecommerce():
 # Use case integration tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_execute_creates_paused_campaign():
-    llm_response = json.dumps({
-        "headlines": ["Sklep Testowy", "Odkryj produkty", "Kup taniej dzisiaj"],
-        "descriptions": ["Szeroki wybór dla każdego klienta.", "Szybka dostawa, darmowe zwroty."],
-    })
+    llm_response = json.dumps(
+        {
+            "headlines": ["Sklep Testowy", "Odkryj produkty", "Kup taniej dzisiaj"],
+            "descriptions": [
+                "Szeroki wybór dla każdego klienta.",
+                "Szybka dostawa, darmowe zwroty.",
+            ],
+        }
+    )
     llm = _make_llm(llm_response)
     prompt_repo = _make_prompt_repo()
     writer = _make_writer()
@@ -156,10 +172,14 @@ async def test_execute_creates_paused_campaign():
 
 @pytest.mark.asyncio
 async def test_execute_budget_conversion():
-    llm = _make_llm(json.dumps({
-        "headlines": ["H1", "H2", "H3"],
-        "descriptions": ["D1 opis długi wystarczająco.", "D2 opis."],
-    }))
+    llm = _make_llm(
+        json.dumps(
+            {
+                "headlines": ["H1", "H2", "H3"],
+                "descriptions": ["D1 opis długi wystarczająco.", "D2 opis."],
+            }
+        )
+    )
     writer = _make_writer()
     uc = CreatePMaxCampaignUseCase(llm=llm, prompt_repo=_make_prompt_repo(), pmax_writer=writer)
     await uc.execute(_make_input(monthly_budget_pln=3000.0))
@@ -183,10 +203,14 @@ async def test_execute_raises_when_prompt_missing():
 
 @pytest.mark.asyncio
 async def test_execute_audience_signals_set():
-    llm = _make_llm(json.dumps({
-        "headlines": ["Sklep", "Oferta", "Kup teraz"],
-        "descriptions": ["Opis produktów w sklepie.", "Zamów teraz."],
-    }))
+    llm = _make_llm(
+        json.dumps(
+            {
+                "headlines": ["Sklep", "Oferta", "Kup teraz"],
+                "descriptions": ["Opis produktów w sklepie.", "Zamów teraz."],
+            }
+        )
+    )
     writer = _make_writer()
     uc = CreatePMaxCampaignUseCase(llm=llm, prompt_repo=_make_prompt_repo(), pmax_writer=writer)
     await uc.execute(_make_input(vertical="ecommerce", customer_id="999"))

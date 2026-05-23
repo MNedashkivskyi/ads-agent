@@ -9,13 +9,12 @@ import pytest
 
 from adcopilot.application.detection.base import DetectionContext, HistoricalStats
 from adcopilot.application.detection.rules.rule_48_above_vertical_benchmark import (
-    AboveVerticalBenchmarkRule,
     _P75_MULTIPLIER,
+    AboveVerticalBenchmarkRule,
 )
-from adcopilot.domain.benchmarking import AccountMetrics, VerticalBenchmarkSnapshot, BenchmarkId
+from adcopilot.domain.benchmarking import BenchmarkId, VerticalBenchmarkSnapshot
 from adcopilot.domain.entities import AccountId, GoogleAdsAccount, UserId
 from adcopilot.domain.recommendation import RecommendationKind
-
 
 _WEEK = date(2026, 4, 20)
 _NOW = datetime(2026, 4, 22, tzinfo=UTC)
@@ -43,7 +42,9 @@ def _history(avg_cpa_micros: int) -> HistoricalStats:
     )
 
 
-def _benchmark(p75_cpa_micros: int, median_cpa_micros: int = 2_000_000) -> VerticalBenchmarkSnapshot:
+def _benchmark(
+    p75_cpa_micros: int, median_cpa_micros: int = 2_000_000
+) -> VerticalBenchmarkSnapshot:
     return VerticalBenchmarkSnapshot(
         id=BenchmarkId(str(uuid4())),
         vertical="salon",

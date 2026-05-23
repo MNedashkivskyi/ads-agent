@@ -78,4 +78,5 @@ async def test_bid_modifier_clamped_upper_bound() -> None:
 
 def test_device_bid_adjustment_removed_from_non_executable() -> None:
     from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS
+
     assert RecommendationKind.DEVICE_BID_ADJUSTMENT not in NON_EXECUTABLE_KINDS

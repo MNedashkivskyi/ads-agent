@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -15,7 +14,9 @@ from adcopilot.infrastructure.landing_page.pagespeed_adapter import (
 )
 
 
-def _make_psi_response(perf: float = 0.85, acc: float = 0.9, seo: float = 0.95, bp: float = 0.8) -> dict:
+def _make_psi_response(
+    perf: float = 0.85, acc: float = 0.9, seo: float = 0.95, bp: float = 0.8
+) -> dict:
     return {
         "id": "https://example.com/",
         "loadingExperience": {"overall_category": "FAST"},

@@ -30,9 +30,7 @@ class AddAudienceSignalsRule:
 
     def detect(self, ctx: DetectionContext) -> list[Recommendation]:
         # Build set of campaign_ids that already have at least one audience.
-        campaigns_with_audience: set[int] = {
-            row.campaign_id for row in ctx.audience_performance
-        }
+        campaigns_with_audience: set[int] = {row.campaign_id for row in ctx.audience_performance}
 
         recs: list[Recommendation] = []
 

@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from adcopilot.application.executors.refresh_ad_copy import AdCopyRefreshExecutor
-from adcopilot.domain.ad_copy_proposal import AdCopyProposal
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.recommendation import (
     Recommendation,
@@ -19,11 +18,13 @@ from adcopilot.domain.recommendation import (
     RecommendationStatus,
 )
 
-_SAMPLE_JSON = json.dumps([
-    {"headlines": ["H1", "H2", "H3"], "descriptions": ["D1", "D2"]},
-    {"headlines": ["H4", "H5", "H6"], "descriptions": ["D3", "D4"]},
-    {"headlines": ["H7", "H8", "H9"], "descriptions": ["D5", "D6"]},
-])
+_SAMPLE_JSON = json.dumps(
+    [
+        {"headlines": ["H1", "H2", "H3"], "descriptions": ["D1", "D2"]},
+        {"headlines": ["H4", "H5", "H6"], "descriptions": ["D3", "D4"]},
+        {"headlines": ["H7", "H8", "H9"], "descriptions": ["D5", "D6"]},
+    ]
+)
 
 
 def _make_rec(evidence: dict) -> Recommendation:
@@ -46,7 +47,9 @@ def _make_executor() -> tuple[AdCopyRefreshExecutor, AsyncMock, AsyncMock]:
     llm.complete.return_value = _SAMPLE_JSON
     prompt_repo = AsyncMock()
     pv = MagicMock()
-    pv.content = "{campaign_name} {vertical} {keyword_themes} {existing_headlines} {existing_descriptions}"
+    pv.content = (
+        "{campaign_name} {vertical} {keyword_themes} {existing_headlines} {existing_descriptions}"
+    )
     prompt_repo.get_latest.return_value = pv
     executor = AdCopyRefreshExecutor(llm=llm, prompt_repo=prompt_repo)
     return executor, llm, prompt_repo

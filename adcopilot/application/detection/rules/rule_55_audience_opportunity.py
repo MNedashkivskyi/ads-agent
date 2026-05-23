@@ -36,10 +36,7 @@ class AudienceOpportunityRule:
             return []
 
         # Compute average conv_rate across all audience rows with sufficient clicks
-        eligible = [
-            r for r in rows
-            if (getattr(r, "clicks", 0) or 0) >= _MIN_CLICKS
-        ]
+        eligible = [r for r in rows if (getattr(r, "clicks", 0) or 0) >= _MIN_CLICKS]
         if not eligible:
             return []
 

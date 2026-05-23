@@ -19,7 +19,9 @@ class AddNegativeKeywordExecutor:
         customer_id: str,
     ) -> dict[str, Any]:
         ad_group_id = int(rec.target["ad_group_id"])
-        keyword_text: str = str(rec.payload.get("negative_keyword", rec.target.get("search_term", "")))
+        keyword_text: str = str(
+            rec.payload.get("negative_keyword", rec.target.get("search_term", ""))
+        )
         match_type: str = str(rec.payload.get("match_type", "EXACT"))
         await mutations.add_ad_group_negative_keyword(
             refresh_token=refresh_token,

@@ -10,9 +10,9 @@ down_revision = "0034"
 branch_labels = None
 depends_on = None
 
-from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB
+import sqlalchemy as sa  # noqa: E402
+from alembic import op  # noqa: E402
+from sqlalchemy.dialects.postgresql import JSONB  # noqa: E402
 
 
 def upgrade() -> None:

@@ -75,9 +75,7 @@ def _make_uc(
 @pytest.mark.asyncio
 async def test_skips_when_no_pending_recommendations() -> None:
     uc = _make_uc(recs=[])
-    result = await uc.execute(
-        user_id=_USER_ID, account_ids=[_ACCOUNT_ID], today=_TODAY
-    )
+    result = await uc.execute(user_id=_USER_ID, account_ids=[_ACCOUNT_ID], today=_TODAY)
     assert result == DigestResult(sent=False, count=0, reason="no_recommendations")
 
 
@@ -89,9 +87,7 @@ async def test_skips_when_no_pending_recommendations() -> None:
 @pytest.mark.asyncio
 async def test_skips_when_already_sent_today() -> None:
     uc = _make_uc(recs=[_rec()], already_sent=True)
-    result = await uc.execute(
-        user_id=_USER_ID, account_ids=[_ACCOUNT_ID], today=_TODAY
-    )
+    result = await uc.execute(user_id=_USER_ID, account_ids=[_ACCOUNT_ID], today=_TODAY)
     assert result == DigestResult(sent=False, count=0, reason="already_sent")
 
 
@@ -104,9 +100,7 @@ async def test_skips_when_already_sent_today() -> None:
 async def test_sends_top_5_when_more_available() -> None:
     recs = [_rec(savings_micros=i * 1_000_000) for i in range(10)]
     uc = _make_uc(recs=recs)
-    result = await uc.execute(
-        user_id=_USER_ID, account_ids=[_ACCOUNT_ID], today=_TODAY
-    )
+    result = await uc.execute(user_id=_USER_ID, account_ids=[_ACCOUNT_ID], today=_TODAY)
     assert result.sent is True
     assert result.count == 5
 
@@ -115,9 +109,7 @@ async def test_sends_top_5_when_more_available() -> None:
 async def test_sends_all_when_fewer_than_5() -> None:
     recs = [_rec() for _ in range(3)]
     uc = _make_uc(recs=recs)
-    result = await uc.execute(
-        user_id=_USER_ID, account_ids=[_ACCOUNT_ID], today=_TODAY
-    )
+    result = await uc.execute(user_id=_USER_ID, account_ids=[_ACCOUNT_ID], today=_TODAY)
     assert result.sent is True
     assert result.count == 3
 
@@ -159,9 +151,7 @@ async def test_records_digest_log_after_send() -> None:
         rec_repo=_make_rec_repo([rec]),
         digest_log_repo=digest_log,
     )
-    await uc.execute(
-        user_id=_USER_ID, account_ids=[_ACCOUNT_ID], today=_TODAY
-    )
+    await uc.execute(user_id=_USER_ID, account_ids=[_ACCOUNT_ID], today=_TODAY)
     digest_log.record.assert_awaited_once()
     call_args = digest_log.record.call_args
     assert call_args.args[0] == _USER_ID

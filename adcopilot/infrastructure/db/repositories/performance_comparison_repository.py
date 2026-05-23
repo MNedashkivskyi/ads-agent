@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from adcopilot.domain.performance_tracking import PerformanceBaseline, PerformanceComparison
+from adcopilot.domain.performance_tracking import PerformanceComparison
 from adcopilot.domain.recommendation import RecommendationId
 from adcopilot.infrastructure.db.models import PerformanceComparisonModel
 
@@ -63,8 +63,11 @@ class SqlPerformanceComparisonRepository:
         )
         return result.scalar_one_or_none() is not None
 
-    async def list_for_account(self, account_id: str, limit: int = 50) -> list[PerformanceComparison]:
+    async def list_for_account(
+        self, account_id: str, limit: int = 50
+    ) -> list[PerformanceComparison]:
         from adcopilot.infrastructure.db.models import RecommendationModel
+
         result = await self._session.execute(
             select(PerformanceComparisonModel)
             .join(

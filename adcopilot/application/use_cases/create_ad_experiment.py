@@ -38,10 +38,10 @@ class CreateAdExperimentUseCase:
         self._repo = experiment_repo
 
     async def execute(self, req: ExperimentCreateRequest) -> ExperimentCreateResult:
-        from adcopilot.infrastructure.google_ads.mutations_adapter import GoogleAdsMutationsAdapter
         from adcopilot.infrastructure.db.repositories.ad_experiment_repository import (
             AdExperimentRepository,
         )
+        from adcopilot.infrastructure.google_ads.mutations_adapter import GoogleAdsMutationsAdapter
 
         assert isinstance(self._mutations, GoogleAdsMutationsAdapter)
         assert isinstance(self._repo, AdExperimentRepository)

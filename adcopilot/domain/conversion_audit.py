@@ -7,10 +7,10 @@ from adcopilot.domain.entities import AccountId
 
 
 class ConversionActionHealth(StrEnum):
-    HEALTHY = "healthy"     # ENABLED + conversions > 0 last 7d
-    STALE = "stale"         # ENABLED + conversions = 0 last 7d
-    DISABLED = "disabled"   # REMOVED or HIDDEN
-    MISSING = "missing"     # no conversion actions at all
+    HEALTHY = "healthy"  # ENABLED + conversions > 0 last 7d
+    STALE = "stale"  # ENABLED + conversions = 0 last 7d
+    DISABLED = "disabled"  # REMOVED or HIDDEN
+    MISSING = "missing"  # no conversion actions at all
 
 
 @dataclass(frozen=True)

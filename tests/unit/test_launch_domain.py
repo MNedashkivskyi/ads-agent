@@ -172,7 +172,9 @@ def test_keyword_proposal_frozen() -> None:
 
 
 def test_keyword_proposal_fields() -> None:
-    kw = make_keyword(text="running trainers", match_type=MatchType.BROAD, estimated_cpc_micros=500_000)
+    kw = make_keyword(
+        text="running trainers", match_type=MatchType.BROAD, estimated_cpc_micros=500_000
+    )
     assert kw.text == "running trainers"
     assert kw.match_type is MatchType.BROAD
     assert kw.estimated_cpc_micros == 500_000
@@ -307,9 +309,7 @@ def test_domain_has_no_fastapi_imports() -> None:
     forbidden = ("fastapi", "sqlalchemy", "google.ads")
     pkg_path = pkg.__path__
 
-    for _, module_name, _ in pkgutil.walk_packages(
-        path=pkg_path, prefix=pkg.__name__ + "."
-    ):
+    for _, module_name, _ in pkgutil.walk_packages(path=pkg_path, prefix=pkg.__name__ + "."):
         mod = importlib.import_module(module_name)
         for attr in dir(mod):
             if attr.startswith("__"):

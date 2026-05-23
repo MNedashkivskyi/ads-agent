@@ -30,7 +30,9 @@ def upgrade() -> None:
         sa.Column("payload", postgresql.JSONB(), nullable=False),
         sa.Column("evidence", postgresql.JSONB(), nullable=False),
         sa.Column("target_hash", sa.String(64), nullable=False),
-        sa.Column("estimated_monthly_savings_micros", sa.BigInteger(), nullable=False, server_default="0"),
+        sa.Column(
+            "estimated_monthly_savings_micros", sa.BigInteger(), nullable=False, server_default="0"
+        ),
         sa.Column("explanation", sa.Text(), nullable=True),
         sa.Column(
             "created_at",

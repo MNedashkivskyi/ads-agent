@@ -73,7 +73,7 @@ async def list_experiments(
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-    from adcopilot.domain.entities import AccountId, UserId
+    from adcopilot.domain.entities import UserId
     from adcopilot.infrastructure.db.repositories.ad_experiment_repository import (
         AdExperimentRepository,
     )

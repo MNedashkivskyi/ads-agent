@@ -28,6 +28,7 @@ _N_DESCRIPTIONS = 2
 # Ports
 # ---------------------------------------------------------------------------
 
+
 class LLMClientPort(Protocol):
     async def complete(self, system: str, user: str, max_tokens: int = 512) -> str: ...
 
@@ -48,6 +49,7 @@ class PMaxCampaignWriterPort(Protocol):
 # ---------------------------------------------------------------------------
 # Input / Output
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class CreatePMaxCampaignInput:
@@ -73,6 +75,7 @@ class CreatePMaxCampaignResult:
 # Use case
 # ---------------------------------------------------------------------------
 
+
 class CreatePMaxCampaignUseCase:
     def __init__(
         self,
@@ -88,7 +91,9 @@ class CreatePMaxCampaignUseCase:
         # 1. Load versioned prompt (CCR-5)
         prompt_version = await self._prompt_repo.get_latest("pmax_asset_generation_v1")
         if prompt_version is None:
-            raise RuntimeError("Prompt 'pmax_asset_generation_v1' not found in prompt_versions table")
+            raise RuntimeError(
+                "Prompt 'pmax_asset_generation_v1' not found in prompt_versions table"
+            )
         system_prompt: str = prompt_version.content
 
         # 2. Generate headlines + descriptions via LLM (CCR-6 — Polish output)
@@ -149,6 +154,7 @@ class CreatePMaxCampaignUseCase:
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _truncate(text: str, max_len: int) -> str:
     return text[:max_len].rstrip()
 
@@ -159,8 +165,12 @@ def _parse_assets(raw: str, fallback_name: str, final_url: str) -> tuple[list[st
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if match:
             data = json.loads(match.group())
-            headlines = [_truncate(h, _MAX_HEADLINE_LEN) for h in data.get("headlines", [])][:_N_HEADLINES]
-            descriptions = [_truncate(d, _MAX_DESC_LEN) for d in data.get("descriptions", [])][:_N_DESCRIPTIONS]
+            headlines = [_truncate(h, _MAX_HEADLINE_LEN) for h in data.get("headlines", [])][
+                :_N_HEADLINES
+            ]
+            descriptions = [_truncate(d, _MAX_DESC_LEN) for d in data.get("descriptions", [])][
+                :_N_DESCRIPTIONS
+            ]
             if len(headlines) == _N_HEADLINES and len(descriptions) == _N_DESCRIPTIONS:
                 return headlines, descriptions
     except Exception:
@@ -183,7 +193,4 @@ def _parse_assets(raw: str, fallback_name: str, final_url: str) -> tuple[list[st
 def _audience_signal_names(vertical: str, customer_id: str) -> list[str]:
     """Return Google Ads in-market audience criterion resource names for the vertical."""
     signals = VERTICAL_AUDIENCES.get(vertical.lower(), VERTICAL_AUDIENCES.get("ecommerce", []))
-    return [
-        f"customers/{customer_id}/userInterests/{sig.segment_id}"
-        for sig in signals
-    ]
+    return [f"customers/{customer_id}/userInterests/{sig.segment_id}" for sig in signals]

@@ -22,7 +22,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from adcopilot.domain.launch.entities import RemarketingCampaignProposal
 
 import structlog
 
@@ -33,7 +36,6 @@ from adcopilot.domain.audit_log import AuditLog, AuditLogId
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
 from adcopilot.domain.launch.audience_signals import AudienceSignal
-from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -44,6 +46,7 @@ from adcopilot.domain.launch.entities import (
     SitelinkProposal,
     StructuredSnippetProposal,
 )
+from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
 from adcopilot.domain.recommendation import RecommendationId
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
 
@@ -123,9 +126,7 @@ class CampaignWriter:
             budget = budget_op.create
             budget.name = f"{proposal.campaign_name} Budget"
             budget.amount_micros = proposal.daily_budget_micros
-            budget.delivery_method = (
-                client.enums.BudgetDeliveryMethodEnum.STANDARD
-            )
+            budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
 
             budget_response = budget_service.mutate_campaign_budgets(
                 customer_id=cid, operations=[budget_op]
@@ -139,9 +140,7 @@ class CampaignWriter:
             campaign.name = proposal.campaign_name
             campaign.status = client.enums.CampaignStatusEnum.PAUSED
             campaign.campaign_budget = budget_rn
-            campaign.advertising_channel_type = (
-                client.enums.AdvertisingChannelTypeEnum.SEARCH
-            )
+            campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
 
             strategy = proposal.bidding_strategy.upper().replace(" ", "_")
             _STRATEGY_MAP = {
@@ -217,9 +216,7 @@ class CampaignWriter:
                 ag.type_ = client.enums.AdGroupTypeEnum.SEARCH_STANDARD
                 operations.append(op)
 
-            response = ag_service.mutate_ad_groups(
-                customer_id=cid, operations=operations
-            )
+            response = ag_service.mutate_ad_groups(customer_id=cid, operations=operations)
             rns = [r.resource_name for r in response.results]
 
             logger.info(
@@ -292,8 +289,7 @@ class CampaignWriter:
                     "ad_group_resource_name": ad_group_resource_name,
                     "keyword_resource_names": rns,
                     "keywords": [
-                        {"text": k.text, "match_type": k.match_type}
-                        for k in keyword_proposals
+                        {"text": k.text, "match_type": k.match_type} for k in keyword_proposals
                     ],
                 },
             )
@@ -415,9 +411,7 @@ class CampaignWriter:
                 criterion.campaign = campaign_resource_name
                 criterion.negative = True
                 criterion.keyword.text = text
-                criterion.keyword.match_type = (
-                    client.enums.KeywordMatchTypeEnum.BROAD
-                )
+                criterion.keyword.match_type = client.enums.KeywordMatchTypeEnum.BROAD
                 operations.append(op)
 
             response = criterion_service.mutate_campaign_criteria(
@@ -496,9 +490,7 @@ class CampaignWriter:
                     asset.structured_snippet_asset.values.append(v)
                 asset_ops.append(op)
 
-            asset_response = asset_service.mutate_assets(
-                customer_id=cid, operations=asset_ops
-            )
+            asset_response = asset_service.mutate_assets(customer_id=cid, operations=asset_ops)
             asset_rns = [r.resource_name for r in asset_response.results]
 
             # Determine field types for linking
@@ -513,7 +505,7 @@ class CampaignWriter:
 
             # Link assets to campaign
             ca_ops: list[Any] = []
-            for asset_rn, field_type in zip(asset_rns, field_types):
+            for asset_rn, field_type in zip(asset_rns, field_types, strict=False):
                 op = client.get_type("CampaignAssetOperation")
                 ca = op.create
                 ca.campaign = campaign_resource_name
@@ -593,9 +585,7 @@ class CampaignWriter:
                 sched.end_minute = _MINUTE_MAP.get(entry.end_minute, 0)
                 ops.append(op)
 
-            response = cc_service.mutate_campaign_criteria(
-                customer_id=cid, operations=ops
-            )
+            response = cc_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
             resource_names = [r.resource_name for r in response.results]
 
             logger.info(
@@ -627,7 +617,7 @@ class CampaignWriter:
         self,
         customer_id: str,
         refresh_token: str,
-        proposal: "CampaignProposal",
+        proposal: CampaignProposal,
     ) -> tuple[str, str]:
         """Create a separate Brand Search campaign (MAXIMIZE_CLICKS, exact-match brand keywords).
 
@@ -766,9 +756,7 @@ class CampaignWriter:
                     )
                     ops.append(op)
 
-            response = agc_service.mutate_ad_group_criteria(
-                customer_id=cid, operations=ops
-            )
+            response = agc_service.mutate_ad_group_criteria(customer_id=cid, operations=ops)
             resource_names = [r.resource_name for r in response.results]
 
             logger.info(
@@ -800,14 +788,12 @@ class CampaignWriter:
         self,
         customer_id: str,
         refresh_token: str,
-        proposal: "RemarketingCampaignProposal",
+        proposal: RemarketingCampaignProposal,
     ) -> tuple[str, str]:
         """Create a PAUSED Display Remarketing campaign + shared budget.
 
         Returns (campaign_resource_name, budget_resource_name).
         """
-        from adcopilot.domain.launch.entities import RemarketingCampaignProposal  # noqa: F401
-
         try:
             client = self._build_client(refresh_token)
             cid = self._cid(customer_id)
@@ -830,9 +816,7 @@ class CampaignWriter:
             campaign_op = client.get_type("CampaignOperation")
             campaign = campaign_op.create
             campaign.name = proposal.campaign_name
-            campaign.advertising_channel_type = (
-                client.enums.AdvertisingChannelTypeEnum.DISPLAY
-            )
+            campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.DISPLAY
             campaign.status = client.enums.CampaignStatusEnum.PAUSED
             campaign.campaign_budget = budget_rn
             campaign.bidding_strategy_type = (
@@ -928,9 +912,7 @@ class CampaignWriter:
                 criterion.user_list.user_list = f"customers/{cid}/userLists/{user_list_id}"
                 ops.append(op)
 
-            response = agc_service.mutate_ad_group_criteria(
-                customer_id=cid, operations=ops
-            )
+            response = agc_service.mutate_ad_group_criteria(customer_id=cid, operations=ops)
             resource_names = [r.resource_name for r in response.results]
 
             logger.info(
@@ -979,6 +961,7 @@ class CampaignWriter:
             campaign.resource_name = campaign_resource_name
             campaign.status = client.enums.CampaignStatusEnum.ENABLED
             from google.protobuf import field_mask_pb2
+
             op.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
             campaign_service.mutate_campaigns(customer_id=cid, operations=[op])
 

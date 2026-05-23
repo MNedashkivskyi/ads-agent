@@ -21,7 +21,6 @@ are not created here. Headlines/descriptions are TEXT_ASSET type.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 import structlog
@@ -43,6 +42,7 @@ def _wrap_exc(exc: Exception) -> Exception:
     error_str = str(exc).lower()
     if "quota" in error_str or "resource exhausted" in error_str:
         from adcopilot.domain.exceptions import GoogleAdsRateLimited
+
         return GoogleAdsRateLimited(str(exc))
     return GoogleAdsUnavailable(str(exc))
 
@@ -55,6 +55,7 @@ class PMaxCampaignWriter:
 
     def _build_client(self, refresh_token: str) -> Any:
         from types import SimpleNamespace
+
         raw = GoogleAdsClientAdapter(self._settings)._build_client(refresh_token)
         return SimpleNamespace(client=raw)
 
@@ -79,9 +80,7 @@ class PMaxCampaignWriter:
             logger.info("pmax: budget created", resource=budget_rn)
 
             # 2. Campaign (PERFORMANCE_MAX, PAUSED)
-            campaign_rn = await self._create_campaign(
-                adapter, customer_id, proposal, budget_rn
-            )
+            campaign_rn = await self._create_campaign(adapter, customer_id, proposal, budget_rn)
             logger.info("pmax: campaign created", resource=campaign_rn)
 
             # 3. AssetGroups with text assets + listing group filter
@@ -152,14 +151,10 @@ class PMaxCampaignWriter:
         campaign_operation = client.get_type("CampaignOperation")
         campaign = campaign_operation.create
         campaign.name = proposal.campaign_name
-        campaign.advertising_channel_type = (
-            client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
-        )
+        campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
         campaign.status = client.enums.CampaignStatusEnum.PAUSED
         campaign.campaign_budget = budget_resource_name
-        campaign.bidding_strategy_type = (
-            client.enums.BiddingStrategyTypeEnum.MAXIMIZE_CONVERSIONS
-        )
+        campaign.bidding_strategy_type = client.enums.BiddingStrategyTypeEnum.MAXIMIZE_CONVERSIONS
         # Link to Merchant Center (shopping_setting)
         campaign.shopping_setting.merchant_id = proposal.merchant_center_feed_id
 
@@ -230,9 +225,7 @@ class PMaxCampaignWriter:
                     else client.enums.AssetFieldTypeEnum.DESCRIPTION
                 )
                 link_ops.append(link_op)
-            link_service.mutate_asset_group_assets(
-                customer_id=customer_id, operations=link_ops
-            )
+            link_service.mutate_asset_group_assets(customer_id=customer_id, operations=link_ops)
 
         # Add catch-all listing group filter (all products)
         lg_service = client.get_service("AssetGroupListingGroupFilterService")
@@ -263,9 +256,7 @@ class PMaxCampaignWriter:
             signal.audience.audience = rn
             ops.append(op)
         if ops:
-            signal_service.mutate_asset_group_signals(
-                customer_id=customer_id, operations=ops
-            )
+            signal_service.mutate_asset_group_signals(customer_id=customer_id, operations=ops)
 
     async def _rollback(
         self,

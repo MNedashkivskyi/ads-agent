@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from datetime import date
+from datetime import UTC, date
 from typing import Any
 
 import structlog
@@ -206,9 +206,9 @@ async def list_conversion_actions(
     Uses a single GAQL query with a 7-day date range (CCR-1).
     Returns an empty list for accounts with zero conversion actions.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     seven_days_ago = today - timedelta(days=7)
     date_range = f"'{seven_days_ago}' AND '{today}'"
 
@@ -267,9 +267,9 @@ async def list_recent_search_terms(
     Results are ordered by cost_micros descending, capped at *limit* rows.
     Returns an empty list for accounts with no search term data.
     """
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     start = today - timedelta(days=days)
     date_range = f"'{start}' AND '{today}'"
 
@@ -659,9 +659,7 @@ async def query_negative_keywords(
                         )
                     )
         except Exception as exc:
-            logger.warning(
-                "failed to fetch ad-group-level negative keywords", error=str(exc)
-            )
+            logger.warning("failed to fetch ad-group-level negative keywords", error=str(exc))
 
         return results
     except (GoogleAdsAuthError, GoogleAdsUnavailable):
@@ -1146,7 +1144,9 @@ async def query_merchant_center_feed(
                     {
                         "feed_id": link.id,
                         "name": link.merchant_center_account_name or "",
-                        "status": link.status.name if hasattr(link.status, "name") else str(link.status),
+                        "status": link.status.name
+                        if hasattr(link.status, "name")
+                        else str(link.status),
                     }
                 )
         return results
@@ -1167,7 +1167,6 @@ async def fetch_auction_insights(
     Returns a list of dicts with keys:
         campaign_id, competitor_domain, impression_share, overlap_rate, position_above_rate
     """
-    from datetime import date as _date
     import asyncio
 
     def _sync() -> list[dict]:
@@ -1188,13 +1187,17 @@ async def fetch_auction_insights(
         try:
             response = service.search(customer_id=customer_id, query=query)
             for row in response:
-                results.append({
-                    "campaign_id": row.campaign.id,
-                    "competitor_domain": row.auction_insight.domain,
-                    "impression_share": row.metrics.auction_insight_search_impression_share or None,
-                    "overlap_rate": row.metrics.auction_insight_search_overlap_rate or None,
-                    "position_above_rate": row.metrics.auction_insight_search_position_above_rate or None,
-                })
+                results.append(
+                    {
+                        "campaign_id": row.campaign.id,
+                        "competitor_domain": row.auction_insight.domain,
+                        "impression_share": row.metrics.auction_insight_search_impression_share
+                        or None,
+                        "overlap_rate": row.metrics.auction_insight_search_overlap_rate or None,
+                        "position_above_rate": row.metrics.auction_insight_search_position_above_rate
+                        or None,
+                    }
+                )
         except Exception as exc:
             raise _wrap_exc(exc) from exc
         return results

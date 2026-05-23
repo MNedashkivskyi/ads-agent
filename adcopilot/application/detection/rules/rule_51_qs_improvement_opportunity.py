@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Any
 
 from adcopilot.application.detection.base import DetectionContext
 from adcopilot.domain.recommendation import (

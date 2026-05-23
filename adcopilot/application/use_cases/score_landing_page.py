@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+
 import structlog
 
 from adcopilot.application.ports.llm import LLMClient
@@ -72,11 +73,14 @@ class LandingPageScoreUseCase:
             ttfb_ms=_ms_label(cwv.ttfb_ms),
         )
 
-        raw = await self._llm.complete(system=_SYSTEM, user=user_msg, max_tokens=800, temperature=0.4)
+        raw = await self._llm.complete(
+            system=_SYSTEM, user=user_msg, max_tokens=800, temperature=0.4
+        )
         recommendations = _parse_recommendations(raw)
 
         # Return a new frozen instance with recommendations attached
         import dataclasses
+
         scored = dataclasses.replace(score, recommendations_pl=recommendations)
 
         logger.info(

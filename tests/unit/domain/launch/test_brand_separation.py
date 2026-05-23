@@ -1,11 +1,11 @@
 """Unit tests for brand campaign separation (Task 4.1)."""
-from decimal import Decimal
-from datetime import datetime, UTC
 
-from adcopilot.domain.launch.budget_tier import BudgetTier
-from adcopilot.domain.launch.templates import build_proposal_from_template
-from adcopilot.domain.launch.entities import CampaignBrief, CampaignBriefId, LaunchStatus
+from datetime import UTC, datetime
+from decimal import Decimal
+
 from adcopilot.domain.entities import AccountId, UserId
+from adcopilot.domain.launch.entities import CampaignBrief, CampaignBriefId, LaunchStatus
+from adcopilot.domain.launch.templates import build_proposal_from_template
 
 
 def _make_brief(monthly_budget_pln: Decimal) -> CampaignBrief:
@@ -63,6 +63,7 @@ def test_brand_budget_is_10_percent_of_daily():
 
 def test_brand_keywords_are_exact_match():
     from adcopilot.domain.launch.entities import MatchType
+
     brief = _make_brief(Decimal("1000"))  # MID
     proposal = build_proposal_from_template(brief)
     for kw in proposal.brand_keywords:
@@ -71,8 +72,14 @@ def test_brand_keywords_are_exact_match():
 
 def test_proposal_post_init_sets_empty_brand_keywords():
     """CampaignProposal.__post_init__ sets brand_keywords=[] if None."""
-    from adcopilot.domain.launch.entities import CampaignProposal, CampaignProposalId, CampaignBriefId
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
+
+    from adcopilot.domain.launch.entities import (
+        CampaignBriefId,
+        CampaignProposal,
+        CampaignProposalId,
+    )
+
     proposal = CampaignProposal(
         id=CampaignProposalId("p1"),
         brief_id=CampaignBriefId("b1"),

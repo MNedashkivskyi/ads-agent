@@ -20,15 +20,15 @@ from datetime import UTC, datetime
 
 import structlog
 
+from adcopilot.application.detection.validation import LandingPageCheckResult as DetectionLPResult
+from adcopilot.application.detection.validation import ValidationContext, validate_proposal
 from adcopilot.application.ports.launch_repositories import (
     CampaignBriefRepo,
     CampaignProposalRepo,
 )
-from adcopilot.application.detection.validation import LandingPageCheckResult as DetectionLPResult, ValidationContext
 from adcopilot.domain.exceptions import LLMError
 from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
 from adcopilot.domain.launch.entities import CampaignBrief, CampaignProposal, LaunchStatus
-from adcopilot.application.detection.validation import validate_proposal
 from adcopilot.domain.launch.templates import build_proposal_from_template
 from adcopilot.infrastructure.llm.campaign_generator import BrandCampaignResponse, CampaignGenerator
 
@@ -36,15 +36,16 @@ logger = structlog.get_logger(__name__)
 
 
 def _apply_seasonal_multiplier(
-    proposal: "CampaignProposal",
+    proposal: CampaignProposal,
     vertical: str,
-) -> "tuple[CampaignProposal, float]":
+) -> tuple[CampaignProposal, float]:
     """Adjust proposal's daily_budget_micros by the Polish market seasonal multiplier.
 
     Returns (updated_proposal, multiplier). Defaults to 1.0 on any error.
     """
     try:
         from adcopilot.domain.polish_market.seasonality import get_seasonal_multiplier
+
         month = datetime.now(tz=UTC).month
         multiplier = get_seasonal_multiplier(vertical, month)
     except Exception:
@@ -64,12 +65,13 @@ def _apply_seasonal_multiplier(
 
 
 def _run_compliance_validators(
-    proposal: "CampaignProposal",
+    proposal: CampaignProposal,
     vertical: str,
-) -> "CampaignProposal":
+) -> CampaignProposal:
     """Run Polish advertising compliance validators and attach warnings to proposal."""
     try:
         from adcopilot.domain.polish_market.compliance_validators import validate_ad_copy
+
         all_headlines: list[str] = []
         all_descriptions: list[str] = []
         for ag in proposal.ad_groups:
@@ -89,12 +91,13 @@ def _run_compliance_validators(
 
 
 def _apply_purchasing_power(
-    proposal: "CampaignProposal",
+    proposal: CampaignProposal,
     location: str,
-) -> "CampaignProposal":
+) -> CampaignProposal:
     """Scale proposal's daily_budget_micros by the voivodeship purchasing power index."""
     try:
         from adcopilot.domain.polish_market.voivodeship_data import get_purchasing_power_for_city
+
         index = get_purchasing_power_for_city(location)
     except Exception:
         return proposal
@@ -162,8 +165,7 @@ class GenerateCampaignProposalUseCase:
         """
         if brief.status not in (LaunchStatus.COLLECTING, LaunchStatus.GENERATING):
             raise ValueError(
-                f"Cannot generate proposal for brief {brief.id} "
-                f"in status {brief.status!r}"
+                f"Cannot generate proposal for brief {brief.id} in status {brief.status!r}"
             )
 
         await self._brief_repo.update_status(brief.id, LaunchStatus.GENERATING)
@@ -223,9 +225,7 @@ class GenerateCampaignProposalUseCase:
         # Stage 3 — ad copy (one call per ad group, sequential)
         ad_copies = []
         for ag in structure.ad_groups:
-            copy = await self._generator.generate_ad_copy(
-                ag, brief, feedback=revision_feedback
-            )
+            copy = await self._generator.generate_ad_copy(ag, brief, feedback=revision_feedback)
             ad_copies.append(copy)
 
         # Stage 4 — negative keywords
@@ -243,13 +243,17 @@ class GenerateCampaignProposalUseCase:
         _tier = classify_budget_tier(brief.monthly_budget_pln)
         if _tier in (BudgetTier.MID, BudgetTier.GROWTH):
             try:
-                brand = await self._generator.generate_brand_campaign(brief, structure.campaign_name)
+                brand = await self._generator.generate_brand_campaign(
+                    brief, structure.campaign_name
+                )
             except Exception:
                 brand = None
                 logger.warning("brand_campaign_generation_failed", brief_id=brief.id)
 
         # Assemble
-        proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions, brand)
+        proposal = self._generator.assemble_proposal(
+            brief, structure, ad_copies, negatives, extensions, brand
+        )
 
         # Apply seasonal multiplier to daily budget
         proposal, seasonal_multiplier = _apply_seasonal_multiplier(proposal, vertical.vertical)
@@ -291,10 +295,7 @@ class GenerateCampaignProposalUseCase:
             else validation_feedback
         )
 
-        has_copy_errors = any(
-            "headline" in e or "description" in e or "path" in e
-            for e in errors
-        )
+        has_copy_errors = any("headline" in e or "description" in e or "path" in e for e in errors)
         has_structure_errors = any("keyword" in e for e in errors)
 
         if has_structure_errors:
@@ -310,7 +311,9 @@ class GenerateCampaignProposalUseCase:
                 )
                 ad_copies.append(copy)
 
-        proposal = self._generator.assemble_proposal(brief, structure, ad_copies, negatives, extensions)
+        proposal = self._generator.assemble_proposal(
+            brief, structure, ad_copies, negatives, extensions
+        )
         proposal, _ = _apply_seasonal_multiplier(proposal, vertical.vertical)
         proposal = _apply_purchasing_power(proposal, brief.location)
         proposal = _run_compliance_validators(proposal, vertical.vertical)
@@ -327,7 +330,10 @@ class GenerateCampaignProposalUseCase:
 
     async def _build_validation_context(self, proposal: CampaignProposal) -> ValidationContext:
         """Probe landing page URLs and build a ValidationContext with the results."""
-        from adcopilot.infrastructure.landing_page.checker import LandingPageChecker, LandingPageCheckResult as InfraLPResult
+        from adcopilot.infrastructure.landing_page.checker import LandingPageChecker
+        from adcopilot.infrastructure.landing_page.checker import (
+            LandingPageCheckResult as InfraLPResult,
+        )
 
         urls: set[str] = set()
         for ag in proposal.ad_groups:

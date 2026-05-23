@@ -48,9 +48,8 @@ class GoogleAdsMutationsAdapter:
             criterion.resource_name = resource_name
             criterion.status = client.enums.AdGroupCriterionStatusEnum.PAUSED
             from google.protobuf import field_mask_pb2
-            criterion_operation.update_mask.CopyFrom(
-                field_mask_pb2.FieldMask(paths=["status"])
-            )
+
+            criterion_operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
             ad_group_criterion_service.mutate_ad_group_criteria(
                 customer_id=customer_id.replace("-", ""),
                 operations=[criterion_operation],
@@ -79,6 +78,7 @@ class GoogleAdsMutationsAdapter:
             ad.resource_name = resource_name
             ad.status = client.enums.AdGroupAdStatusEnum.PAUSED
             from google.protobuf import field_mask_pb2
+
             operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
             ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=customer_id.replace("-", ""),
@@ -109,7 +109,9 @@ class GoogleAdsMutationsAdapter:
             criterion.negative = True
             criterion.keyword.text = keyword_text
             criterion.keyword.match_type = getattr(
-                client.enums.KeywordMatchTypeEnum, match_type, client.enums.KeywordMatchTypeEnum.EXACT
+                client.enums.KeywordMatchTypeEnum,
+                match_type,
+                client.enums.KeywordMatchTypeEnum.EXACT,
             )
             ad_group_criterion_service.mutate_ad_group_criteria(
                 customer_id=customer_id.replace("-", ""),
@@ -152,6 +154,7 @@ class GoogleAdsMutationsAdapter:
             budget.resource_name = budget_resource_name
             budget.amount_micros = new_budget_micros
             from google.protobuf import field_mask_pb2
+
             operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["amount_micros"]))
             campaign_budget_service.mutate_campaign_budgets(
                 customer_id=customer_id.replace("-", ""),
@@ -186,6 +189,7 @@ class GoogleAdsMutationsAdapter:
             criterion.resource_name = resource_name
             criterion.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
             from google.protobuf import field_mask_pb2
+
             operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
             ad_group_criterion_service.mutate_ad_group_criteria(
                 customer_id=customer_id.replace("-", ""),
@@ -215,6 +219,7 @@ class GoogleAdsMutationsAdapter:
             ad.resource_name = resource_name
             ad.status = client.enums.AdGroupAdStatusEnum.ENABLED
             from google.protobuf import field_mask_pb2
+
             operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
             ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=customer_id.replace("-", ""),
@@ -265,9 +270,7 @@ class GoogleAdsMutationsAdapter:
                 customer_id=customer_id.replace("-", ""),
                 operations=[operation],
             )
-            logger.info(
-                "negative keyword removed", customer_id=customer_id, keyword=keyword_text
-            )
+            logger.info("negative keyword removed", customer_id=customer_id, keyword=keyword_text)
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
@@ -297,9 +300,8 @@ class GoogleAdsMutationsAdapter:
                 client.enums.KeywordMatchTypeEnum.PHRASE,
             )
             from google.protobuf import field_mask_pb2
-            operation.update_mask.CopyFrom(
-                field_mask_pb2.FieldMask(paths=["keyword.match_type"])
-            )
+
+            operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["keyword.match_type"]))
             ad_group_criterion_service.mutate_ad_group_criteria(
                 customer_id=customer_id.replace("-", ""),
                 operations=[operation],
@@ -355,9 +357,8 @@ class GoogleAdsMutationsAdapter:
             sub_msg = getattr(campaign, field_name)
             sub_msg.CopyFrom(type(sub_msg)())
             from google.protobuf import field_mask_pb2
-            operation.update_mask.CopyFrom(
-                field_mask_pb2.FieldMask(paths=[field_name])
-            )
+
+            operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=[field_name]))
             campaign_service.mutate_campaigns(
                 customer_id=customer_id.replace("-", ""),
                 operations=[operation],
@@ -397,7 +398,10 @@ class GoogleAdsMutationsAdapter:
                 a.final_urls.append(sl.get("final_url", "https://example.com"))
                 asset_ops.append(op)
 
-            asset_rns = [r.resource_name for r in asset_service.mutate_assets(customer_id=cid, operations=asset_ops).results]
+            asset_rns = [
+                r.resource_name
+                for r in asset_service.mutate_assets(customer_id=cid, operations=asset_ops).results
+            ]
 
             ca_ops = []
             for asset_rn in asset_rns:
@@ -408,7 +412,12 @@ class GoogleAdsMutationsAdapter:
                 ca.field_type = client.enums.AssetFieldTypeEnum.SITELINK
                 ca_ops.append(op)
 
-            ca_rns = [r.resource_name for r in campaign_asset_service.mutate_campaign_assets(customer_id=cid, operations=ca_ops).results]
+            ca_rns = [
+                r.resource_name
+                for r in campaign_asset_service.mutate_campaign_assets(
+                    customer_id=cid, operations=ca_ops
+                ).results
+            ]
             logger.info("sitelinks created", customer_id=customer_id, count=len(ca_rns))
             return ca_rns
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
@@ -436,7 +445,10 @@ class GoogleAdsMutationsAdapter:
                 op.create.callout_asset.callout_text = text
                 asset_ops.append(op)
 
-            asset_rns = [r.resource_name for r in asset_service.mutate_assets(customer_id=cid, operations=asset_ops).results]
+            asset_rns = [
+                r.resource_name
+                for r in asset_service.mutate_assets(customer_id=cid, operations=asset_ops).results
+            ]
 
             ca_ops = []
             for asset_rn in asset_rns:
@@ -447,7 +459,12 @@ class GoogleAdsMutationsAdapter:
                 ca.field_type = client.enums.AssetFieldTypeEnum.CALLOUT
                 ca_ops.append(op)
 
-            ca_rns = [r.resource_name for r in campaign_asset_service.mutate_campaign_assets(customer_id=cid, operations=ca_ops).results]
+            ca_rns = [
+                r.resource_name
+                for r in campaign_asset_service.mutate_campaign_assets(
+                    customer_id=cid, operations=ca_ops
+                ).results
+            ]
             logger.info("callouts created", customer_id=customer_id, count=len(ca_rns))
             return ca_rns
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
@@ -475,7 +492,10 @@ class GoogleAdsMutationsAdapter:
             a.structured_snippet_asset.header = header
             for v in values:
                 a.structured_snippet_asset.values.append(v)
-            asset_rns = [r.resource_name for r in asset_service.mutate_assets(customer_id=cid, operations=[op]).results]
+            asset_rns = [
+                r.resource_name
+                for r in asset_service.mutate_assets(customer_id=cid, operations=[op]).results
+            ]
 
             ca_ops = []
             for asset_rn in asset_rns:
@@ -486,7 +506,12 @@ class GoogleAdsMutationsAdapter:
                 ca.field_type = client.enums.AssetFieldTypeEnum.STRUCTURED_SNIPPET
                 ca_ops.append(op2)
 
-            ca_rns = [r.resource_name for r in campaign_asset_service.mutate_campaign_assets(customer_id=cid, operations=ca_ops).results]
+            ca_rns = [
+                r.resource_name
+                for r in campaign_asset_service.mutate_campaign_assets(
+                    customer_id=cid, operations=ca_ops
+                ).results
+            ]
             logger.info("structured snippets created", customer_id=customer_id, count=len(ca_rns))
             return ca_rns
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
@@ -507,11 +532,18 @@ class GoogleAdsMutationsAdapter:
             campaign_criterion_service = client.get_service("CampaignCriterionService")
             op = client.get_type("CampaignCriterionOperation")
             criterion = op.create
-            criterion.campaign = client.get_service("CampaignService").campaign_path(cid, campaign_id)
+            criterion.campaign = client.get_service("CampaignService").campaign_path(
+                cid, campaign_id
+            )
             criterion.device.type_ = client.enums.DeviceEnum.MOBILE
             criterion.bid_modifier = bid_modifier
             campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=[op])
-            logger.info("device bid modifier set", customer_id=customer_id, campaign_id=campaign_id, bid_modifier=bid_modifier)
+            logger.info(
+                "device bid modifier set",
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                bid_modifier=bid_modifier,
+            )
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
@@ -542,7 +574,9 @@ class GoogleAdsMutationsAdapter:
                 ops.append(op)
             if ops:
                 campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
-            logger.info("device bid modifier removed", customer_id=customer_id, campaign_id=campaign_id)
+            logger.info(
+                "device bid modifier removed", customer_id=customer_id, campaign_id=campaign_id
+            )
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
@@ -561,7 +595,6 @@ class GoogleAdsMutationsAdapter:
             cid = customer_id.replace("-", "")
             ga_service = client.get_service("GoogleAdsService")
             campaign_criterion_service = client.get_service("CampaignCriterionService")
-            match_type_enum = getattr(client.enums.KeywordMatchTypeEnum, match_type, None)
             query = (
                 f"SELECT campaign_criterion.resource_name FROM campaign_criterion "
                 f"WHERE campaign_criterion.campaign = 'customers/{cid}/campaigns/{campaign_id}' "
@@ -576,7 +609,9 @@ class GoogleAdsMutationsAdapter:
                 ops.append(op)
             if ops:
                 campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
-            logger.info("campaign negative keyword removed", customer_id=customer_id, keyword=keyword_text)
+            logger.info(
+                "campaign negative keyword removed", customer_id=customer_id, keyword=keyword_text
+            )
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
@@ -596,12 +631,16 @@ class GoogleAdsMutationsAdapter:
             campaign_criterion_service = client.get_service("CampaignCriterionService")
             op = client.get_type("CampaignCriterionOperation")
             criterion = op.create
-            criterion.campaign = client.get_service("CampaignService").campaign_path(cid, campaign_id)
+            criterion.campaign = client.get_service("CampaignService").campaign_path(
+                cid, campaign_id
+            )
             criterion.negative = True
             criterion.keyword.text = keyword_text
             criterion.keyword.match_type = getattr(client.enums.KeywordMatchTypeEnum, match_type)
             campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=[op])
-            logger.info("campaign negative keyword added", customer_id=customer_id, keyword=keyword_text)
+            logger.info(
+                "campaign negative keyword added", customer_id=customer_id, keyword=keyword_text
+            )
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
@@ -623,9 +662,17 @@ class GoogleAdsMutationsAdapter:
             campaign.resource_name = campaign_service.campaign_path(cid, campaign_id)
             campaign.target_cpa.target_cpa_micros = target_cpa_micros
             from google.protobuf import field_mask_pb2
-            op.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["target_cpa.target_cpa_micros"]))
+
+            op.update_mask.CopyFrom(
+                field_mask_pb2.FieldMask(paths=["target_cpa.target_cpa_micros"])
+            )
             campaign_service.mutate_campaigns(customer_id=cid, operations=[op])
-            logger.info("target CPA set", customer_id=customer_id, campaign_id=campaign_id, target_cpa_micros=target_cpa_micros)
+            logger.info(
+                "target CPA set",
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                target_cpa_micros=target_cpa_micros,
+            )
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
@@ -648,7 +695,9 @@ class GoogleAdsMutationsAdapter:
             for day in range(2, 9):  # MONDAY=2 through SUNDAY=8
                 op = client.get_type("CampaignCriterionOperation")
                 criterion = op.create
-                criterion.campaign = client.get_service("CampaignService").campaign_path(cid, campaign_id)
+                criterion.campaign = client.get_service("CampaignService").campaign_path(
+                    cid, campaign_id
+                )
                 criterion.ad_schedule.day_of_week = day
                 criterion.ad_schedule.start_hour = hour_of_day
                 criterion.ad_schedule.end_hour = (hour_of_day + 1) % 24
@@ -657,7 +706,12 @@ class GoogleAdsMutationsAdapter:
                 criterion.bid_modifier = bid_modifier
                 ops.append(op)
             campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
-            logger.info("ad schedule set", customer_id=customer_id, campaign_id=campaign_id, hour=hour_of_day)
+            logger.info(
+                "ad schedule set",
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                hour=hour_of_day,
+            )
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
@@ -689,7 +743,12 @@ class GoogleAdsMutationsAdapter:
                 ops.append(op)
             if ops:
                 campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
-            logger.info("ad schedule removed", customer_id=customer_id, campaign_id=campaign_id, hour=hour_of_day)
+            logger.info(
+                "ad schedule removed",
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                hour=hour_of_day,
+            )
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
@@ -708,11 +767,18 @@ class GoogleAdsMutationsAdapter:
             campaign_criterion_service = client.get_service("CampaignCriterionService")
             op = client.get_type("CampaignCriterionOperation")
             criterion = op.create
-            criterion.campaign = client.get_service("CampaignService").campaign_path(cid, campaign_id)
+            criterion.campaign = client.get_service("CampaignService").campaign_path(
+                cid, campaign_id
+            )
             criterion.negative = True
             criterion.location.geo_target_constant = f"geoTargetConstants/{location_id}"
             campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=[op])
-            logger.info("geo excluded", customer_id=customer_id, campaign_id=campaign_id, location_id=location_id)
+            logger.info(
+                "geo excluded",
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                location_id=location_id,
+            )
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
@@ -745,7 +811,12 @@ class GoogleAdsMutationsAdapter:
                 ops.append(op)
             if ops:
                 campaign_criterion_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
-            logger.info("geo exclusion removed", customer_id=customer_id, campaign_id=campaign_id, location_id=location_id)
+            logger.info(
+                "geo exclusion removed",
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                location_id=location_id,
+            )
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
@@ -792,11 +863,19 @@ class GoogleAdsMutationsAdapter:
             criterion.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
             criterion.keyword.text = keyword_text
             criterion.keyword.match_type = getattr(client.enums.KeywordMatchTypeEnum, match_type)
-            response = ad_group_criterion_service.mutate_ad_group_criteria(customer_id=cid, operations=[op])
+            response = ad_group_criterion_service.mutate_ad_group_criteria(
+                customer_id=cid, operations=[op]
+            )
             new_rn = response.results[0].resource_name
             # resource_name format: customers/{cid}/adGroupCriteria/{ad_group_id}~{criterion_id}
             criterion_id = int(new_rn.split("~")[-1])
-            logger.info("keyword added", customer_id=customer_id, ad_group_id=ad_group_id, keyword=keyword_text, criterion_id=criterion_id)
+            logger.info(
+                "keyword added",
+                customer_id=customer_id,
+                ad_group_id=ad_group_id,
+                keyword=keyword_text,
+                criterion_id=criterion_id,
+            )
             return criterion_id
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
@@ -835,7 +914,12 @@ class GoogleAdsMutationsAdapter:
                 ops.append(op)
             if ops:
                 ad_group_criterion_service.mutate_ad_group_criteria(customer_id=cid, operations=ops)
-            logger.info("keyword paused by text", customer_id=customer_id, ad_group_id=ad_group_id, keyword=keyword_text)
+            logger.info(
+                "keyword paused by text",
+                customer_id=customer_id,
+                ad_group_id=ad_group_id,
+                keyword=keyword_text,
+            )
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
         except Exception as exc:
@@ -852,7 +936,12 @@ class GoogleAdsMutationsAdapter:
             cid = customer_id.replace("-", "")
             ad_group_service = client.get_service("AdGroupService")
             resource_name = ad_group_service.ad_group_path(cid, ad_group_id)
-            logger.info("ad_group_resource_name", customer_id=customer_id, ad_group_id=ad_group_id, resource_name=resource_name)
+            logger.info(
+                "ad_group_resource_name",
+                customer_id=customer_id,
+                ad_group_id=ad_group_id,
+                resource_name=resource_name,
+            )
             return resource_name
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
@@ -902,7 +991,9 @@ class GoogleAdsMutationsAdapter:
             new_rn = response.results[0].resource_name
             # resource_name format: customers/{cid}/adGroupAds/{ad_group_id}~{ad_id}
             ad_id = int(new_rn.split("~")[-1])
-            logger.info("rsa created", customer_id=customer_id, ad_group_id=ad_group_id, ad_id=ad_id)
+            logger.info(
+                "rsa created", customer_id=customer_id, ad_group_id=ad_group_id, ad_id=ad_id
+            )
             return ad_id
         except (GoogleAdsAuthError, GoogleAdsUnavailable):
             raise
@@ -945,9 +1036,7 @@ class GoogleAdsMutationsAdapter:
             user_list = user_list_op.create
             user_list.name = list_name
             user_list.description = f"Customer Match list: {list_name}"
-            user_list.membership_status = (
-                client.enums.UserListMembershipStatusEnum.OPEN
-            )
+            user_list.membership_status = client.enums.UserListMembershipStatusEnum.OPEN
             user_list.membership_life_span = 540
             user_list.crm_based_user_list.upload_key_type = (
                 client.enums.CustomerMatchUploadKeyTypeEnum.CONTACT_INFO

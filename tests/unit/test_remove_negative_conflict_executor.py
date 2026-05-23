@@ -41,7 +41,11 @@ async def test_campaign_level_removal() -> None:
     mutations = FakeGoogleAdsMutations()
     rec = _rec(
         target={"criterion_id": "999", "campaign_id": "10"},
-        evidence={"conflict_scope": "campaign", "negative_keyword_text": "free", "negative_match_type": "EXACT"},
+        evidence={
+            "conflict_scope": "campaign",
+            "negative_keyword_text": "free",
+            "negative_match_type": "EXACT",
+        },
     )
     result = await RemoveNegativeConflictExecutor().execute(rec, mutations, "token", "cid")
 
@@ -58,9 +62,13 @@ async def test_ad_group_level_removal() -> None:
     mutations = FakeGoogleAdsMutations()
     rec = _rec(
         target={"criterion_id": "999", "campaign_id": "10", "ad_group_id": "20"},
-        evidence={"conflict_scope": "ad_group", "negative_keyword_text": "free", "negative_match_type": "BROAD"},
+        evidence={
+            "conflict_scope": "ad_group",
+            "negative_keyword_text": "free",
+            "negative_match_type": "BROAD",
+        },
     )
-    result = await RemoveNegativeConflictExecutor().execute(rec, mutations, "token", "cid")
+    await RemoveNegativeConflictExecutor().execute(rec, mutations, "token", "cid")
 
     call = mutations.calls[0]
     assert call["method"] == "remove_ad_group_negative_keyword"
@@ -69,4 +77,5 @@ async def test_ad_group_level_removal() -> None:
 
 def test_negative_keyword_conflict_removed_from_non_executable() -> None:
     from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS
+
     assert RecommendationKind.NEGATIVE_KEYWORD_CONFLICT not in NON_EXECUTABLE_KINDS

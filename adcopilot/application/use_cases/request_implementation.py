@@ -14,7 +14,10 @@ from adcopilot.domain.implementation_partner import (
     ImplementationRequestId,
     ImplementationRequestStatus,
 )
-from adcopilot.infrastructure.db.models import ImplementationPartnerModel, ImplementationRequestModel
+from adcopilot.infrastructure.db.models import (
+    ImplementationPartnerModel,
+    ImplementationRequestModel,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -74,7 +77,9 @@ async def request_implementation(
     return request
 
 
-async def _auto_match_partner(platform: str, session: AsyncSession) -> ImplementationPartnerModel | None:
+async def _auto_match_partner(
+    platform: str, session: AsyncSession
+) -> ImplementationPartnerModel | None:
     result = await session.execute(
         select(ImplementationPartnerModel)
         .where(ImplementationPartnerModel.is_active == True)  # noqa: E712
@@ -95,7 +100,9 @@ async def _notify_partner(
 ) -> None:
     try:
         import httpx
+
         from adcopilot.config import get_settings
+
         settings = get_settings()
         if not getattr(settings, "SENDGRID_API_KEY", None):
             logger.info("email_skipped_no_sendgrid", partner_email=partner.email)
@@ -131,6 +138,7 @@ async def _notify_client_telegram(
 ) -> None:
     try:
         from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
         from adcopilot.config import get_settings
         from adcopilot.infrastructure.db.models import UserModel
 
@@ -141,6 +149,7 @@ async def _notify_client_telegram(
                 user = await s.get(UserModel, uuid.UUID(user_id) if _is_uuid(user_id) else None)
                 if user and user.telegram_chat_id:
                     import httpx
+
                     msg = (
                         f"✅ Zlecenie instalacji GTM wysłane!\n\n"
                         f"Partner: {partner.name}\n"

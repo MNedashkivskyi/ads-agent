@@ -21,7 +21,9 @@ def _make_settings() -> Settings:
     )
 
 
-def _make_row(term: str, campaign_name: str, cost: int, clicks: int, impressions: int, conversions: float) -> MagicMock:
+def _make_row(
+    term: str, campaign_name: str, cost: int, clicks: int, impressions: int, conversions: float
+) -> MagicMock:
     row = MagicMock()
     row.search_term_view.search_term = term
     row.campaign.name = campaign_name
@@ -80,7 +82,7 @@ async def test_limit_passed_to_query(mock_build: MagicMock) -> None:
     await list_recent_search_terms("tok", "123-456", settings, days=14, limit=5)
 
     call_args = mc.get_service.return_value.search_stream.call_args
-    query_str = call_args.kwargs.get("query") or call_args.args[0] if call_args.args else ""
+    query_str = call_args.kwargs.get("query") or (call_args.args[0] if call_args.args else "")
     assert "LIMIT 5" in query_str
 
 

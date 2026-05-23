@@ -19,9 +19,9 @@ import json
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from adcopilot.application.use_cases.launch.generate_proposal import (
     GenerateCampaignProposalUseCase,
@@ -176,7 +176,11 @@ _SALON_STRUCTURE = json.dumps(
                     {"text": "hair cut near me", "match_type": "phrase", "estimated_cpc_pln": 1.3},
                     {"text": "best hair salon", "match_type": "broad", "estimated_cpc_pln": 1.1},
                     {"text": "hair salon booking", "match_type": "exact", "estimated_cpc_pln": 2.0},
-                    {"text": "affordable haircut", "match_type": "phrase", "estimated_cpc_pln": 0.8},
+                    {
+                        "text": "affordable haircut",
+                        "match_type": "phrase",
+                        "estimated_cpc_pln": 0.8,
+                    },
                     {"text": "salon appointment", "match_type": "exact", "estimated_cpc_pln": 1.8},
                 ],
             },
@@ -185,13 +189,29 @@ _SALON_STRUCTURE = json.dumps(
                 "theme": "hair color and highlights",
                 "keywords": [
                     {"text": "hair color Warsaw", "match_type": "phrase", "estimated_cpc_pln": 2.0},
-                    {"text": "hair highlights salon", "match_type": "broad", "estimated_cpc_pln": 1.6},
+                    {
+                        "text": "hair highlights salon",
+                        "match_type": "broad",
+                        "estimated_cpc_pln": 1.6,
+                    },
                     {"text": "balayage Warsaw", "match_type": "phrase", "estimated_cpc_pln": 2.5},
                     {"text": "ombre hair", "match_type": "phrase", "estimated_cpc_pln": 1.8},
                     {"text": "hair dye salon", "match_type": "broad", "estimated_cpc_pln": 1.2},
-                    {"text": "root coloring service", "match_type": "exact", "estimated_cpc_pln": 2.2},
-                    {"text": "professional coloring", "match_type": "phrase", "estimated_cpc_pln": 1.5},
-                    {"text": "hair toning Warsaw", "match_type": "phrase", "estimated_cpc_pln": 1.9},
+                    {
+                        "text": "root coloring service",
+                        "match_type": "exact",
+                        "estimated_cpc_pln": 2.2,
+                    },
+                    {
+                        "text": "professional coloring",
+                        "match_type": "phrase",
+                        "estimated_cpc_pln": 1.5,
+                    },
+                    {
+                        "text": "hair toning Warsaw",
+                        "match_type": "phrase",
+                        "estimated_cpc_pln": 1.9,
+                    },
                 ],
             },
         ],
@@ -297,13 +317,21 @@ _ECOM_STRUCTURE = json.dumps(
                 "theme": "organic dog food products",
                 "keywords": [
                     {"text": "organic dog food", "match_type": "phrase", "estimated_cpc_pln": 1.2},
-                    {"text": "buy dog food online", "match_type": "phrase", "estimated_cpc_pln": 1.5},
+                    {
+                        "text": "buy dog food online",
+                        "match_type": "phrase",
+                        "estimated_cpc_pln": 1.5,
+                    },
                     {"text": "dog food delivery", "match_type": "broad", "estimated_cpc_pln": 0.9},
                     {"text": "premium dog food", "match_type": "phrase", "estimated_cpc_pln": 1.4},
                     {"text": "natural dog food", "match_type": "broad", "estimated_cpc_pln": 1.1},
                     {"text": "dog food Poland", "match_type": "phrase", "estimated_cpc_pln": 1.0},
                     {"text": "healthy dog food", "match_type": "broad", "estimated_cpc_pln": 1.3},
-                    {"text": "grain free dog food", "match_type": "phrase", "estimated_cpc_pln": 1.6},
+                    {
+                        "text": "grain free dog food",
+                        "match_type": "phrase",
+                        "estimated_cpc_pln": 1.6,
+                    },
                 ],
             },
             {
@@ -311,13 +339,25 @@ _ECOM_STRUCTURE = json.dumps(
                 "theme": "organic cat food products",
                 "keywords": [
                     {"text": "organic cat food", "match_type": "phrase", "estimated_cpc_pln": 1.1},
-                    {"text": "buy cat food online", "match_type": "phrase", "estimated_cpc_pln": 1.4},
+                    {
+                        "text": "buy cat food online",
+                        "match_type": "phrase",
+                        "estimated_cpc_pln": 1.4,
+                    },
                     {"text": "cat food delivery", "match_type": "broad", "estimated_cpc_pln": 0.8},
                     {"text": "premium cat food", "match_type": "phrase", "estimated_cpc_pln": 1.3},
                     {"text": "natural cat food", "match_type": "broad", "estimated_cpc_pln": 1.0},
-                    {"text": "grain free cat food", "match_type": "phrase", "estimated_cpc_pln": 1.5},
+                    {
+                        "text": "grain free cat food",
+                        "match_type": "phrase",
+                        "estimated_cpc_pln": 1.5,
+                    },
                     {"text": "healthy cat food", "match_type": "broad", "estimated_cpc_pln": 1.2},
-                    {"text": "wet cat food online", "match_type": "phrase", "estimated_cpc_pln": 0.9},
+                    {
+                        "text": "wet cat food online",
+                        "match_type": "phrase",
+                        "estimated_cpc_pln": 0.9,
+                    },
                 ],
             },
         ],
@@ -381,9 +421,7 @@ def _ecom_brief() -> CampaignBrief:
         id=CampaignBriefId(str(uuid.uuid4())),
         user_id=UserId(str(uuid.uuid4())),
         account_id=AccountId(str(uuid.uuid4())),
-        business_description=(
-            "Online store selling organic pet food for dogs and cats in Poland"
-        ),
+        business_description=("Online store selling organic pet food for dogs and cats in Poland"),
         location="Poland",
         typical_customer_value=Decimal("150"),
         primary_action="Purchase",
@@ -634,11 +672,7 @@ async def test_double_failure_falls_back_to_template() -> None:
     assert proposal.brief_id == brief.id
 
     # Template for "salon" brief should produce salon-appropriate keywords
-    all_kw_texts = {
-        kw.text.lower()
-        for ag in proposal.ad_groups
-        for kw in ag.keywords
-    }
+    all_kw_texts = {kw.text.lower() for ag in proposal.ad_groups for kw in ag.keywords}
     salon_kws = {"hair salon", "haircut near me", "hair color salon", "balayage"}
     assert any(kw in all_kw_texts for kw in salon_kws), (
         f"Expected salon keywords in template, got: {sorted(all_kw_texts)[:10]}"
@@ -712,9 +746,7 @@ async def test_template_proposal_always_passes_validator() -> None:
         )
         proposal = build_proposal_from_template(brief)
         errors = validate_proposal(proposal, brief)
-        assert errors == [], (
-            f"Template '{vertical_key}' failed validation: {errors}"
-        )
+        assert errors == [], f"Template '{vertical_key}' failed validation: {errors}"
 
 
 @pytest.mark.asyncio
@@ -750,9 +782,7 @@ async def test_status_transitions_on_success() -> None:
 async def test_status_transitions_on_template_fallback() -> None:
     """Brief status still reaches PROPOSED even when falling back to template."""
     brief = _salon_brief()
-    llm = ScriptedFakeLLMClient(
-        {"classify the vertical": ["bad", "also bad"]}
-    )
+    llm = ScriptedFakeLLMClient({"classify the vertical": ["bad", "also bad"]})
     brief_repo = InMemoryBriefRepo(brief)
     proposal_repo = InMemoryProposalRepo()
     uc = GenerateCampaignProposalUseCase(brief_repo, proposal_repo, CampaignGenerator(llm))

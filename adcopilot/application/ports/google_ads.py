@@ -39,9 +39,7 @@ class MerchantCenterLink:
 class GoogleAdsClientPort(Protocol):
     async def list_accessible_customers(self, refresh_token: str) -> list[str]: ...
 
-    async def get_customer_info(
-        self, refresh_token: str, customer_id: str
-    ) -> CustomerInfo: ...
+    async def get_customer_info(self, refresh_token: str, customer_id: str) -> CustomerInfo: ...
 
     async def query_campaigns(
         self, refresh_token: str, customer_id: str, snapshot_date: date

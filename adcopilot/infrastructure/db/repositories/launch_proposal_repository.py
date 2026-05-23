@@ -68,9 +68,7 @@ def _model_to_domain(
             for ad in ad_models
         ]
 
-        domain_ad_groups.append(
-            AdGroupProposal(name=ag.name, keywords=domain_kws, ads=domain_ads)
-        )
+        domain_ad_groups.append(AdGroupProposal(name=ag.name, keywords=domain_kws, ads=domain_ads))
 
     domain_sitelinks = [
         SitelinkProposal(
@@ -99,7 +97,7 @@ def _model_to_domain(
         )
 
     brand_keywords: list[KeywordProposal] = []
-    for kw_dict in (proposal.brand_keywords or []):
+    for kw_dict in proposal.brand_keywords or []:
         brand_keywords.append(
             KeywordProposal(
                 text=kw_dict["text"],
@@ -303,9 +301,7 @@ class SqlCampaignProposalRepository:
 
         # Keywords
         kw_result = await self._session.execute(
-            select(LaunchKeywordModel).where(
-                LaunchKeywordModel.ad_group_id.in_(ag_ids)
-            )
+            select(LaunchKeywordModel).where(LaunchKeywordModel.ad_group_id.in_(ag_ids))
         )
         kws = list(kw_result.scalars().all())
         kws_by_group: dict[uuid.UUID, list[LaunchKeywordModel]] = {}
@@ -339,4 +335,6 @@ class SqlCampaignProposalRepository:
         )
         snippets = list(sn_result.scalars().all())
 
-        return _model_to_domain(proposal, ad_groups, kws_by_group, ads_by_group, sitelinks, callouts, snippets)
+        return _model_to_domain(
+            proposal, ad_groups, kws_by_group, ads_by_group, sitelinks, callouts, snippets
+        )

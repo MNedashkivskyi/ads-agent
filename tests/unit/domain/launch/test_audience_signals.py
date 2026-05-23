@@ -1,6 +1,6 @@
 import pytest
 
-from adcopilot.domain.launch.audience_signals import get_audience_signals, VERTICAL_AUDIENCES
+from adcopilot.domain.launch.audience_signals import VERTICAL_AUDIENCES, get_audience_signals
 from adcopilot.domain.launch.budget_tier import BudgetTier
 
 
@@ -26,7 +26,9 @@ def test_unknown_vertical_falls_back_to_generic():
     assert signals == get_audience_signals("generic", BudgetTier.MID)
 
 
-@pytest.mark.parametrize("vertical", ["salon", "ecommerce", "restaurant", "legal", "medical", "generic"])
+@pytest.mark.parametrize(
+    "vertical", ["salon", "ecommerce", "restaurant", "legal", "medical", "generic"]
+)
 def test_all_verticals_have_audiences_for_mid(vertical):
     signals = get_audience_signals(vertical, BudgetTier.MID)
     assert len(signals) >= 1

@@ -26,7 +26,7 @@ from adcopilot.domain.recommendation import (
 _RSA_TYPE = "RESPONSIVE_SEARCH_AD"
 _MIN_IMPRESSIONS = 100
 _JACCARD_THRESHOLD = 0.60  # Headlines more similar than this are "redundant"
-_MIN_REDUNDANT = 3          # Flag only when ≥ 3 headlines are redundant
+_MIN_REDUNDANT = 3  # Flag only when ≥ 3 headlines are redundant
 
 
 def _tokenise(text: str) -> frozenset[str]:

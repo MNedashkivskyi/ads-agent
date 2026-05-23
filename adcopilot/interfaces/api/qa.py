@@ -131,7 +131,9 @@ async def ask(
         "account_id": ctx.get("account_id"),
         "snapshot_date": ctx.get("snapshot_date"),
         "has_data": ctx.get("summary") is not None,
-        "active_campaigns": ctx.get("summary", {}).get("active_campaigns") if ctx.get("summary") else 0,
+        "active_campaigns": ctx.get("summary", {}).get("active_campaigns")
+        if ctx.get("summary")
+        else 0,
     }
 
     return AskResponse(answer=answer, context_summary=context_summary)

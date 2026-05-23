@@ -67,7 +67,8 @@ class UpgradeConversionActionRule:
 
         # Only consider ENABLED actions that count toward Conversions column.
         active = [
-            a for a in ctx.conversion_actions
+            a
+            for a in ctx.conversion_actions
             if a.status == "ENABLED" and a.include_in_conversions_metric
         ]
         if not active:

@@ -23,7 +23,9 @@ class RemoveNegativeConflictExecutor:
         conflict_scope = str(rec.evidence.get("conflict_scope", "campaign"))
         keyword_text = str(rec.evidence["negative_keyword_text"])
         match_type = str(rec.evidence.get("negative_match_type", "EXACT"))
-        ad_group_id = int(rec.target.get("ad_group_id", 0)) if conflict_scope == "ad_group" else None
+        ad_group_id = (
+            int(rec.target.get("ad_group_id", 0)) if conflict_scope == "ad_group" else None
+        )
 
         if conflict_scope == "ad_group" and ad_group_id:
             await mutations.remove_ad_group_negative_keyword(

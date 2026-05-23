@@ -24,7 +24,6 @@ from adcopilot.application.ports.llm import LLMClient
 from adcopilot.domain.exceptions import LLMError
 from adcopilot.domain.launch.bidding_resolver import resolve_bidding_strategy
 from adcopilot.domain.launch.budget_tier import classify_budget_tier
-from adcopilot.domain.launch.structure_rules import build_structure_prompt_fragment
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -37,6 +36,7 @@ from adcopilot.domain.launch.entities import (
     SitelinkProposal,
     StructuredSnippetProposal,
 )
+from adcopilot.domain.launch.structure_rules import build_structure_prompt_fragment
 
 logger = structlog.get_logger(__name__)
 
@@ -455,8 +455,12 @@ class CampaignGenerator:
         resolved_strategy = bidding_rec.initial_strategy
 
         user = _structure_user_prompt(
-            brief, vertical, resolved_strategy, feedback,
-            has_conversion_tracking, existing_monthly_conversions,
+            brief,
+            vertical,
+            resolved_strategy,
+            feedback,
+            has_conversion_tracking,
+            existing_monthly_conversions,
         )
         response = await self._call_and_parse(
             _STRUCTURE_SYSTEM, user, "structure", CampaignStructureResponse, max_tokens=2000
@@ -534,9 +538,7 @@ class CampaignGenerator:
         brand: BrandCampaignResponse | None = None,
     ) -> CampaignProposal:
         """Combine pipeline outputs into a ``CampaignProposal`` domain object."""
-        daily_budget_micros = int(
-            brief.monthly_budget_pln / Decimal("30") * Decimal("1000000")
-        )
+        daily_budget_micros = int(brief.monthly_budget_pln / Decimal("30") * Decimal("1000000"))
 
         ad_groups: list[AdGroupProposal] = []
         all_cpcs: list[int] = []
@@ -569,9 +571,7 @@ class CampaignGenerator:
                     )
                 )
 
-            ad_groups.append(
-                AdGroupProposal(name=ag_item.name, keywords=keywords, ads=ads)
-            )
+            ad_groups.append(AdGroupProposal(name=ag_item.name, keywords=keywords, ads=ads))
 
         cpc_min = min(all_cpcs) if all_cpcs else 500_000
         cpc_max = max(all_cpcs) if all_cpcs else 2_000_000
@@ -589,9 +589,7 @@ class CampaignGenerator:
                 )
                 for sl in extensions.sitelinks
             ]
-            domain_callouts = [
-                CalloutProposal(text=co[:25]) for co in extensions.callouts
-            ]
+            domain_callouts = [CalloutProposal(text=co[:25]) for co in extensions.callouts]
             if extensions.structured_snippet_values:
                 domain_snippets = [
                     StructuredSnippetProposal(
@@ -675,8 +673,7 @@ class CampaignGenerator:
                 error=str(first_exc)[:200],
             )
             retry_user = (
-                user
-                + f"\n\n[CORRECTION REQUIRED] Your previous response could not be "
+                user + f"\n\n[CORRECTION REQUIRED] Your previous response could not be "
                 f"parsed as JSON. Error: {first_exc!s}\n"
                 "Please respond with ONLY a valid JSON object, no markdown."
             )

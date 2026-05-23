@@ -1,5 +1,4 @@
 """Unit tests for ad schedule rules (Task 4.2)."""
-import pytest
 
 from adcopilot.domain.launch.budget_tier import BudgetTier
 from adcopilot.domain.launch.schedule_rules import get_ad_schedule
@@ -60,7 +59,15 @@ def test_micro_tier_b2b_same_as_mid():
 def test_schedule_entry_fields():
     schedule = get_ad_schedule("legal", BudgetTier.GROWTH)
     for entry in schedule:
-        assert entry.day_of_week in {"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"}
+        assert entry.day_of_week in {
+            "MONDAY",
+            "TUESDAY",
+            "WEDNESDAY",
+            "THURSDAY",
+            "FRIDAY",
+            "SATURDAY",
+            "SUNDAY",
+        }
         assert 0 <= entry.start_hour <= 23
         assert 0 <= entry.end_hour <= 23
         assert entry.start_minute in {0, 15, 30, 45}

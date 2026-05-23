@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from adcopilot.application.detection.base import DetectionRule
 from adcopilot.application.detection.engine import RuleEngine
+from adcopilot.application.detection.rules.audience_bid_adjustment import AudienceBidAdjustmentRule
+from adcopilot.application.detection.rules.audience_expansion import AudienceExpansionRule
+from adcopilot.application.detection.rules.competitor_aggression import CompetitorAggressionRule
+from adcopilot.application.detection.rules.new_competitor import NewCompetitorRule
 from adcopilot.application.detection.rules.rule_01_wasted_search_term import WastedSearchTermRule
 from adcopilot.application.detection.rules.rule_02_zero_conversion_keyword import (
     ZeroConversionKeywordRule,
@@ -76,8 +80,6 @@ from adcopilot.application.detection.rules.rule_31_day_of_week_bid_adjustment im
 from adcopilot.application.detection.rules.rule_32_add_audience_signals import (
     AddAudienceSignalsRule,
 )
-from adcopilot.application.detection.rules.audience_bid_adjustment import AudienceBidAdjustmentRule
-from adcopilot.application.detection.rules.audience_expansion import AudienceExpansionRule
 from adcopilot.application.detection.rules.rule_33_reallocate_budget import ReallocateBudgetRule
 from adcopilot.application.detection.rules.rule_34_is_lost_to_budget import IsLostToBudgetRule
 from adcopilot.application.detection.rules.rule_35_is_lost_to_rank import IsLostToRankRule
@@ -98,34 +100,55 @@ from adcopilot.application.detection.rules.rule_43_add_structured_snippets impor
     AddStructuredSnippetsRule,
 )
 from adcopilot.application.detection.rules.rule_44_refresh_sitelink import RefreshSitelinkRule
-from adcopilot.application.detection.rules.rule_45_landing_page_keyword_mismatch import LandingPageKeywordMismatchRule
+from adcopilot.application.detection.rules.rule_45_landing_page_keyword_mismatch import (
+    LandingPageKeywordMismatchRule,
+)
 from adcopilot.application.detection.rules.rule_46_promote_search_term import PromoteSearchTermRule
-from adcopilot.application.detection.rules.rule_48_above_vertical_benchmark import AboveVerticalBenchmarkRule
+from adcopilot.application.detection.rules.rule_48_above_vertical_benchmark import (
+    AboveVerticalBenchmarkRule,
+)
 from adcopilot.application.detection.rules.rule_49_pmax_low_roas import PMaxLowRoasRule
-from adcopilot.application.detection.rules.rule_50_pmax_asset_disapproved import PMaxAssetDisapprovedRule
-from adcopilot.application.detection.rules.new_competitor import NewCompetitorRule
-from adcopilot.application.detection.rules.competitor_aggression import CompetitorAggressionRule
-from adcopilot.application.detection.rules.rule_51_qs_improvement_opportunity import QSImprovementOpportunityRule
-from adcopilot.application.detection.rules.rule_52_campaign_fragmentation import CampaignFragmentationRule
+from adcopilot.application.detection.rules.rule_50_pmax_asset_disapproved import (
+    PMaxAssetDisapprovedRule,
+)
+from adcopilot.application.detection.rules.rule_51_qs_improvement_opportunity import (
+    QSImprovementOpportunityRule,
+)
+from adcopilot.application.detection.rules.rule_52_campaign_fragmentation import (
+    CampaignFragmentationRule,
+)
 from adcopilot.application.detection.rules.rule_53_campaign_bloat import CampaignBloatRule
-from adcopilot.application.detection.rules.rule_54_device_campaign_split import DeviceCampaignSplitRule
-from adcopilot.application.detection.rules.rule_55_audience_opportunity import AudienceOpportunityRule
-from adcopilot.application.detection.rules.rule_56_audience_underperforming import AudienceUnderperformingRule
-from adcopilot.application.detection.rules.rule_57_customer_match_lookalike import CustomerMatchLookalikeRule
-from adcopilot.application.detection.rules.rule_58_seasonal_opportunity import SeasonalOpportunityRule
-from adcopilot.application.detection.rules.rule_59_seasonal_conservation import SeasonalConservationRule
+from adcopilot.application.detection.rules.rule_54_device_campaign_split import (
+    DeviceCampaignSplitRule,
+)
+from adcopilot.application.detection.rules.rule_55_audience_opportunity import (
+    AudienceOpportunityRule,
+)
+from adcopilot.application.detection.rules.rule_56_audience_underperforming import (
+    AudienceUnderperformingRule,
+)
+from adcopilot.application.detection.rules.rule_57_customer_match_lookalike import (
+    CustomerMatchLookalikeRule,
+)
+from adcopilot.application.detection.rules.rule_58_seasonal_opportunity import (
+    SeasonalOpportunityRule,
+)
+from adcopilot.application.detection.rules.rule_59_seasonal_conservation import (
+    SeasonalConservationRule,
+)
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
-
 # Rules that require working conversion tracking to produce meaningful results.
 # When tracking is broken/missing, these rules are skipped to avoid noise.
-_CONVERSION_DEPENDENT_RULES = frozenset({
-    "ZeroConversionKeywordRule",
-    "CpaSpikeRule",
-    "ConversionRateDropRule",
-    "RelaxTargetCpaRule",
-})
+_CONVERSION_DEPENDENT_RULES = frozenset(
+    {
+        "ZeroConversionKeywordRule",
+        "CpaSpikeRule",
+        "ConversionRateDropRule",
+        "RelaxTargetCpaRule",
+    }
+)
 
 
 def build_rule_engine(

@@ -48,18 +48,14 @@ class SqlGoogleAdsAccountRepository:
 
     async def get(self, account_id: AccountId) -> GoogleAdsAccount | None:
         result = await self._session.execute(
-            select(GoogleAdsAccountModel).where(
-                GoogleAdsAccountModel.id == uuid.UUID(account_id)
-            )
+            select(GoogleAdsAccountModel).where(GoogleAdsAccountModel.id == uuid.UUID(account_id))
         )
         model = result.scalar_one_or_none()
         return _model_to_domain(model) if model else None
 
     async def list_for_user(self, user_id: UserId) -> list[GoogleAdsAccount]:
         result = await self._session.execute(
-            select(GoogleAdsAccountModel).where(
-                GoogleAdsAccountModel.user_id == uuid.UUID(user_id)
-            )
+            select(GoogleAdsAccountModel).where(GoogleAdsAccountModel.user_id == uuid.UUID(user_id))
         )
         return [_model_to_domain(m) for m in result.scalars().all()]
 
@@ -74,9 +70,7 @@ class SqlGoogleAdsAccountRepository:
 
     async def save(self, account: GoogleAdsAccount) -> GoogleAdsAccount:
         result = await self._session.execute(
-            select(GoogleAdsAccountModel).where(
-                GoogleAdsAccountModel.id == uuid.UUID(account.id)
-            )
+            select(GoogleAdsAccountModel).where(GoogleAdsAccountModel.id == uuid.UUID(account.id))
         )
         existing = result.scalar_one_or_none()
         model = _domain_to_model(account, existing)

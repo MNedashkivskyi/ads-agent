@@ -32,9 +32,9 @@ _RSA_TYPE = "RESPONSIVE_SEARCH_AD"
 _MIN_IMPRESSIONS = 200
 
 # Patterns that signal specific, concrete copy
-_HAS_NUMBER = re.compile(r"\d")              # any digit
-_HAS_CURRENCY = re.compile(r"[$€£₽zł]")     # currency symbols
-_HAS_PERCENT = re.compile(r"\d+\s*%")        # e.g. "30%"
+_HAS_NUMBER = re.compile(r"\d")  # any digit
+_HAS_CURRENCY = re.compile(r"[$€£₽zł]")  # currency symbols
+_HAS_PERCENT = re.compile(r"\d+\s*%")  # e.g. "30%"
 _HAS_ANCHOR = re.compile(
     r"\b("
     r"free|guarantee|guaranteed|warranty|"

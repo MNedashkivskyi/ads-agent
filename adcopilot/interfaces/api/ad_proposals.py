@@ -45,7 +45,6 @@ async def get_ad_proposals(
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.application.use_cases.refresh_ad_copy import AdCopyRefreshUseCase
-    from adcopilot.domain.entities import AccountId
     from adcopilot.domain.recommendation import RecommendationId, RecommendationKind
     from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
         SqlPromptVersionRepository,
@@ -65,7 +64,10 @@ async def get_ad_proposals(
             if str(rec.account_id) not in [user_id] and True:
                 pass  # account ownership verified below via account_repo if needed
 
-            if rec.kind not in (RecommendationKind.AD_FATIGUE, RecommendationKind.WEAK_RSA_STRENGTH):
+            if rec.kind not in (
+                RecommendationKind.AD_FATIGUE,
+                RecommendationKind.WEAK_RSA_STRENGTH,
+            ):
                 raise HTTPException(
                     status_code=422,
                     detail=f"Recommendation kind {rec.kind.value} does not support ad proposals",
@@ -102,7 +104,7 @@ async def approve_ad_proposal(
     rec_id: str,
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
-    body: ApproveProposalRequest = ApproveProposalRequest(),
+    body: ApproveProposalRequest = ApproveProposalRequest(),  # noqa: B008
 ) -> ApproveProposalResponse:
     """Approve an ad copy proposal.
 
@@ -130,7 +132,10 @@ async def approve_ad_proposal(
             rec = await rec_repo.get(RecommendationId(rec_id))
             if rec is None:
                 raise HTTPException(status_code=404, detail="Recommendation not found")
-            if rec.kind not in (RecommendationKind.AD_FATIGUE, RecommendationKind.WEAK_RSA_STRENGTH):
+            if rec.kind not in (
+                RecommendationKind.AD_FATIGUE,
+                RecommendationKind.WEAK_RSA_STRENGTH,
+            ):
                 raise HTTPException(
                     status_code=422,
                     detail=f"Recommendation kind {rec.kind.value} does not support ad proposals",
@@ -149,7 +154,9 @@ async def approve_ad_proposal(
     # Store experiment mode flag in the task payload for the executor to handle.
     # The executor checks payload["run_as_experiment"] to decide whether to
     # replace the ad or create an A/B experiment.
-    execute_recommendation_task.delay(rec_id, {"run_as_experiment": not body.force_replace, "variant_index": body.variant_index})
+    execute_recommendation_task.delay(
+        rec_id, {"run_as_experiment": not body.force_replace, "variant_index": body.variant_index}
+    )
     logger.info(
         "ad_proposal.approved",
         user_id=user_id,

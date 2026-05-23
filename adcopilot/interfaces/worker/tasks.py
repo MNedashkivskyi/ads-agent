@@ -61,11 +61,11 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
         # needs_reauth=True on the account.  Notify the user so they know to
         # reconnect their Google Ads account.
         if not result.success and "GoogleAdsAuthError" in (result.error_message or ""):
-                # TODO(phase-1): send reauth notification via new notifier
-                logger.warning(
-                    "snapshot auth failure — user needs to reconnect Google Ads",
-                    account_id=account_id,
-                )
+            # TODO(phase-1): send reauth notification via new notifier
+            logger.warning(
+                "snapshot auth failure — user needs to reconnect Google Ads",
+                account_id=account_id,
+            )
         if result.success:
             # Run detection asynchronously after a successful snapshot
             asyncio.run(_run_detection(settings, AccountId(account_id), snap_date))
@@ -147,7 +147,6 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
             from adcopilot.infrastructure.db.repositories.snooze_repository import (
                 SqlSnoozeRepository,
             )
-            from adcopilot.domain.snapshot import ConversionActionSnapshot
 
             rec_repo = SqlRecommendationRepository(session)
             snooze_repo = SqlSnoozeRepository(session)
@@ -155,10 +154,11 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
             # Check if conversion tracking is working — load conversion actions
             # from the snapshot repository to determine if any are healthy.
             snapshot_repo = SqlSnapshotRepository(session)
-            conversion_actions = await snapshot_repo.get_conversion_actions(AccountId(str(account_id)))
+            conversion_actions = await snapshot_repo.get_conversion_actions(
+                AccountId(str(account_id))
+            )
             has_working_tracking = any(
-                a.status == "ENABLED" and a.all_conversions > 0
-                for a in conversion_actions
+                a.status == "ENABLED" and a.all_conversions > 0 for a in conversion_actions
             )
             if not has_working_tracking:
                 logger.info(
@@ -166,7 +166,9 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
                     account_id=str(account_id),
                 )
 
-            rule_engine = build_rule_engine(rec_repo, snooze_repo, has_working_tracking=has_working_tracking)
+            rule_engine = build_rule_engine(
+                rec_repo, snooze_repo, has_working_tracking=has_working_tracking
+            )
             use_case = RunDetectionUseCase(
                 snapshot_repo=snapshot_repo,
                 rec_repo=rec_repo,
@@ -206,6 +208,8 @@ async def _update_experiment_metrics(
     account_id: object,
 ) -> None:
     """Update per-ad metrics for running experiments and conclude if significant."""
+    from datetime import UTC, datetime
+
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from adcopilot.application.use_cases.evaluate_experiment import evaluate_experiment
@@ -222,7 +226,6 @@ async def _update_experiment_metrics(
     )
     from adcopilot.infrastructure.google_ads.mutations_adapter import GoogleAdsMutationsAdapter
     from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
-    from datetime import UTC, datetime
 
     assert isinstance(settings, Settings)
     assert isinstance(session, AsyncSession)
@@ -275,7 +278,11 @@ async def _update_experiment_metrics(
 
                 # Pause losing ad
                 ad_group_id = int(exp.ad_group_resource_name.split("/")[-1])
-                loser_rn = exp.variant_ad_resource_name if result.winner == "control" else exp.control_ad_resource_name
+                loser_rn = (
+                    exp.variant_ad_resource_name
+                    if result.winner == "control"
+                    else exp.control_ad_resource_name
+                )
                 loser_ad_id = int(loser_rn.split("~")[-1])
                 try:
                     await mutations.pause_ad(
@@ -294,18 +301,23 @@ async def _update_experiment_metrics(
                     reason=result.reason,
                 )
         except Exception as exc:
-            logger.warning("experiment.metrics_update_failed", experiment_id=str(exp.id), error=str(exc))
+            logger.warning(
+                "experiment.metrics_update_failed", experiment_id=str(exp.id), error=str(exc)
+            )
 
 
 async def _notify_pmax_alerts(
     session: object,
     settings: object,
     account_id: object,
-    snap_date: "date",
+    snap_date: date,
 ) -> None:
     """Send WebNotifier alerts for freshly-detected PMax anomalies."""
     import uuid as _uuid_mod
-    from datetime import datetime, timezone
+    from datetime import datetime
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
 
     from adcopilot.domain.recommendation import RecommendationKind, RecommendationStatus
     from adcopilot.infrastructure.db.models import RecommendationModel
@@ -314,8 +326,6 @@ async def _notify_pmax_alerts(
     )
     from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
     from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from sqlalchemy import select
 
     _PMAX_KINDS = {
         RecommendationKind.PMAX_LOW_ROAS.value,
@@ -323,15 +333,15 @@ async def _notify_pmax_alerts(
     }
 
     from adcopilot.config import Settings
+
     assert isinstance(settings, Settings)
     assert isinstance(session, AsyncSession)
 
-    today = datetime.now(tz=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     acct_uuid = _uuid_mod.UUID(str(account_id))
 
     result = await session.execute(
-        select(RecommendationModel)
-        .where(
+        select(RecommendationModel).where(
             RecommendationModel.account_id == acct_uuid,
             RecommendationModel.kind.in_(_PMAX_KINDS),
             RecommendationModel.status == RecommendationStatus.PENDING.value,
@@ -420,29 +430,14 @@ def send_daily_digests_task() -> dict[str, object]:
 
 async def _run_send_digests(settings: object) -> dict[str, object]:
     """Compute digests for all users (log-only; notifier wired in Phase 1)."""
-    from datetime import datetime
-
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-    from adcopilot.application.use_cases.send_daily_digest import SendDailyDigestUseCase
     from adcopilot.config import Settings
-    from adcopilot.domain.entities import AccountId, UserId
     from adcopilot.infrastructure.db.models import UserModel
-    from adcopilot.infrastructure.db.repositories.digest_sent_log_repository import (
-        SqlDigestSentLogRepository,
-    )
-    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
-        SqlGoogleAdsAccountRepository,
-    )
-    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
-        SqlRecommendationRepository,
-    )
+
     assert isinstance(settings, Settings)
 
-    today = datetime.now(UTC).date()
     engine = create_async_engine(settings.DATABASE_URL)
-    sent = 0
-    skipped = 0
     try:
         from sqlalchemy import select
 
@@ -556,7 +551,9 @@ async def _run_trial_reminders(settings: object) -> dict[str, object]:
     retry_backoff_max=300,
     name="adcopilot.interfaces.worker.tasks.execute_recommendation_task",
 )
-def execute_recommendation_task(self: object, rec_id: str, options: dict | None = None) -> dict[str, object]:
+def execute_recommendation_task(
+    self: object, rec_id: str, options: dict | None = None
+) -> dict[str, object]:
     """Execute a single APPROVED recommendation against the Google Ads API.
 
     Auth errors (revoked/expired refresh token) are caught immediately and
@@ -678,7 +675,6 @@ async def _handle_auth_failure(rec_id: str) -> None:
         await engine.dispose()
 
 
-
 async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
     """Mark the recommendation FAILED and log the failure (notification wired in Phase 1)."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -771,6 +767,7 @@ async def _run_generate_campaign(
             if not settings.LLM_API_KEY:
                 from adcopilot.domain.launch.entities import LaunchStatus
                 from adcopilot.domain.launch.templates import build_proposal_from_template
+
                 proposal = build_proposal_from_template(brief)
                 await proposal_repo.save(proposal)
                 await brief_repo.update_status(brief.id, LaunchStatus.PROPOSED)
@@ -875,7 +872,6 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
             _saved_customer_id = account.customer_id
             _saved_primary_action = brief.primary_action
 
-
             writer = CampaignWriter(
                 settings=settings,
                 audit_log_repo=audit_repo,
@@ -924,6 +920,7 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
                 from adcopilot.domain.launch.budget_tier import classify_budget_tier
                 from adcopilot.domain.launch.schedule_rules import get_ad_schedule
                 from adcopilot.domain.launch.templates import detect_vertical_from_description
+
                 _tier = classify_budget_tier(brief.monthly_budget_pln)
                 _vertical = detect_vertical_from_description(brief.business_description)
 
@@ -983,7 +980,17 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
                     brief_id=brief_id,
                 )
                 # Rollback everything created so far
-                if campaign_rn or ag_rns or kw_rns or ad_rns or neg_rns or ext_rns or audience_rns or brand_campaign_rn or schedule_rns:
+                if (
+                    campaign_rn
+                    or ag_rns
+                    or kw_rns
+                    or ad_rns
+                    or neg_rns
+                    or ext_rns
+                    or audience_rns
+                    or brand_campaign_rn
+                    or schedule_rns
+                ):
                     resources = CreatedCampaignResources(
                         campaign_resource_name=campaign_rn or "",
                         budget_resource_name=budget_rn if "budget_rn" in dir() else "",
@@ -1137,9 +1144,7 @@ def monitor_new_campaign_task(
     """
     import asyncio
 
-    return asyncio.run(
-        _run_monitor_new_campaign(brief_id, account_id, hours_elapsed)
-    )
+    return asyncio.run(_run_monitor_new_campaign(brief_id, account_id, hours_elapsed))
 
 
 async def _run_monitor_new_campaign(
@@ -1159,6 +1164,7 @@ async def _run_monitor_new_campaign(
     from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
         SqlCampaignBriefRepository,
     )
+
     settings = get_settings()
 
     # Verify campaign is still ENABLED
@@ -1464,9 +1470,7 @@ async def _run_anomaly_detection_all_accounts(settings: object) -> dict[str, obj
         # Fetch all active accounts with OAuth credentials
         async with AsyncSession(engine) as session:
             account_repo = SqlGoogleAdsAccountRepository(session)
-            credentials_repo = SqlOAuthCredentialsRepository(
-                session, settings.TOKEN_ENCRYPTION_KEY
-            )
+            credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
             accounts = await account_repo.list_active()
             account_creds: list[tuple[object, str, str]] = []
             for acct in accounts:
@@ -1566,9 +1570,7 @@ def check_bidding_upgrade_task() -> dict[str, object]:
                         total_recs += len(recs)
                         accounts_checked += 1
                 except Exception:
-                    logger.exception(
-                        "bidding_upgrade_check.failed", account_id=str(account.id)
-                    )
+                    logger.exception("bidding_upgrade_check.failed", account_id=str(account.id))
                     accounts_errored += 1
         finally:
             await engine.dispose()
@@ -1648,9 +1650,7 @@ def check_rlsa_eligibility_task() -> dict[str, object]:
                     total_added += added
                     accounts_checked += 1
                 except Exception:
-                    logger.exception(
-                        "rlsa_eligibility_check.failed", account_id=str(account.id)
-                    )
+                    logger.exception("rlsa_eligibility_check.failed", account_id=str(account.id))
                     accounts_errored += 1
         finally:
             await engine.dispose()
@@ -1670,7 +1670,9 @@ def check_rlsa_eligibility_task() -> dict[str, object]:
     return asyncio.run(_run())  # type: ignore[return-value]
 
 
-@celery_app.task(name="adcopilot.interfaces.worker.tasks.check_remarketing_campaign_eligibility_task")  # type: ignore[untyped-decorator]
+@celery_app.task(
+    name="adcopilot.interfaces.worker.tasks.check_remarketing_campaign_eligibility_task"
+)  # type: ignore[untyped-decorator]
 def check_remarketing_campaign_eligibility_task() -> dict[str, object]:
     """Monthly task: propose Display Remarketing campaigns for eligible GROWTH accounts."""
     import asyncio
@@ -1769,9 +1771,6 @@ def check_remarketing_campaign_eligibility_task() -> dict[str, object]:
 def send_weekly_performance_report_task() -> dict[str, object]:
     """Weekly task (Fridays 10:00 UTC): send performance impact summary via Telegram."""
     import asyncio
-    from adcopilot.config import get_settings
-
-    settings = get_settings()
 
     async def _run() -> dict[str, object]:
         # TODO(phase-0.2): wire new performance reporter implementation
@@ -1790,6 +1789,7 @@ def send_weekly_performance_report_task() -> dict[str, object]:
 def compare_recommendation_performance_task() -> dict[str, object]:
     """Daily task: compare executed recommendations against 7-day and 14-day baselines."""
     import asyncio
+
     from adcopilot.config import get_settings
 
     settings = get_settings()
@@ -1823,11 +1823,17 @@ def compare_recommendation_performance_task() -> dict[str, object]:
                 comparison_repo = SqlPerformanceComparisonRepository(session)
                 snapshot_repo = SqlSnapshotRepository(session)
 
-                async def _fetch_snapshot(account_id: str, entity_type: str, entity_id: int) -> dict | None:
+                async def _fetch_snapshot(
+                    account_id: str, entity_type: str, entity_id: int
+                ) -> dict | None:
                     from datetime import date
+
                     today = date.today()
                     from adcopilot.domain.entities import AccountId
-                    campaigns = await snapshot_repo.get_campaigns_by_date(AccountId(account_id), today)
+
+                    campaigns = await snapshot_repo.get_campaigns_by_date(
+                        AccountId(account_id), today
+                    )
                     if entity_type == "campaign":
                         for c in campaigns:
                             if c.campaign_id == entity_id:
@@ -1860,6 +1866,8 @@ def classify_account_vertical_task(account_id: str) -> dict[str, object]:
     import asyncio as _asyncio
 
     async def _run() -> dict[str, object]:
+        from sqlalchemy.ext.asyncio import AsyncSession
+
         from adcopilot.application.use_cases.classify_account_vertical import (
             ClassifyAccountVerticalUseCase,
         )
@@ -1868,7 +1876,6 @@ def classify_account_vertical_task(account_id: str) -> dict[str, object]:
         from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
             SqlGoogleAdsAccountRepository,
         )
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         settings = Settings()
         engine = build_async_engine(settings)
@@ -1894,18 +1901,19 @@ def aggregate_benchmarks_task() -> dict[str, object]:
     import asyncio as _asyncio
 
     async def _run() -> dict[str, object]:
+        from sqlalchemy.ext.asyncio import AsyncSession
+
         from adcopilot.application.use_cases.aggregate_benchmarks import (
             AggregateBenchmarksUseCase,
         )
         from adcopilot.config import Settings
         from adcopilot.infrastructure.db.engine import build_async_engine
-        from adcopilot.infrastructure.db.repositories.benchmark_repository import (
-            SqlBenchmarkRepository,
-        )
         from adcopilot.infrastructure.db.repositories.account_summary_provider import (
             SqlAccountSummaryProvider,
         )
-        from sqlalchemy.ext.asyncio import AsyncSession
+        from adcopilot.infrastructure.db.repositories.benchmark_repository import (
+            SqlBenchmarkRepository,
+        )
 
         settings = Settings()
         engine = build_async_engine(settings)
@@ -1940,6 +1948,7 @@ def monthly_landing_page_audit_task() -> dict[str, object]:
         import json
 
         import structlog
+        from sqlalchemy.ext.asyncio import AsyncSession
 
         from adcopilot.application.use_cases.score_landing_page import LandingPageScoreUseCase
         from adcopilot.config import Settings
@@ -1957,7 +1966,6 @@ def monthly_landing_page_audit_task() -> dict[str, object]:
         from adcopilot.infrastructure.landing_page.pagespeed_adapter import PageSpeedAdapter
         from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
         from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         _log = structlog.get_logger(__name__)
         settings = Settings()
@@ -2039,9 +2047,12 @@ def generate_weekly_insight_task() -> dict[str, object]:
 
     async def _run() -> dict[str, object]:
         import structlog
+        from sqlalchemy.ext.asyncio import AsyncSession
 
         from adcopilot.application.services.account_context_builder import AccountContextBuilder
-        from adcopilot.application.use_cases.generate_weekly_insight import GenerateWeeklyInsightUseCase
+        from adcopilot.application.use_cases.generate_weekly_insight import (
+            GenerateWeeklyInsightUseCase,
+        )
         from adcopilot.config import Settings
         from adcopilot.infrastructure.db.engine import build_async_engine
         from adcopilot.infrastructure.db.repositories.audit_log_repository import (
@@ -2064,7 +2075,6 @@ def generate_weekly_insight_task() -> dict[str, object]:
         )
         from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
         from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
-        from sqlalchemy.ext.asyncio import AsyncSession
 
         _log = structlog.get_logger(__name__)
         settings = Settings()
@@ -2100,6 +2110,7 @@ def generate_weekly_insight_task() -> dict[str, object]:
                         insight_text = await insight_uc.execute(ctx)
 
                         import datetime as _dt
+
                         today = _dt.date.today()
                         week_start = today - _dt.timedelta(days=today.weekday())
 
@@ -2121,7 +2132,9 @@ def generate_weekly_insight_task() -> dict[str, object]:
                         )
                         delivered += 1
                     except Exception as exc:
-                        _log.error("weekly_insight.error", account_id=str(account.id), error=str(exc))
+                        _log.error(
+                            "weekly_insight.error", account_id=str(account.id), error=str(exc)
+                        )
                         errors += 1
 
                 await session.commit()
@@ -2149,8 +2162,8 @@ def send_conversion_tracking_reminders_task() -> dict[str, object]:
 
 async def _run_conversion_reminders(settings: object) -> dict[str, object]:
     import httpx
-    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
     from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import Settings
     from adcopilot.domain.entities import AccountId
@@ -2232,7 +2245,11 @@ def snapshot_ga4_data_task(account_id: str, snapshot_date_iso: str) -> dict:
 
 
 async def _run_ga4_snapshot(account_id: str, snap_date) -> dict:
+    import base64
+    import hashlib
     import uuid as _uuid
+
+    from cryptography.fernet import Fernet
     from sqlalchemy import select
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -2240,8 +2257,6 @@ async def _run_ga4_snapshot(account_id: str, snap_date) -> dict:
     from adcopilot.config import get_settings
     from adcopilot.infrastructure.db.models import GA4CredentialsModel, GA4PageSnapshotModel
     from adcopilot.infrastructure.ga4.queries_adapter import fetch_page_metrics
-    from cryptography.fernet import Fernet
-    import base64, hashlib
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -2317,8 +2332,11 @@ def snapshot_auction_insights_task(account_id: str, snapshot_date_iso: str) -> d
 
 
 async def _run_auction_insights_snapshot(account_id: str, snap_date) -> dict:
+    import base64
+    import hashlib
     import uuid as _uuid
-    from sqlalchemy import select
+
+    from cryptography.fernet import Fernet
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -2328,8 +2346,6 @@ async def _run_auction_insights_snapshot(account_id: str, snap_date) -> dict:
         SqlGoogleAdsAccountRepository,
     )
     from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
-    from cryptography.fernet import Fernet
-    import base64, hashlib
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -2395,11 +2411,13 @@ async def _run_auction_insights_snapshot(account_id: str, snap_date) -> dict:
 def weekly_qs_improvement_check_task() -> dict:
     """Weekly QS improvement check: auto-create plans and evaluate measuring ones."""
     import asyncio
+
     return asyncio.get_event_loop().run_until_complete(_weekly_qs_improvement_check())
 
 
 async def _weekly_qs_improvement_check() -> dict:
     from datetime import UTC, datetime
+
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import get_settings
@@ -2428,6 +2446,7 @@ async def _weekly_qs_improvement_check() -> dict:
                     from adcopilot.application.use_cases.create_qs_improvement_plan import (
                         create_qs_improvement_plan,
                     )
+
                     plan = await create_qs_improvement_plan(
                         account_id=str(account.id), session=session
                     )
@@ -2436,7 +2455,9 @@ async def _weekly_qs_improvement_check() -> dict:
                 except ValueError:
                     pass
                 except Exception as exc:
-                    logger.warning("qs_auto_create_failed", account_id=str(account.id), error=str(exc))
+                    logger.warning(
+                        "qs_auto_create_failed", account_id=str(account.id), error=str(exc)
+                    )
 
             # 2. Evaluate plans past their measurement window
             now = datetime.now(UTC)
@@ -2446,6 +2467,7 @@ async def _weekly_qs_improvement_check() -> dict:
                     from adcopilot.application.use_cases.evaluate_qs_improvement_plan import (
                         evaluate_qs_improvement_plan,
                     )
+
                     await evaluate_qs_improvement_plan(plan_id=plan.id, session=session)
                     evaluated += 1
                 except Exception as exc:
@@ -2475,14 +2497,18 @@ async def _monthly_performance_reports() -> None:
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+    from adcopilot.application.use_cases.generate_performance_report import (
+        generate_performance_report,
+    )
     from adcopilot.config import get_settings
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
+    from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
+        SqlPromptVersionRepository,
+    )
     from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient as AnthropicLLMClient
     from adcopilot.infrastructure.reporting.pdf_renderer import render_performance_report_pdf
-    from adcopilot.application.use_cases.generate_performance_report import generate_performance_report
-    from adcopilot.infrastructure.db.repositories.prompt_version_repository import SqlPromptVersionRepository
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -2516,6 +2542,7 @@ async def _monthly_performance_reports() -> None:
 
                     import json as _json
                     import uuid as _uuid
+
                     from sqlalchemy import text as _text
 
                     await session.execute(

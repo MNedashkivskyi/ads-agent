@@ -2,16 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import date, UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import uuid4
-
-import pytest
 
 from adcopilot.application.detection.base import DetectionContext, HistoricalStats
 from adcopilot.application.detection.rules.rule_46_promote_search_term import (
     PromoteSearchTermRule,
-    _jaccard,
     _is_already_keyword,
+    _jaccard,
 )
 from adcopilot.domain.entities import AccountId, GoogleAdsAccount, UserId
 from adcopilot.domain.recommendation import RecommendationKind
@@ -19,7 +17,6 @@ from adcopilot.domain.snapshot import KeywordSnapshot, SearchTermSnapshot, Snaps
 
 
 def _account() -> GoogleAdsAccount:
-    from datetime import datetime, UTC
     return GoogleAdsAccount(
         id=AccountId("123"),
         user_id=UserId("u1"),
@@ -206,9 +203,11 @@ def test_payload_contains_expected_fields() -> None:
 
 def test_duplicate_terms_deduplicated() -> None:
     rule = PromoteSearchTermRule()
-    ctx = _ctx([
-        _st(term="salon beauty", conversions=5.0, clicks=10),
-        _st(term="salon beauty", conversions=5.0, clicks=10),
-    ])
+    ctx = _ctx(
+        [
+            _st(term="salon beauty", conversions=5.0, clicks=10),
+            _st(term="salon beauty", conversions=5.0, clicks=10),
+        ]
+    )
     recs = rule.detect(ctx)
     assert len(recs) == 1

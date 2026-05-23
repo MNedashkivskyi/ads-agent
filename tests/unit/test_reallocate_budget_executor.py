@@ -67,4 +67,5 @@ async def test_donor_too_low_raises() -> None:
 
 def test_reallocate_budget_removed_from_non_executable() -> None:
     from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS
+
     assert RecommendationKind.REALLOCATE_BUDGET not in NON_EXECUTABLE_KINDS

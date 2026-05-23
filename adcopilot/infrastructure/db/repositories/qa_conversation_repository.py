@@ -13,7 +13,15 @@ from adcopilot.infrastructure.db.models import QaConversationModel
 
 
 class QaConversation:
-    __slots__ = ("id", "user_id", "account_id", "question", "answer", "context_snapshot", "created_at")
+    __slots__ = (
+        "id",
+        "user_id",
+        "account_id",
+        "question",
+        "answer",
+        "context_snapshot",
+        "created_at",
+    )
 
     def __init__(
         self,

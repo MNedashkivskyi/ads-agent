@@ -94,9 +94,12 @@ def run_backup() -> str:
 
     pg_dump_cmd = [
         "pg_dump",
-        "-h", str(db["host"]),
-        "-p", str(db["port"]),
-        "-U", str(db["user"]),
+        "-h",
+        str(db["host"]),
+        "-p",
+        str(db["port"]),
+        "-U",
+        str(db["user"]),
         "--no-password",
         "--format=plain",
         str(db["dbname"]),

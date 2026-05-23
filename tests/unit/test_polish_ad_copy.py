@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from adcopilot.domain.launch.templates import _TEMPLATES
 from adcopilot.domain.polish_market.ad_copy_rules import (
     DESCRIPTION_MAX_CHARS,
     HEADLINE_MAX_CHARS,
@@ -12,8 +13,6 @@ from adcopilot.domain.polish_market.ad_copy_rules import (
     description_ok,
     headline_ok,
 )
-from adcopilot.domain.launch.templates import _TEMPLATES
-
 
 # ---------------------------------------------------------------------------
 # ad_copy_rules unit tests

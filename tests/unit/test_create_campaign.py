@@ -71,9 +71,7 @@ class InMemoryBriefRepo:
         self._brief = brief
         return brief
 
-    async def update_status(
-        self, brief_id: CampaignBriefId, status: LaunchStatus
-    ) -> None:
+    async def update_status(self, brief_id: CampaignBriefId, status: LaunchStatus) -> None:
         self.status_history.append(status)
 
 
@@ -282,14 +280,12 @@ def _make_brief(status: LaunchStatus = LaunchStatus.APPROVED) -> CampaignBrief:
 
 
 def _make_keyword(text: str) -> KeywordProposal:
-    return KeywordProposal(
-        text=text, match_type=MatchType.PHRASE, estimated_cpc_micros=1_000_000
-    )
+    return KeywordProposal(text=text, match_type=MatchType.PHRASE, estimated_cpc_micros=1_000_000)
 
 
 def _make_ad() -> AdProposal:
     return AdProposal(
-        headlines=[f"Headline {i+1}" for i in range(5)],
+        headlines=[f"Headline {i + 1}" for i in range(5)],
         descriptions=["Desc one here", "Desc two here"],
         final_url="https://example.com",
         path_segments=("salon", "warsaw"),
@@ -386,7 +382,7 @@ class TestCreateCampaignHappyPath:
         assert "create_campaign" in methods_called
         assert "create_ad_groups" in methods_called
         assert methods_called.count("create_keywords") == 2  # once per ad group
-        assert methods_called.count("create_ads") == 2        # once per ad group
+        assert methods_called.count("create_ads") == 2  # once per ad group
         assert "create_negative_keywords" in methods_called
 
     @pytest.mark.asyncio

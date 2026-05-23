@@ -40,15 +40,43 @@ def _any_match(patterns: list[str], text: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 _MEDICAL_HEALTH_CLAIMS: list[tuple[str, str, str]] = [
-    (r"wyle[cć]zy", Severity.HIGH, "Nagłówek zawiera roszczenie zdrowotne 'wyleczy/wyleczymy'. Sugestia: 'Profesjonalna pomoc medyczna'"),
-    (r"gwarantowany efekt", Severity.HIGH, "Fraza 'gwarantowany efekt' narusza zasady etyki reklamy. Sugestia: 'Skuteczna terapia'"),
-    (r"100%\s*skuteczno[śs]ci?", Severity.HIGH, "Twierdzenie '100% skuteczności' jest nieweryfikowalne. Sugestia: 'Wysoka skuteczność potwierdzona badaniami'"),
-    (r"najlepszy lekarz", Severity.MEDIUM, "Superlatyw 'najlepszy lekarz' bez certyfikowanego rankingu. Sugestia: 'Doświadczony lekarz specjalista'"),
-    (r"\bnajlepszy\b", Severity.MEDIUM, "Nieuzasadniony superlatyw 'najlepszy'. Sugestia: użyj konkretnych atrybutów"),
+    (
+        r"wyle[cć]zy",
+        Severity.HIGH,
+        "Nagłówek zawiera roszczenie zdrowotne 'wyleczy/wyleczymy'. Sugestia: 'Profesjonalna pomoc medyczna'",
+    ),
+    (
+        r"gwarantowany efekt",
+        Severity.HIGH,
+        "Fraza 'gwarantowany efekt' narusza zasady etyki reklamy. Sugestia: 'Skuteczna terapia'",
+    ),
+    (
+        r"100%\s*skuteczno[śs]ci?",
+        Severity.HIGH,
+        "Twierdzenie '100% skuteczności' jest nieweryfikowalne. Sugestia: 'Wysoka skuteczność potwierdzona badaniami'",
+    ),
+    (
+        r"najlepszy lekarz",
+        Severity.MEDIUM,
+        "Superlatyw 'najlepszy lekarz' bez certyfikowanego rankingu. Sugestia: 'Doświadczony lekarz specjalista'",
+    ),
+    (
+        r"\bnajlepszy\b",
+        Severity.MEDIUM,
+        "Nieuzasadniony superlatyw 'najlepszy'. Sugestia: użyj konkretnych atrybutów",
+    ),
     (r"\bjedyny\b", Severity.MEDIUM, "Twierdzenie 'jedyny' wymaga weryfikowalnych dowodów"),
-    (r"\bnajpewniejszy\b", Severity.MEDIUM, "Superlatyw 'najpewniejszy' bez certyfikowanego rankingu"),
+    (
+        r"\bnajpewniejszy\b",
+        Severity.MEDIUM,
+        "Superlatyw 'najpewniejszy' bez certyfikowanego rankingu",
+    ),
     (r"bez skierowania", Severity.LOW, "Rozważ dodanie: 'konsultacja z lekarzem zalecana'"),
-    (r"natychmiastowe wyzdrowienie", Severity.HIGH, "Twierdzenie o 'natychmiastowym wyzdrowieniu' jest wprowadzające w błąd"),
+    (
+        r"natychmiastowe wyzdrowienie",
+        Severity.HIGH,
+        "Twierdzenie o 'natychmiastowym wyzdrowieniu' jest wprowadzające w błąd",
+    ),
     (r"gwarantujemy zdrowie", Severity.HIGH, "Gwarancja zdrowia narusza przepisy reklamowe"),
 ]
 
@@ -59,16 +87,52 @@ _MEDICAL_DISCLAIMER_MISSING = (
 )
 
 _FINANCIAL_LEGAL_CLAIMS: list[tuple[str, str, str]] = [
-    (r"gwarantowany zysk", Severity.HIGH, "Fraza 'gwarantowany zysk' narusza prawo reklamowe. Sugestia: 'Możliwy zysk przy odpowiednim zarządzaniu'"),
-    (r"pewna inwestycja", Severity.HIGH, "Twierdzenie 'pewna inwestycja' jest mylące. Sugestia: 'Perspektywiczna inwestycja'"),
-    (r"bez ryzyka", Severity.HIGH, "Każda inwestycja wiąże się z ryzykiem. Sugestia: 'Inwestycja z zarządzaniem ryzykiem'"),
-    (r"zarobisz\s+\d+", Severity.HIGH, "Obietnica konkretnych zarobków jest nieuczciwa. Sugestia: 'Możliwość wzrostu kapitału'"),
+    (
+        r"gwarantowany zysk",
+        Severity.HIGH,
+        "Fraza 'gwarantowany zysk' narusza prawo reklamowe. Sugestia: 'Możliwy zysk przy odpowiednim zarządzaniu'",
+    ),
+    (
+        r"pewna inwestycja",
+        Severity.HIGH,
+        "Twierdzenie 'pewna inwestycja' jest mylące. Sugestia: 'Perspektywiczna inwestycja'",
+    ),
+    (
+        r"bez ryzyka",
+        Severity.HIGH,
+        "Każda inwestycja wiąże się z ryzykiem. Sugestia: 'Inwestycja z zarządzaniem ryzykiem'",
+    ),
+    (
+        r"zarobisz\s+\d+",
+        Severity.HIGH,
+        "Obietnica konkretnych zarobków jest nieuczciwa. Sugestia: 'Możliwość wzrostu kapitału'",
+    ),
     (r"zysk\s+\d+%", Severity.HIGH, "Obiecany % zysku wymaga zastrzeżenia o ryzyku"),
-    (r"podwoisz\s+(swój\s+)?kapita[łl]", Severity.HIGH, "Obietnica podwojenia kapitału jest unikana. Sugestia: 'Potencjał wzrostu kapitału'"),
-    (r"gwarantujemy wygraną", Severity.HIGH, "Gwarancja wygranej sprawy sądowej narusza Kodeks Etyki Reklamy. Sugestia: 'Skuteczna pomoc prawna'"),
-    (r"100%\s*skuteczno[śs][cć]\s*(w|w\s*sprawach)?", Severity.HIGH, "Twierdzenie '100% skuteczności' dla usług prawnych jest nieuczciwe"),
-    (r"pewna wygrana", Severity.HIGH, "Twierdzenie o 'pewnej wygranej' narusza zasady etyki prawniczej"),
-    (r"gwarantujemy wynik", Severity.MEDIUM, "Gwarancja wyniku sprawy jest ryzykowna prawnie. Sugestia: 'Dążymy do najlepszego wyniku'"),
+    (
+        r"podwoisz\s+(swój\s+)?kapita[łl]",
+        Severity.HIGH,
+        "Obietnica podwojenia kapitału jest unikana. Sugestia: 'Potencjał wzrostu kapitału'",
+    ),
+    (
+        r"gwarantujemy wygraną",
+        Severity.HIGH,
+        "Gwarancja wygranej sprawy sądowej narusza Kodeks Etyki Reklamy. Sugestia: 'Skuteczna pomoc prawna'",
+    ),
+    (
+        r"100%\s*skuteczno[śs][cć]\s*(w|w\s*sprawach)?",
+        Severity.HIGH,
+        "Twierdzenie '100% skuteczności' dla usług prawnych jest nieuczciwe",
+    ),
+    (
+        r"pewna wygrana",
+        Severity.HIGH,
+        "Twierdzenie o 'pewnej wygranej' narusza zasady etyki prawniczej",
+    ),
+    (
+        r"gwarantujemy wynik",
+        Severity.MEDIUM,
+        "Gwarancja wyniku sprawy jest ryzykowna prawnie. Sugestia: 'Dążymy do najlepszego wyniku'",
+    ),
 ]
 
 _FINANCIAL_DISCLAIMER = (
@@ -83,18 +147,43 @@ _FINANCIAL_DISCLAIMER = (
 # ---------------------------------------------------------------------------
 
 _GENERAL_CLAIMS: list[tuple[str, str, str]] = [
-    (r"lepszy ni[zż]\s+\w+", Severity.MEDIUM, "Twierdzenie porównawcze 'lepszy niż' wymaga weryfikowalnych dowodów"),
-    (r"ta[nń]szy od konkurencji", Severity.MEDIUM, "Twierdzenie o niższej cenie niż konkurencja wymaga aktualnych dowodów"),
-    (r"\bza darmo\b", Severity.HIGH, "Fraza 'za darmo' jest OK tylko gdy usługa jest rzeczywiście bezpłatna"),
-    (r"\bdarmowy\b", Severity.HIGH, "Słowo 'darmowy' jest OK tylko gdy usługa jest rzeczywiście bezpłatna"),
-    (r"\bdarmowa\b", Severity.HIGH, "Słowo 'darmowa' jest OK tylko gdy usługa jest rzeczywiście bezpłatna"),
-    (r"[A-ZŁÓŚĄĘŻŹ]{4,}", Severity.LOW, "WSZYSTKIE WIELKIE LITERY w nagłówku naruszają politykę Google Ads. Sugestia: użyj normalnej wielkości liter"),
+    (
+        r"lepszy ni[zż]\s+\w+",
+        Severity.MEDIUM,
+        "Twierdzenie porównawcze 'lepszy niż' wymaga weryfikowalnych dowodów",
+    ),
+    (
+        r"ta[nń]szy od konkurencji",
+        Severity.MEDIUM,
+        "Twierdzenie o niższej cenie niż konkurencja wymaga aktualnych dowodów",
+    ),
+    (
+        r"\bza darmo\b",
+        Severity.HIGH,
+        "Fraza 'za darmo' jest OK tylko gdy usługa jest rzeczywiście bezpłatna",
+    ),
+    (
+        r"\bdarmowy\b",
+        Severity.HIGH,
+        "Słowo 'darmowy' jest OK tylko gdy usługa jest rzeczywiście bezpłatna",
+    ),
+    (
+        r"\bdarmowa\b",
+        Severity.HIGH,
+        "Słowo 'darmowa' jest OK tylko gdy usługa jest rzeczywiście bezpłatna",
+    ),
+    (
+        r"[A-ZŁÓŚĄĘŻŹ]{4,}",
+        Severity.LOW,
+        "WSZYSTKIE WIELKIE LITERY w nagłówku naruszają politykę Google Ads. Sugestia: użyj normalnej wielkości liter",
+    ),
 ]
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def _check_patterns(
     text: str,
@@ -106,7 +195,9 @@ def _check_patterns(
             parts = message.split("Sugestia:", 1)
             suggestion = parts[1].strip() if len(parts) > 1 else ""
             msg = parts[0].strip()
-            warnings.append(ComplianceWarning(severity=Severity(severity), message=msg, suggestion=suggestion))
+            warnings.append(
+                ComplianceWarning(severity=Severity(severity), message=msg, suggestion=suggestion)
+            )
     return warnings
 
 
@@ -131,7 +222,9 @@ def validate_ad_copy(
     if normalized_vertical in ("lekarz", "medical"):
         warnings.extend(_check_patterns(combined_text, _MEDICAL_HEALTH_CLAIMS))
         # Require disclaimer for medical ads
-        disclaimer_keywords = r"skonsultuj\s+si[eę]\s+z\s+lekarzem|porada\s+lekarska|konsultacja\s+medyczna"
+        disclaimer_keywords = (
+            r"skonsultuj\s+si[eę]\s+z\s+lekarzem|porada\s+lekarska|konsultacja\s+medyczna"
+        )
         if not _match(disclaimer_keywords, combined_text):
             sev, msg, sug = _MEDICAL_DISCLAIMER_MISSING
             warnings.append(ComplianceWarning(severity=sev, message=msg, suggestion=sug))

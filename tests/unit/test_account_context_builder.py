@@ -2,23 +2,31 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
+from datetime import UTC, date, datetime
+from unittest.mock import AsyncMock
 
 import pytest
 
 from adcopilot.application.services.account_context_builder import (
     AccountContextBuilder,
+    _delta_pct,
     _safe_cpa,
     _safe_cpc,
     _safe_roas,
-    _delta_pct,
 )
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.snapshot import CampaignSnapshot
 
 
-def _make_campaign(name: str, cost: int, budget: int, clicks: int, conversions: float, conv_value: float, status: str = "ENABLED") -> CampaignSnapshot:
+def _make_campaign(
+    name: str,
+    cost: int,
+    budget: int,
+    clicks: int,
+    conversions: float,
+    conv_value: float,
+    status: str = "ENABLED",
+) -> CampaignSnapshot:
     return CampaignSnapshot(
         id="snap-1",  # type: ignore[arg-type]
         account_id=AccountId("acc-1"),
@@ -109,8 +117,11 @@ async def test_build_empty_context_when_no_snapshot() -> None:
 @pytest.mark.asyncio
 async def test_build_includes_pending_alerts() -> None:
     from adcopilot.domain.recommendation import (
-        Recommendation, RecommendationId, RecommendationKind,
-        RecommendationSeverity, RecommendationStatus,
+        Recommendation,
+        RecommendationId,
+        RecommendationKind,
+        RecommendationSeverity,
+        RecommendationStatus,
     )
 
     alert = Recommendation(

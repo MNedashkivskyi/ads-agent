@@ -29,27 +29,33 @@ _EXECUTORS: dict[RecommendationKind, RecommendationExecutor] | None = None
 
 
 def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
+    from adcopilot.application.executors.ad_schedule_adjustment import AdScheduleAdjustmentExecutor
     from adcopilot.application.executors.add_callouts import AddCalloutsExecutor
     from adcopilot.application.executors.add_negative_keyword import AddNegativeKeywordExecutor
-    from adcopilot.application.executors.device_bid_adjustment import DeviceBidAdjustmentExecutor
-    from adcopilot.application.executors.ad_schedule_adjustment import AdScheduleAdjustmentExecutor
-    from adcopilot.application.executors.reallocate_budget import ReallocateBudgetExecutor
-    from adcopilot.application.executors.relax_target_cpa import RelaxTargetCpaExecutor
-    from adcopilot.application.executors.remove_negative_conflict import RemoveNegativeConflictExecutor
-    from adcopilot.application.executors.remove_redundant_match_type import RemoveRedundantMatchTypeExecutor
-    from adcopilot.application.executors.geo_exclusion import GeoExclusionExecutor
     from adcopilot.application.executors.add_sitelinks import AddSitelinksExecutor
-    from adcopilot.application.executors.add_structured_snippets import AddStructuredSnippetsExecutor
+    from adcopilot.application.executors.add_structured_snippets import (
+        AddStructuredSnippetsExecutor,
+    )
     from adcopilot.application.executors.adjust_bidding_strategy import (
         AdjustBiddingStrategyExecutor,
     )
     from adcopilot.application.executors.adjust_budget import AdjustBudgetExecutor
     from adcopilot.application.executors.change_match_type import ChangeMatchTypeExecutor
+    from adcopilot.application.executors.device_bid_adjustment import DeviceBidAdjustmentExecutor
+    from adcopilot.application.executors.geo_exclusion import GeoExclusionExecutor
     from adcopilot.application.executors.increase_budget import IncreaseBudgetExecutor
     from adcopilot.application.executors.pause_ad import PauseAdExecutor
     from adcopilot.application.executors.pause_keyword import PauseKeywordExecutor
     from adcopilot.application.executors.promote_search_term import PromoteSearchTermExecutor
+    from adcopilot.application.executors.reallocate_budget import ReallocateBudgetExecutor
     from adcopilot.application.executors.refresh_ad_copy import AdCopyRefreshExecutor
+    from adcopilot.application.executors.relax_target_cpa import RelaxTargetCpaExecutor
+    from adcopilot.application.executors.remove_negative_conflict import (
+        RemoveNegativeConflictExecutor,
+    )
+    from adcopilot.application.executors.remove_redundant_match_type import (
+        RemoveRedundantMatchTypeExecutor,
+    )
     from adcopilot.config import get_settings
 
     execs: list[RecommendationExecutor] = [

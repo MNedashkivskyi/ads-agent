@@ -1,12 +1,12 @@
 """Unit tests for LandingPageChecker."""
+
 from __future__ import annotations
 
-import pytest
 import httpx
+import pytest
 import respx
 
-from adcopilot.infrastructure.landing_page.checker import LandingPageChecker, LandingPageCheckResult
-
+from adcopilot.infrastructure.landing_page.checker import LandingPageChecker
 
 SAMPLE_HTML = """<!DOCTYPE html>
 <html lang="pl">
@@ -21,9 +21,7 @@ SAMPLE_HTML = """<!DOCTYPE html>
 @pytest.mark.asyncio
 @respx.mock
 async def test_check_returns_content_on_200():
-    respx.get("https://example.com/").mock(
-        return_value=httpx.Response(200, text=SAMPLE_HTML)
-    )
+    respx.get("https://example.com/").mock(return_value=httpx.Response(200, text=SAMPLE_HTML))
     checker = LandingPageChecker()
     result = await checker.check("https://example.com/")
 
@@ -39,9 +37,7 @@ async def test_check_returns_content_on_200():
 @pytest.mark.asyncio
 @respx.mock
 async def test_check_non_200_returns_unreachable():
-    respx.get("https://example.com/404").mock(
-        return_value=httpx.Response(404, text="Not Found")
-    )
+    respx.get("https://example.com/404").mock(return_value=httpx.Response(404, text="Not Found"))
     checker = LandingPageChecker()
     result = await checker.check("https://example.com/404")
 
@@ -63,9 +59,7 @@ async def test_check_timeout_returns_unreachable():
 @pytest.mark.asyncio
 @respx.mock
 async def test_check_http_url_sets_https_false():
-    respx.get("http://example.com/").mock(
-        return_value=httpx.Response(200, text=SAMPLE_HTML)
-    )
+    respx.get("http://example.com/").mock(return_value=httpx.Response(200, text=SAMPLE_HTML))
     checker = LandingPageChecker()
     result = await checker.check("http://example.com/")
 

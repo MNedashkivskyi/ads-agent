@@ -2,21 +2,20 @@
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from adcopilot.application.use_cases.detect_pmax_eligibility import (
     DetectPMaxEligibilityUseCase,
-    PMaxEligibilityResult,
     _is_ecommerce,
 )
 from adcopilot.domain.launch.entities import (
     AssetGroupProposal,
+    CampaignBriefId,
     PMaxCampaignProposal,
     PMaxProposalId,
-    CampaignBriefId,
 )
-
 
 # ---------------------------------------------------------------------------
 # _is_ecommerce() helper

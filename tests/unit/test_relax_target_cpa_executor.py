@@ -41,7 +41,10 @@ async def test_executor_sets_suggested_target_cpa() -> None:
     mutations = FakeGoogleAdsMutations()
     rec = _rec(
         target={"campaign_id": "300"},
-        evidence={"suggested_target_cpa_micros": 75_000_000, "current_target_cpa_micros": 50_000_000},
+        evidence={
+            "suggested_target_cpa_micros": 75_000_000,
+            "current_target_cpa_micros": 50_000_000,
+        },
     )
     result = await RelaxTargetCpaExecutor().execute(rec, mutations, "token", "cid")
 
@@ -56,4 +59,5 @@ async def test_executor_sets_suggested_target_cpa() -> None:
 
 def test_relax_target_cpa_removed_from_non_executable() -> None:
     from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS
+
     assert RecommendationKind.RELAX_TARGET_CPA not in NON_EXECUTABLE_KINDS

@@ -28,6 +28,7 @@ async def trigger_digest(
     """Manually trigger a daily digest for a user (log-only mode)."""
     from datetime import datetime
 
+    from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.application.use_cases.send_daily_digest import SendDailyDigestUseCase
@@ -42,8 +43,6 @@ async def trigger_digest(
     from adcopilot.infrastructure.db.repositories.recommendation_repository import (
         SqlRecommendationRepository,
     )
-
-    from sqlalchemy import select
 
     engine = create_async_engine(settings.DATABASE_URL)
     try:

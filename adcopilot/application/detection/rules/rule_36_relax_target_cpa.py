@@ -24,9 +24,9 @@ from adcopilot.domain.recommendation import (
     RecommendationStatus,
 )
 
-_TARGET_CPA_RATIO = 0.50      # target < 50% of account avg → too tight
+_TARGET_CPA_RATIO = 0.50  # target < 50% of account avg → too tight
 _MIN_SPEND_MICROS = 5_000_000  # campaign must have spent at least €5
-_MAX_CONVERSIONS = 5.0         # if already converting well, skip
+_MAX_CONVERSIONS = 5.0  # if already converting well, skip
 
 
 class RelaxTargetCpaRule:

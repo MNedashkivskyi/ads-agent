@@ -30,11 +30,23 @@ def upgrade() -> None:
         sa.Column("clicks", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("cost_micros", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("conversions", sa.Float(), nullable=False, server_default="0"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_device_performance_snapshots_account_id", "device_performance_snapshots", ["account_id"])
+    op.create_index(
+        "ix_device_performance_snapshots_account_id", "device_performance_snapshots", ["account_id"]
+    )
     op.create_unique_constraint(
         "uq_device_performance_snapshots",
         "device_performance_snapshots",
@@ -53,11 +65,23 @@ def upgrade() -> None:
         sa.Column("clicks", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("cost_micros", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("conversions", sa.Float(), nullable=False, server_default="0"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_geo_performance_snapshots_account_id", "geo_performance_snapshots", ["account_id"])
+    op.create_index(
+        "ix_geo_performance_snapshots_account_id", "geo_performance_snapshots", ["account_id"]
+    )
     op.create_unique_constraint(
         "uq_geo_performance_snapshots",
         "geo_performance_snapshots",
@@ -76,11 +100,23 @@ def upgrade() -> None:
         sa.Column("clicks", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("cost_micros", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("conversions", sa.Float(), nullable=False, server_default="0"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_hour_performance_snapshots_account_id", "hour_performance_snapshots", ["account_id"])
+    op.create_index(
+        "ix_hour_performance_snapshots_account_id", "hour_performance_snapshots", ["account_id"]
+    )
     op.create_unique_constraint(
         "uq_hour_performance_snapshots",
         "hour_performance_snapshots",
@@ -99,11 +135,25 @@ def upgrade() -> None:
         sa.Column("clicks", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("cost_micros", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("conversions", sa.Float(), nullable=False, server_default="0"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_day_of_week_performance_snapshots_account_id", "day_of_week_performance_snapshots", ["account_id"])
+    op.create_index(
+        "ix_day_of_week_performance_snapshots_account_id",
+        "day_of_week_performance_snapshots",
+        ["account_id"],
+    )
     op.create_unique_constraint(
         "uq_day_of_week_performance_snapshots",
         "day_of_week_performance_snapshots",
@@ -123,11 +173,25 @@ def upgrade() -> None:
         sa.Column("clicks", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("cost_micros", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("conversions", sa.Float(), nullable=False, server_default="0"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_audience_performance_snapshots_account_id", "audience_performance_snapshots", ["account_id"])
+    op.create_index(
+        "ix_audience_performance_snapshots_account_id",
+        "audience_performance_snapshots",
+        ["account_id"],
+    )
     op.create_unique_constraint(
         "uq_audience_performance_snapshots",
         "audience_performance_snapshots",

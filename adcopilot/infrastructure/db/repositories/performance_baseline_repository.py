@@ -55,7 +55,9 @@ class SqlPerformanceBaselineRepository:
         self._session.add(m)
         await self._session.flush()
 
-    async def get_by_recommendation(self, recommendation_id: RecommendationId) -> PerformanceBaseline | None:
+    async def get_by_recommendation(
+        self, recommendation_id: RecommendationId
+    ) -> PerformanceBaseline | None:
         result = await self._session.execute(
             select(PerformanceBaselineModel).where(
                 PerformanceBaselineModel.recommendation_id == uuid.UUID(recommendation_id)

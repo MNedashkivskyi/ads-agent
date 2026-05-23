@@ -22,7 +22,6 @@ class SentryDebugError(RuntimeError):
     """Deliberate error raised by :func:`trigger_sentry` to verify wiring."""
 
 
-
 class EnvCheckResponse(BaseModel):
     ok: bool
     missing: list[str]
@@ -57,14 +56,15 @@ async def env_check() -> EnvCheckResponse:
     if settings.SECRET_KEY == "change-me-in-production":
         warnings.append("SECRET_KEY is using the insecure default — set a random value in Railway")
     if settings.TOKEN_ENCRYPTION_KEY == "change-me-in-production-32-bytes":
-        warnings.append("TOKEN_ENCRYPTION_KEY is using the insecure default — set a random 32-byte value")
+        warnings.append(
+            "TOKEN_ENCRYPTION_KEY is using the insecure default — set a random 32-byte value"
+        )
     if settings.OAUTH_REDIRECT_URI and "localhost" in settings.OAUTH_REDIRECT_URI:
         warnings.append(
             f"OAUTH_REDIRECT_URI is set to '{settings.OAUTH_REDIRECT_URI}' which contains 'localhost' — "
             "this will not work in production. Set it to your Railway API public URL, e.g. "
             "https://<api-service>.up.railway.app/oauth/google/callback"
         )
-
 
     return EnvCheckResponse(
         ok=len(missing) == 0,

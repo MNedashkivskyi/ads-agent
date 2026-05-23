@@ -1,4 +1,5 @@
 """Unit tests for audience signal wiring (tier + vertical → signals)."""
+
 from adcopilot.domain.launch.audience_signals import get_audience_signals
 from adcopilot.domain.launch.budget_tier import BudgetTier
 from adcopilot.domain.launch.templates import detect_vertical_from_description

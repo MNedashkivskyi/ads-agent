@@ -16,9 +16,7 @@ _DEFAULT_SNOOZE_DAYS = 7
 
 
 class SnoozeRecommendationUseCase:
-    def __init__(
-        self, rec_repo: RecommendationRepository, snooze_repo: SnoozeRepository
-    ) -> None:
+    def __init__(self, rec_repo: RecommendationRepository, snooze_repo: SnoozeRepository) -> None:
         self._rec_repo = rec_repo
         self._snooze_repo = snooze_repo
 

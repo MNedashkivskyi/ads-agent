@@ -7,10 +7,11 @@ from typing import Any
 
 import structlog
 
-from adcopilot.application.ports.performance_comparison_repository import PerformanceComparisonRepository
+from adcopilot.application.ports.performance_comparison_repository import (
+    PerformanceComparisonRepository,
+)
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.repositories import GoogleAdsAccountRepository
-from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
 
 logger = structlog.get_logger(__name__)
 
@@ -47,7 +48,8 @@ class SendPerformanceReportUseCase:
                 # Filter to last 14 days
                 cutoff = now - timedelta(days=_REPORT_WINDOW_DAYS)
                 recent = [
-                    c for c in comparisons_raw
+                    c
+                    for c in comparisons_raw
                     if c.compared_at.replace(tzinfo=UTC) >= cutoff
                     if c.compared_at.tzinfo is None or c.compared_at >= cutoff
                 ]
@@ -64,14 +66,19 @@ class SendPerformanceReportUseCase:
 
                 # Compute cumulative savings from IMPROVED comparisons
                 cumulative = sum(
-                    int(abs(c.delta_cpa_pct / 100) * c.current_cpa_micros * c.current_conversions * 4)
+                    int(
+                        abs(c.delta_cpa_pct / 100)
+                        * c.current_cpa_micros
+                        * c.current_conversions
+                        * 4
+                    )
                     for c, _ in pairs
                     if c.verdict == "IMPROVED"
                 )
 
                 account_name = getattr(account, "name", str(account.id))
                 await self._reporter.send_report(
-                    chat_id=int(chat_id),
+                    chat_id=int(account.telegram_chat_id),
                     account_name=account_name,
                     comparisons=pairs,
                     cumulative_savings_micros=cumulative,

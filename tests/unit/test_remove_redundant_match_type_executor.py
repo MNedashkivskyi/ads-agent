@@ -7,7 +7,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from adcopilot.application.executors.remove_redundant_match_type import RemoveRedundantMatchTypeExecutor
+from adcopilot.application.executors.remove_redundant_match_type import (
+    RemoveRedundantMatchTypeExecutor,
+)
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.recommendation import (
     Recommendation,
@@ -41,7 +43,11 @@ async def test_pauses_broad_keyword_when_exact_exists() -> None:
     mutations = FakeGoogleAdsMutations()
     rec = _rec(
         target={"ad_group_id": "50", "criterion_id": "77"},
-        evidence={"keyword_text": "buty sportowe", "redundant_match_type": "BROAD", "kept_match_type": "EXACT"},
+        evidence={
+            "keyword_text": "buty sportowe",
+            "redundant_match_type": "BROAD",
+            "kept_match_type": "EXACT",
+        },
     )
     result = await RemoveRedundantMatchTypeExecutor().execute(rec, mutations, "token", "cid")
 
@@ -58,12 +64,17 @@ async def test_pauses_broad_when_phrase_exists() -> None:
     mutations = FakeGoogleAdsMutations()
     rec = _rec(
         target={"ad_group_id": "50", "criterion_id": "88"},
-        evidence={"keyword_text": "buty sportowe", "redundant_match_type": "BROAD", "kept_match_type": "PHRASE"},
+        evidence={
+            "keyword_text": "buty sportowe",
+            "redundant_match_type": "BROAD",
+            "kept_match_type": "PHRASE",
+        },
     )
-    result = await RemoveRedundantMatchTypeExecutor().execute(rec, mutations, "token", "cid")
+    await RemoveRedundantMatchTypeExecutor().execute(rec, mutations, "token", "cid")
     assert mutations.calls[0]["method"] == "pause_keyword"
 
 
 def test_match_type_redundancy_removed_from_non_executable() -> None:
     from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS
+
     assert RecommendationKind.MATCH_TYPE_REDUNDANCY not in NON_EXECUTABLE_KINDS

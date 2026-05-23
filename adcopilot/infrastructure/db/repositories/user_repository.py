@@ -57,9 +57,7 @@ class SqlUserRepository:
         return _model_to_domain(model) if model else None
 
     async def get_by_email(self, email: str) -> User | None:
-        result = await self._session.execute(
-            select(UserModel).where(UserModel.email == email)
-        )
+        result = await self._session.execute(select(UserModel).where(UserModel.email == email))
         model = result.scalar_one_or_none()
         return _model_to_domain(model) if model else None
 

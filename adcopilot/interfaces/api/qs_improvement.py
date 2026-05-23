@@ -72,21 +72,29 @@ def _plan_to_response(plan) -> QSImprovementPlanResponse:
             avg_qs=plan.baseline_metrics.avg_qs,
             avg_cpc_micros=plan.baseline_metrics.avg_cpc_micros,
             avg_ctr=plan.baseline_metrics.avg_ctr,
-        ) if plan.baseline_metrics else None,
+        )
+        if plan.baseline_metrics
+        else None,
         current_metrics=QSMetricsResponse(
             avg_qs=plan.current_metrics.avg_qs,
             avg_cpc_micros=plan.current_metrics.avg_cpc_micros,
             avg_ctr=plan.current_metrics.avg_ctr,
-        ) if plan.current_metrics else None,
+        )
+        if plan.current_metrics
+        else None,
         evaluation_summary_pl=plan.evaluation_summary_pl,
         created_at=plan.created_at.isoformat(),
         started_at=plan.started_at.isoformat() if plan.started_at else None,
-        measurement_ends_at=plan.measurement_ends_at.isoformat() if plan.measurement_ends_at else None,
+        measurement_ends_at=plan.measurement_ends_at.isoformat()
+        if plan.measurement_ends_at
+        else None,
         completed_at=plan.completed_at.isoformat() if plan.completed_at else None,
     )
 
 
-@router.get("/{user_id}/quality-score/improvement-plans", response_model=list[QSImprovementPlanResponse])
+@router.get(
+    "/{user_id}/quality-score/improvement-plans", response_model=list[QSImprovementPlanResponse]
+)
 async def list_qs_improvement_plans(
     user_id: str,
     current_user: CurrentUser,
@@ -95,9 +103,12 @@ async def list_qs_improvement_plans(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
     from adcopilot.config import get_settings
     from adcopilot.infrastructure.db.repositories.account_repository import AccountRepository
-    from adcopilot.infrastructure.db.repositories.qs_improvement_plan_repository import QSImprovementPlanRepository
+    from adcopilot.infrastructure.db.repositories.qs_improvement_plan_repository import (
+        QSImprovementPlanRepository,
+    )
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -124,10 +135,15 @@ async def create_qs_improvement_plan(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.create_qs_improvement_plan import (
+        create_qs_improvement_plan as uc,
+    )
     from adcopilot.config import get_settings
     from adcopilot.infrastructure.db.repositories.account_repository import AccountRepository
-    from adcopilot.infrastructure.db.repositories.qs_improvement_plan_repository import QSImprovementPlanRepository
-    from adcopilot.application.use_cases.create_qs_improvement_plan import create_qs_improvement_plan as uc
+    from adcopilot.infrastructure.db.repositories.qs_improvement_plan_repository import (
+        QSImprovementPlanRepository,
+    )
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -144,7 +160,7 @@ async def create_qs_improvement_plan(
                     keyword_criterion_ids=body.keyword_criterion_ids,
                 )
             except ValueError as e:
-                raise HTTPException(status_code=422, detail=str(e))
+                raise HTTPException(status_code=422, detail=str(e)) from e
             repo = QSImprovementPlanRepository(session)
             await repo.save(plan)
             await session.commit()
@@ -153,7 +169,9 @@ async def create_qs_improvement_plan(
     return _plan_to_response(plan)
 
 
-@router.get("/{user_id}/quality-score/improvement-plans/{plan_id}", response_model=QSImprovementPlanResponse)
+@router.get(
+    "/{user_id}/quality-score/improvement-plans/{plan_id}", response_model=QSImprovementPlanResponse
+)
 async def get_qs_improvement_plan(
     user_id: str,
     plan_id: str,
@@ -163,8 +181,11 @@ async def get_qs_improvement_plan(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
     from adcopilot.config import get_settings
-    from adcopilot.infrastructure.db.repositories.qs_improvement_plan_repository import QSImprovementPlanRepository
+    from adcopilot.infrastructure.db.repositories.qs_improvement_plan_repository import (
+        QSImprovementPlanRepository,
+    )
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -179,7 +200,10 @@ async def get_qs_improvement_plan(
     return _plan_to_response(plan)
 
 
-@router.post("/{user_id}/quality-score/improvement-plans/{plan_id}/execute", response_model=QSImprovementPlanResponse)
+@router.post(
+    "/{user_id}/quality-score/improvement-plans/{plan_id}/execute",
+    response_model=QSImprovementPlanResponse,
+)
 async def execute_qs_improvement_plan(
     user_id: str,
     plan_id: str,
@@ -189,8 +213,11 @@ async def execute_qs_improvement_plan(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.execute_qs_improvement_plan import (
+        execute_qs_improvement_plan as uc,
+    )
     from adcopilot.config import get_settings
-    from adcopilot.application.use_cases.execute_qs_improvement_plan import execute_qs_improvement_plan as uc
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -200,7 +227,7 @@ async def execute_qs_improvement_plan(
                 plan = await uc(plan_id=plan_id, session=session)
                 await session.commit()
             except ValueError as e:
-                raise HTTPException(status_code=422, detail=str(e))
+                raise HTTPException(status_code=422, detail=str(e)) from e
     finally:
         await engine.dispose()
     return _plan_to_response(plan)

@@ -51,6 +51,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(
-        f"DELETE FROM prompt_versions WHERE prompt_key = '{_KEY}' AND version = {_VERSION}"
-    )
+    op.execute(f"DELETE FROM prompt_versions WHERE prompt_key = '{_KEY}' AND version = {_VERSION}")

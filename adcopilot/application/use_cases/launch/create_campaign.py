@@ -100,9 +100,7 @@ class CreateCampaignUseCase:
 
         try:
             # Step 1 — Campaign + Budget
-            campaign_rn, budget_rn = await self._writer.create_campaign(
-                cid, rt, proposal
-            )
+            campaign_rn, budget_rn = await self._writer.create_campaign(cid, rt, proposal)
             logger.info(
                 "create_campaign_step_done",
                 brief_id=brief.id,
@@ -121,9 +119,7 @@ class CreateCampaignUseCase:
 
             # Step 3 — Keywords (per ad group, sequential)
             for ag_proposal, ag_rn in zip(proposal.ad_groups, ad_group_rns):  # noqa: B905
-                kw_rns = await self._writer.create_keywords(
-                    cid, rt, ag_rn, ag_proposal.keywords
-                )
+                kw_rns = await self._writer.create_keywords(cid, rt, ag_rn, ag_proposal.keywords)
                 keyword_rns.extend(kw_rns)
             logger.info(
                 "create_keywords_step_done",
@@ -132,10 +128,8 @@ class CreateCampaignUseCase:
             )
 
             # Step 4 — Ads (per ad group, sequential)
-            for ag_proposal, ag_rn in zip(proposal.ad_groups, ad_group_rns):   # noqa: B905
-                a_rns = await self._writer.create_ads(
-                    cid, rt, ag_rn, ag_proposal.ads
-                )
+            for ag_proposal, ag_rn in zip(proposal.ad_groups, ad_group_rns):  # noqa: B905
+                a_rns = await self._writer.create_ads(cid, rt, ag_rn, ag_proposal.ads)
                 ad_rns.extend(a_rns)
             logger.info(
                 "create_ads_step_done",

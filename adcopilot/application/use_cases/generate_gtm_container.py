@@ -10,7 +10,9 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-_TEMPLATES_DIR = Path(__file__).parent.parent.parent / "domain" / "conversion_tracking" / "gtm_templates"
+_TEMPLATES_DIR = (
+    Path(__file__).parent.parent.parent / "domain" / "conversion_tracking" / "gtm_templates"
+)
 
 _ECOMMERCE_PLATFORMS = {"shopify", "woocommerce", "shoper"}
 _LEAD_GEN_PLATFORMS = {"wordpress", "custom"}

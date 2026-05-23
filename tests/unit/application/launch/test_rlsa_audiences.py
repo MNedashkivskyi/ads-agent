@@ -1,12 +1,13 @@
 """Unit tests for AddRlsaAudiencesUseCase."""
+
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from adcopilot.application.use_cases.add_rlsa_audiences import AddRlsaAudiencesUseCase
 from adcopilot.domain.snapshot import RemarketingListInfo
-
 
 _ACCOUNT_ID = "acc-1"
 _REFRESH_TOKEN = "token"
@@ -28,7 +29,9 @@ def _make_uc(lists, ag_rns=_AG_RNS, create_rns=None):
     queries.query_remarketing_lists.return_value = lists
     writer = AsyncMock()
     writer.get_search_ad_group_resource_names.return_value = ag_rns
-    writer.create_rlsa_audiences.return_value = create_rns or [f"crit/{i}" for i in range(len(ag_rns))]
+    writer.create_rlsa_audiences.return_value = create_rns or [
+        f"crit/{i}" for i in range(len(ag_rns))
+    ]
     return AddRlsaAudiencesUseCase(queries, writer), queries, writer
 
 

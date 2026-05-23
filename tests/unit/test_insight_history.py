@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,10 +13,10 @@ from adcopilot.infrastructure.db.repositories.weekly_insight_repository import (
     WeeklyInsight,
 )
 
-
 # ---------------------------------------------------------------------------
 # Repository unit tests
 # ---------------------------------------------------------------------------
+
 
 def _make_model(
     user_id: str = "user-1",
@@ -31,7 +31,7 @@ def _make_model(
     m.week_start = week_start
     m.insight_text = insight_text
     m.context_snapshot = {"summary": {"spend": 200.0}}
-    m.created_at = datetime(2026, 5, 19, 8, 30, tzinfo=timezone.utc)
+    m.created_at = datetime(2026, 5, 19, 8, 30, tzinfo=UTC)
     return m
 
 
@@ -113,6 +113,7 @@ async def test_list_for_user_empty():
 # API endpoint tests
 # ---------------------------------------------------------------------------
 
+
 def _mock_insight_items() -> list[WeeklyInsight]:
     return [
         WeeklyInsight(
@@ -122,7 +123,7 @@ def _mock_insight_items() -> list[WeeklyInsight]:
             week_start=date(2026, 5, 18),
             insight_text="Tydzień był udany.",
             context_snapshot=None,
-            created_at=datetime(2026, 5, 19, 8, 30, tzinfo=timezone.utc),
+            created_at=datetime(2026, 5, 19, 8, 30, tzinfo=UTC),
         ),
         WeeklyInsight(
             id=str(uuid.uuid4()),
@@ -131,7 +132,7 @@ def _mock_insight_items() -> list[WeeklyInsight]:
             week_start=date(2026, 5, 11),
             insight_text="ROAS wzrósł o 15%.",
             context_snapshot={"summary": {}},
-            created_at=datetime(2026, 5, 12, 8, 30, tzinfo=timezone.utc),
+            created_at=datetime(2026, 5, 12, 8, 30, tzinfo=UTC),
         ),
     ]
 
@@ -154,12 +155,15 @@ async def test_insights_endpoint_returns_items():
     mock_session_instance.__aexit__ = AsyncMock(return_value=False)
     mock_session_instance.begin = MagicMock(return_value=mock_session_instance)
 
-    import adcopilot.infrastructure.db.repositories.weekly_insight_repository as repo_mod
     import sqlalchemy.ext.asyncio as sqla_async
+
+    import adcopilot.infrastructure.db.repositories.weekly_insight_repository as repo_mod
 
     with (
         patch.object(repo_mod, "SqlWeeklyInsightRepository", return_value=mock_repo_instance),
-        patch.object(sqla_async, "create_async_engine", return_value=MagicMock(dispose=AsyncMock())),
+        patch.object(
+            sqla_async, "create_async_engine", return_value=MagicMock(dispose=AsyncMock())
+        ),
         patch.object(sqla_async, "AsyncSession", return_value=mock_session_instance),
     ):
         app = FastAPI()

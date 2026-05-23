@@ -56,9 +56,7 @@ class CampaignBloatRule:
                 "campaign_id": str(campaign_id),
                 "campaign_name": campaign_name,
                 "ad_group_count": len(ad_groups),
-                "ad_group_ids": [
-                    str(getattr(ag, "ad_group_id", "")) for ag in ad_groups[:10]
-                ],
+                "ad_group_ids": [str(getattr(ag, "ad_group_id", "")) for ag in ad_groups[:10]],
             }
 
             recs.append(

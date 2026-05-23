@@ -26,7 +26,13 @@ def _draw_title(c: canvas.Canvas, text: str, y: float, font_size: int = 16) -> f
     return y - font_size - 8
 
 
-def _draw_body(c: canvas.Canvas, text: str, y: float, font_size: int = 10, max_width: float = PAGE_W - 2 * MARGIN) -> float:
+def _draw_body(
+    c: canvas.Canvas,
+    text: str,
+    y: float,
+    font_size: int = 10,
+    max_width: float = PAGE_W - 2 * MARGIN,
+) -> float:
     c.setFont("Helvetica", font_size)
     words = text.split()
     line = ""

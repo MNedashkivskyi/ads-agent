@@ -179,11 +179,15 @@ async def block_search_term(
 
             if body.scope == "campaign_id":
                 if body.campaign_id is None:
-                    raise HTTPException(status_code=422, detail="campaign_id required for scope=campaign_id")
+                    raise HTTPException(
+                        status_code=422, detail="campaign_id required for scope=campaign_id"
+                    )
                 campaign_ids = [body.campaign_id]
             else:
                 # all_campaigns — fetch from latest snapshot
-                latest_date = await snapshot_repo.get_latest_snapshot_date(AccountId(body.account_id))
+                latest_date = await snapshot_repo.get_latest_snapshot_date(
+                    AccountId(body.account_id)
+                )
                 if latest_date is None:
                     raise HTTPException(status_code=422, detail="No snapshot data available")
                 campaigns = await snapshot_repo.get_campaigns_by_date(
@@ -226,7 +230,10 @@ async def block_search_term(
     try:
         from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
 
-        async with AsyncSession(create_async_engine(settings.DATABASE_URL)) as notif_session, notif_session.begin():
+        async with (
+            AsyncSession(create_async_engine(settings.DATABASE_URL)) as notif_session,
+            notif_session.begin(),
+        ):
             notifier = SqlWebNotifier(notif_session)
             await notifier.send_alert(user_id=user_id, title="Zablokowano frazę", body=message)
     except Exception:
@@ -237,4 +244,5 @@ async def block_search_term(
 
 def _new_uuid() -> str:
     import uuid
+
     return str(uuid.uuid4())

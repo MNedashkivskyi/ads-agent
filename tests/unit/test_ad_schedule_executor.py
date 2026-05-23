@@ -55,7 +55,7 @@ async def test_executor_sets_schedule_with_minus_one() -> None:
 async def test_executor_handles_hour_zero() -> None:
     mutations = FakeGoogleAdsMutations()
     rec = _rec({"campaign_id": "1", "hour_of_day": "0"})
-    result = await AdScheduleAdjustmentExecutor().execute(rec, mutations, "token", "cid")
+    await AdScheduleAdjustmentExecutor().execute(rec, mutations, "token", "cid")
     assert mutations.calls[0]["hour_of_day"] == 0
 
 
@@ -63,10 +63,11 @@ async def test_executor_handles_hour_zero() -> None:
 async def test_executor_handles_hour_23() -> None:
     mutations = FakeGoogleAdsMutations()
     rec = _rec({"campaign_id": "1", "hour_of_day": "23"})
-    result = await AdScheduleAdjustmentExecutor().execute(rec, mutations, "token", "cid")
+    await AdScheduleAdjustmentExecutor().execute(rec, mutations, "token", "cid")
     assert mutations.calls[0]["hour_of_day"] == 23
 
 
 def test_ad_schedule_removed_from_non_executable() -> None:
     from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS
+
     assert RecommendationKind.AD_SCHEDULE_ADJUSTMENT not in NON_EXECUTABLE_KINDS

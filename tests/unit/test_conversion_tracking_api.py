@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,7 +11,9 @@ from adcopilot.domain.conversion_audit import ConversionActionHealth, Conversion
 from adcopilot.domain.entities import AccountId
 
 
-def _make_audit_result(overall: ConversionActionHealth = ConversionActionHealth.HEALTHY) -> ConversionAuditResult:
+def _make_audit_result(
+    overall: ConversionActionHealth = ConversionActionHealth.HEALTHY,
+) -> ConversionAuditResult:
     from adcopilot.domain.conversion_audit import ConversionActionStatus
 
     return ConversionAuditResult(
@@ -33,6 +35,7 @@ def _make_audit_result(overall: ConversionActionHealth = ConversionActionHealth.
 @pytest.fixture
 def test_client() -> TestClient:
     from adcopilot.main import create_app
+
     app = create_app()
     return TestClient(app, raise_server_exceptions=False)
 
@@ -40,7 +43,9 @@ def test_client() -> TestClient:
 def _auth_headers(user_id: str = "user-123") -> dict:
     """Generate a valid JWT for testing."""
     from jose import jwt
+
     from adcopilot.config import get_settings
+
     settings = get_settings()
     token = jwt.encode({"sub": user_id}, settings.SECRET_KEY, algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}

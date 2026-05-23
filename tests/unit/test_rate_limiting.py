@@ -105,9 +105,7 @@ def test_login_returns_429_after_limit_exceeded(rate_limited_client: TestClient)
     client = TestClient(app, raise_server_exceptions=False)
 
     payload = {"email": "x@example.com", "password": "wrong"}
-    responses = [
-        client.post("/api/auth/login", json=payload) for _ in range(4)
-    ]
+    responses = [client.post("/api/auth/login", json=payload) for _ in range(4)]
     # The first 3 must NOT be 429; the 4th must be 429.
     for r in responses[:3]:
         assert r.status_code != 429, f"Unexpected 429 on attempt {responses.index(r) + 1}"
@@ -130,9 +128,7 @@ def test_signup_returns_429_after_limit_exceeded() -> None:
     client = TestClient(app, raise_server_exceptions=False)
 
     payload = {"email": "new@example.com", "password": "pass"}
-    responses = [
-        client.post("/api/auth/signup", json=payload) for _ in range(4)
-    ]
+    responses = [client.post("/api/auth/signup", json=payload) for _ in range(4)]
     for r in responses[:3]:
         assert r.status_code != 429
     assert responses[3].status_code == 429
@@ -155,7 +151,7 @@ def test_rate_limit_response_has_retry_after_header() -> None:
     client = TestClient(app, raise_server_exceptions=False)
 
     payload = {"email": "x@example.com", "password": "wrong"}
-    client.post("/api/auth/login", json=payload)   # allowed
+    client.post("/api/auth/login", json=payload)  # allowed
     response = client.post("/api/auth/login", json=payload)  # blocked
 
     assert response.status_code == 429
@@ -181,13 +177,9 @@ def test_different_ips_are_limited_independently() -> None:
     payload = {"email": "x@example.com", "password": "wrong"}
     # First IP exhausts its quota
     client.post("/api/auth/login", json=payload, headers={"X-Real-IP": "1.1.1.1"})
-    blocked = client.post(
-        "/api/auth/login", json=payload, headers={"X-Real-IP": "1.1.1.1"}
-    )
+    blocked = client.post("/api/auth/login", json=payload, headers={"X-Real-IP": "1.1.1.1"})
     assert blocked.status_code == 429
 
     # Second IP must still get through
-    allowed = client.post(
-        "/api/auth/login", json=payload, headers={"X-Real-IP": "2.2.2.2"}
-    )
+    allowed = client.post("/api/auth/login", json=payload, headers={"X-Real-IP": "2.2.2.2"})
     assert allowed.status_code != 429

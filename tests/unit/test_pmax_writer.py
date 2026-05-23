@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from adcopilot.application.ports.campaign_writer import (
     CreatedPMaxResources,
-    PMaxCampaignWriterPort,
 )
 from adcopilot.domain.launch.entities import (
     AssetGroupProposal,
@@ -16,6 +15,7 @@ from adcopilot.domain.launch.entities import (
     PMaxCampaignProposal,
     PMaxProposalId,
 )
+from adcopilot.infrastructure.google_ads.pmax_writer import PMaxCampaignWriter
 
 
 def _proposal(
@@ -39,10 +39,8 @@ def _proposal(
     )
 
 
-def _make_writer() -> tuple["PMaxCampaignWriter", MagicMock]:
+def _make_writer() -> tuple[PMaxCampaignWriter, MagicMock]:
     """Return (writer, mock_client_adapter) with all services pre-mocked."""
-    from adcopilot.infrastructure.google_ads.pmax_writer import PMaxCampaignWriter
-
     settings = MagicMock()
     settings.GOOGLE_ADS_DEVELOPER_TOKEN = "dev-tok"
     settings.GOOGLE_ADS_CLIENT_ID = "cid"
@@ -70,9 +68,7 @@ def _make_writer() -> tuple["PMaxCampaignWriter", MagicMock]:
             )
         ),
         "CampaignService": MagicMock(
-            mutate_campaigns=MagicMock(
-                return_value=_make_response("customers/1/campaigns/200")
-            )
+            mutate_campaigns=MagicMock(return_value=_make_response("customers/1/campaigns/200"))
         ),
         "AssetGroupService": MagicMock(
             mutate_asset_groups=MagicMock(
@@ -82,9 +78,7 @@ def _make_writer() -> tuple["PMaxCampaignWriter", MagicMock]:
         "AssetService": MagicMock(
             mutate_assets=MagicMock(
                 return_value=MagicMock(
-                    results=[
-                        MagicMock(resource_name=f"customers/1/assets/{i}") for i in range(5)
-                    ]
+                    results=[MagicMock(resource_name=f"customers/1/assets/{i}") for i in range(5)]
                 )
             )
         ),
@@ -161,8 +155,8 @@ def test_pmax_writer_port_protocol() -> None:
 @pytest.mark.asyncio
 async def test_create_pmax_campaign_rolls_back_on_error() -> None:
     """If campaign creation fails, budget must be removed (rollback)."""
-    from adcopilot.infrastructure.google_ads.pmax_writer import PMaxCampaignWriter
     from adcopilot.domain.exceptions import GoogleAdsUnavailable
+    from adcopilot.infrastructure.google_ads.pmax_writer import PMaxCampaignWriter
 
     settings = MagicMock()
     writer = PMaxCampaignWriter(settings=settings)
@@ -185,19 +179,18 @@ async def test_create_pmax_campaign_rolls_back_on_error() -> None:
     mock_adapter = MagicMock()
     mock_adapter.client = mock_client
 
-    with patch.object(writer, "_build_client", return_value=mock_adapter):
-        with pytest.raises((GoogleAdsUnavailable, RuntimeError)):
-            await writer.create_pmax_campaign(
-                customer_id="123",
-                refresh_token="tok",
-                proposal=_proposal(),
-            )
+    with (
+        patch.object(writer, "_build_client", return_value=mock_adapter),
+        pytest.raises((GoogleAdsUnavailable, RuntimeError)),
+    ):
+        await writer.create_pmax_campaign(
+            customer_id="123",
+            refresh_token="tok",
+            proposal=_proposal(),
+        )
 
     # Budget removal must have been attempted
-    remove_calls = [
-        call
-        for call in budget_service.mutate_campaign_budgets.call_args_list
-    ]
+    remove_calls = [call for call in budget_service.mutate_campaign_budgets.call_args_list]
     # First call: create, second call: rollback remove
     assert len(remove_calls) >= 1  # at minimum the create call happened
 

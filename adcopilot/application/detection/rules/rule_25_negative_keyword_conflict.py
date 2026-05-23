@@ -46,9 +46,7 @@ class NegativeKeywordConflictRule:
             return []
 
         # Build campaign_id lookup from ad groups: ad_group_id -> campaign_id
-        ag_campaign: dict[int, int] = {
-            ag.ad_group_id: ag.campaign_id for ag in ctx.ad_groups
-        }
+        ag_campaign: dict[int, int] = {ag.ad_group_id: ag.campaign_id for ag in ctx.ad_groups}
 
         recs: list[Recommendation] = []
         # Track seen conflicts to emit at most one rec per positive keyword

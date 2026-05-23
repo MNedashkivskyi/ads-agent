@@ -55,9 +55,11 @@ class AdExperimentRepository:
 
     async def list_for_account(self, account_id: str) -> list[AdExperimentModel]:
         result = await self._session.execute(
-            select(AdExperimentModel).where(
+            select(AdExperimentModel)
+            .where(
                 AdExperimentModel.account_id == uuid.UUID(account_id),
-            ).order_by(AdExperimentModel.created_at.desc())
+            )
+            .order_by(AdExperimentModel.created_at.desc())
         )
         return list(result.scalars().all())
 

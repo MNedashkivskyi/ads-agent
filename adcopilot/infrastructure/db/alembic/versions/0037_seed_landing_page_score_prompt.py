@@ -47,4 +47,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DELETE FROM prompt_versions WHERE prompt_key = 'landing_page_score_v1' AND version = 1")
+    op.execute(
+        "DELETE FROM prompt_versions WHERE prompt_key = 'landing_page_score_v1' AND version = 1"
+    )

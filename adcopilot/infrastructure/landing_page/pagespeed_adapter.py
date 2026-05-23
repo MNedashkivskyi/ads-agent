@@ -73,7 +73,7 @@ def _parse_score(data: dict) -> LandingPageScore:
         best_practices_score=best_practices,
         mobile_friendly=mobile_friendly,
         core_web_vitals=_parse_cwv(audits),
-        recommendations_pl=[],   # filled by LandingPageScoreUseCase
+        recommendations_pl=[],  # filled by LandingPageScoreUseCase
         scored_at=datetime.now(UTC),
         raw_pagespeed=data,
     )
@@ -86,7 +86,11 @@ class PageSpeedAdapter:
         self._api_key = api_key
 
     async def analyze(self, url: str) -> LandingPageScore:
-        params: dict = {"url": url, "strategy": "mobile", "category": ["performance", "accessibility", "seo", "best-practices"]}
+        params: dict = {
+            "url": url,
+            "strategy": "mobile",
+            "category": ["performance", "accessibility", "seo", "best-practices"],
+        }
         if self._api_key:
             params["key"] = self._api_key
 
@@ -98,9 +102,20 @@ class PageSpeedAdapter:
         except httpx.TimeoutException as exc:
             raise PageAnalyzerError(f"PageSpeed timeout for {url}") from exc
         except httpx.HTTPStatusError as exc:
-            raise PageAnalyzerError(f"PageSpeed API error {exc.response.status_code} for {url}") from exc
+            raise PageAnalyzerError(
+                f"PageSpeed API error {exc.response.status_code} for {url}"
+            ) from exc
         except Exception as exc:
             raise PageAnalyzerError(f"PageSpeed unexpected error for {url}: {exc}") from exc
 
-        logger.info("pagespeed.analyzed", url=url, score=_safe_int(data.get("lighthouseResult", {}).get("categories", {}).get("performance", {}).get("score")))
+        logger.info(
+            "pagespeed.analyzed",
+            url=url,
+            score=_safe_int(
+                data.get("lighthouseResult", {})
+                .get("categories", {})
+                .get("performance", {})
+                .get("score")
+            ),
+        )
         return _parse_score(data)

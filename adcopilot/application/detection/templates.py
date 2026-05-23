@@ -674,7 +674,7 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
     },
     RecommendationKind.PROMOTE_SEARCH_TERM: {
         "pl": (
-            "Fraza wyszukiwania \"{search_term}\" wygenerowała {conversions:.0f} konwersji"
+            'Fraza wyszukiwania "{search_term}" wygenerowała {conversions:.0f} konwersji'
             " przy CPA {cpa_pln:.2f} zł (średnia konta: {avg_cpa_pln:.2f} zł),"
             " ale nie jest jeszcze dodana jako słowo kluczowe."
             " Dodanie jej jako dopasowanie ścisłe [exact] w grupie reklam {ad_group_id}"
@@ -682,7 +682,7 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
             " Wytłumacz korzyści z promowania tej frazy, po polsku."
         ),
         "en": (
-            "Search term \"{search_term}\" generated {conversions:.0f} conversions"
+            'Search term "{search_term}" generated {conversions:.0f} conversions'
             " at a CPA of {cpa_pln:.2f} PLN (account average: {avg_cpa_pln:.2f} PLN)"
             " but is not yet added as a keyword."
             " Adding it as an exact-match keyword in ad group {ad_group_id}"
@@ -694,7 +694,7 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
         "pl": (
             "Twoje konto ma CPA {account_cpa_pln:.2f} zł, czyli o {pct_above_p75:.1f}%"
             " powyżej górnego kwartyla (p75 = {benchmark_p75_pln:.2f} zł)"
-            " dla branży \"{vertical}\" (tier {city_tier})."
+            ' dla branży "{vertical}" (tier {city_tier}).'
             " Mediana benchmarku to {benchmark_median_pln:.2f} zł"
             " na podstawie {benchmark_account_count} kont."
             " Wskaż konkretne obszary kampanii do optymalizacji CPA, po polsku."
@@ -702,7 +702,7 @@ TEMPLATES: dict[RecommendationKind, dict[str, str]] = {
         "en": (
             "Your account CPA is {account_cpa_pln:.2f} PLN — {pct_above_p75:.1f}%"
             " above the vertical p75 benchmark ({benchmark_p75_pln:.2f} PLN)"
-            " for the \"{vertical}\" vertical (city tier {city_tier})."
+            ' for the "{vertical}" vertical (city tier {city_tier}).'
             " The benchmark median is {benchmark_median_pln:.2f} PLN"
             " across {benchmark_account_count} accounts."
             " Suggest specific campaign optimisations to bring CPA closer to benchmark."
@@ -721,6 +721,7 @@ def format_micros_as_currency(micros: int, currency: str = "EUR") -> str:
     """
     if currency == "PLN":
         from adcopilot.domain.polish_market.currency import format_pln_micros
+
         return format_pln_micros(micros)
     symbols = {"EUR": "€", "USD": "$", "GBP": "£"}
     symbol = symbols.get(currency, currency + " ")

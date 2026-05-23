@@ -1,10 +1,9 @@
 """Unit tests for landing page relevance validation rule (Rule 6b)."""
+
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-
-import pytest
 
 from adcopilot.application.detection.validation import (
     LandingPageCheckResult,
@@ -22,7 +21,7 @@ from adcopilot.domain.launch.entities import (
 )
 
 _URL = "https://example.com/"
-_NOW = datetime(2024, 1, 1, tzinfo=timezone.utc)
+_NOW = datetime(2024, 1, 1, tzinfo=UTC)
 
 
 def _make_brief() -> CampaignBrief:
@@ -43,7 +42,10 @@ def _make_brief() -> CampaignBrief:
 
 
 def _make_proposal(url: str, keywords: list[str]) -> CampaignProposal:
-    kws = [KeywordProposal(text=k, match_type=MatchType.BROAD, estimated_cpc_micros=500_000) for k in keywords]
+    kws = [
+        KeywordProposal(text=k, match_type=MatchType.BROAD, estimated_cpc_micros=500_000)
+        for k in keywords
+    ]
     ad = AdProposal(
         headlines=["Kancelaria prawna"] * 3,
         descriptions=["Profesjonalna pomoc prawna"] * 2,
@@ -90,7 +92,9 @@ def test_matching_keywords_pass():
     brief = _make_brief()
     lp_ctx = ValidationContext(
         landing_page_results={
-            _URL: _lp_result(_URL, "kancelaria prawna obsługa firm Warszawa prawnik", title="Kancelaria Prawna")
+            _URL: _lp_result(
+                _URL, "kancelaria prawna obsługa firm Warszawa prawnik", title="Kancelaria Prawna"
+            )
         }
     )
     result = validate_proposal(proposal, brief, lp_ctx)
@@ -113,7 +117,12 @@ def test_unreachable_page_skips_relevance_check():
     proposal = _make_proposal(_URL, ["kancelaria prawna"])
     brief = _make_brief()
     unreachable = LandingPageCheckResult(
-        url=_URL, reachable=False, https=True, load_time_seconds=5.1, language_detected=None, error_message="timeout"
+        url=_URL,
+        reachable=False,
+        https=True,
+        load_time_seconds=5.1,
+        language_detected=None,
+        error_message="timeout",
     )
     lp_ctx = ValidationContext(landing_page_results={_URL: unreachable})
     result = validate_proposal(proposal, brief, lp_ctx)

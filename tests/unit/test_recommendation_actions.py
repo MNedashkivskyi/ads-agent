@@ -125,9 +125,7 @@ async def test_snooze_raises_if_not_found() -> None:
     repo = _rec_repo(None)
     snooze = _snooze_repo()
     with pytest.raises(ValueError, match="not found"):
-        await SnoozeRecommendationUseCase(repo, snooze).execute(
-            RecommendationId(str(uuid.uuid4()))
-        )
+        await SnoozeRecommendationUseCase(repo, snooze).execute(RecommendationId(str(uuid.uuid4())))
 
 
 @pytest.mark.asyncio

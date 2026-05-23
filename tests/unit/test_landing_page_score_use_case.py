@@ -23,7 +23,9 @@ def _make_score(performance: int = 72) -> LandingPageScore:
         seo_score=90,
         best_practices_score=78,
         mobile_friendly=True,
-        core_web_vitals=CoreWebVitals(lcp_ms=2500.0, fcp_ms=1100.0, cls_score=0.08, tbt_ms=200.0, ttfb_ms=180.0),
+        core_web_vitals=CoreWebVitals(
+            lcp_ms=2500.0, fcp_ms=1100.0, cls_score=0.08, tbt_ms=200.0, ttfb_ms=180.0
+        ),
         recommendations_pl=[],
         scored_at=datetime.now(UTC),
     )
@@ -59,7 +61,9 @@ async def test_execute_returns_score_with_recommendations() -> None:
     page_analyzer.analyze.return_value = _make_score(72)
 
     llm = AsyncMock()
-    llm.complete.return_value = json.dumps(["Zoptymalizuj obrazy PNG", "Wdróż lazy loading", "Skompresuj CSS"])
+    llm.complete.return_value = json.dumps(
+        ["Zoptymalizuj obrazy PNG", "Wdróż lazy loading", "Skompresuj CSS"]
+    )
 
     prompt_repo = AsyncMock()
     pv = MagicMock()
@@ -70,7 +74,9 @@ async def test_execute_returns_score_with_recommendations() -> None:
     )
     prompt_repo.get_latest.return_value = pv
 
-    use_case = LandingPageScoreUseCase(page_analyzer=page_analyzer, llm=llm, prompt_repo=prompt_repo)
+    use_case = LandingPageScoreUseCase(
+        page_analyzer=page_analyzer, llm=llm, prompt_repo=prompt_repo
+    )
     result = await use_case.execute("https://example.com")
 
     assert result.performance_score == 72
@@ -91,7 +97,9 @@ async def test_execute_handles_bad_llm_response_gracefully() -> None:
     pv.content = "{url} {performance_score} {accessibility_score} {seo_score} {best_practices_score} {mobile_friendly} {lcp_ms} {fcp_ms} {cls_score} {tbt_ms} {ttfb_ms}"
     prompt_repo.get_latest.return_value = pv
 
-    use_case = LandingPageScoreUseCase(page_analyzer=page_analyzer, llm=llm, prompt_repo=prompt_repo)
+    use_case = LandingPageScoreUseCase(
+        page_analyzer=page_analyzer, llm=llm, prompt_repo=prompt_repo
+    )
     result = await use_case.execute("https://example.com")
 
     assert result.recommendations_pl == []  # graceful degradation

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -54,8 +53,7 @@ class KeywordQSHistoryRepository:
         limit: int = 50,
     ) -> list[KeywordQSHistoryModel]:
         """Return the most-recent history row per keyword, ordered by recorded_date desc."""
-        from sqlalchemy import func, over
-        from sqlalchemy.orm import aliased
+        from sqlalchemy import func
 
         subq = (
             select(

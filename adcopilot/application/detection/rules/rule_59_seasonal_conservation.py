@@ -20,15 +20,33 @@ from adcopilot.domain.recommendation import (
 )
 
 _MULTIPLIERS: dict[int, float] = {
-    1: 0.8, 2: 0.9, 3: 1.1, 4: 1.1,
-    5: 1.0, 6: 1.0, 7: 1.0, 8: 1.0,
-    9: 1.1, 10: 1.0, 11: 1.3, 12: 1.4,
+    1: 0.8,
+    2: 0.9,
+    3: 1.1,
+    4: 1.1,
+    5: 1.0,
+    6: 1.0,
+    7: 1.0,
+    8: 1.0,
+    9: 1.1,
+    10: 1.0,
+    11: 1.3,
+    12: 1.4,
 }
 
 _MONTH_NAMES_PL: dict[int, str] = {
-    1: "styczeń", 2: "luty", 3: "marzec", 4: "kwiecień",
-    5: "maj", 6: "czerwiec", 7: "lipiec", 8: "sierpień",
-    9: "wrzesień", 10: "październik", 11: "listopad", 12: "grudzień",
+    1: "styczeń",
+    2: "luty",
+    3: "marzec",
+    4: "kwiecień",
+    5: "maj",
+    6: "czerwiec",
+    7: "lipiec",
+    8: "sierpień",
+    9: "wrzesień",
+    10: "październik",
+    11: "listopad",
+    12: "grudzień",
 }
 
 _WINDOW_DAYS = 14

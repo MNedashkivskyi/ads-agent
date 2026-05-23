@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+
 import pytest
 
 from adcopilot.application.use_cases.get_latest_prompt import get_latest_prompt
@@ -43,12 +45,30 @@ def repo() -> InMemoryPromptVersionRepository:
 
 
 @pytest.mark.asyncio
-async def test_get_latest_prompt_returns_highest_version(repo: InMemoryPromptVersionRepository) -> None:
-    from datetime import datetime, timezone
+async def test_get_latest_prompt_returns_highest_version(
+    repo: InMemoryPromptVersionRepository,
+) -> None:
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc)
-    await repo.save(PromptVersion(id=PromptVersionId(0), prompt_key="test_key", version=1, content="v1 content", created_at=now))
-    await repo.save(PromptVersion(id=PromptVersionId(0), prompt_key="test_key", version=2, content="v2 content", created_at=now))
+    now = datetime.now(UTC)
+    await repo.save(
+        PromptVersion(
+            id=PromptVersionId(0),
+            prompt_key="test_key",
+            version=1,
+            content="v1 content",
+            created_at=now,
+        )
+    )
+    await repo.save(
+        PromptVersion(
+            id=PromptVersionId(0),
+            prompt_key="test_key",
+            version=2,
+            content="v2 content",
+            created_at=now,
+        )
+    )
 
     result = await get_latest_prompt(repo, "test_key")
 
@@ -57,10 +77,18 @@ async def test_get_latest_prompt_returns_highest_version(repo: InMemoryPromptVer
 
 @pytest.mark.asyncio
 async def test_get_latest_prompt_single_version(repo: InMemoryPromptVersionRepository) -> None:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc)
-    await repo.save(PromptVersion(id=PromptVersionId(0), prompt_key="single_key", version=1, content="only version", created_at=now))
+    now = datetime.now(UTC)
+    await repo.save(
+        PromptVersion(
+            id=PromptVersionId(0),
+            prompt_key="single_key",
+            version=1,
+            content="only version",
+            created_at=now,
+        )
+    )
 
     result = await get_latest_prompt(repo, "single_key")
 
@@ -68,18 +96,30 @@ async def test_get_latest_prompt_single_version(repo: InMemoryPromptVersionRepos
 
 
 @pytest.mark.asyncio
-async def test_get_latest_prompt_raises_for_missing_key(repo: InMemoryPromptVersionRepository) -> None:
+async def test_get_latest_prompt_raises_for_missing_key(
+    repo: InMemoryPromptVersionRepository,
+) -> None:
     with pytest.raises(KeyError, match="missing_key"):
         await get_latest_prompt(repo, "missing_key")
 
 
 @pytest.mark.asyncio
-async def test_get_by_version_returns_specific_version(repo: InMemoryPromptVersionRepository) -> None:
-    from datetime import datetime, timezone
+async def test_get_by_version_returns_specific_version(
+    repo: InMemoryPromptVersionRepository,
+) -> None:
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc)
-    await repo.save(PromptVersion(id=PromptVersionId(0), prompt_key="test_key", version=1, content="v1", created_at=now))
-    await repo.save(PromptVersion(id=PromptVersionId(0), prompt_key="test_key", version=2, content="v2", created_at=now))
+    now = datetime.now(UTC)
+    await repo.save(
+        PromptVersion(
+            id=PromptVersionId(0), prompt_key="test_key", version=1, content="v1", created_at=now
+        )
+    )
+    await repo.save(
+        PromptVersion(
+            id=PromptVersionId(0), prompt_key="test_key", version=2, content="v2", created_at=now
+        )
+    )
 
     result = await repo.get_by_version("test_key", 1)
 
@@ -90,11 +130,19 @@ async def test_get_by_version_returns_specific_version(repo: InMemoryPromptVersi
 
 @pytest.mark.asyncio
 async def test_get_latest_ignores_other_keys(repo: InMemoryPromptVersionRepository) -> None:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    now = datetime.now(timezone.utc)
-    await repo.save(PromptVersion(id=PromptVersionId(0), prompt_key="key_a", version=1, content="a1", created_at=now))
-    await repo.save(PromptVersion(id=PromptVersionId(0), prompt_key="key_b", version=99, content="b99", created_at=now))
+    now = datetime.now(UTC)
+    await repo.save(
+        PromptVersion(
+            id=PromptVersionId(0), prompt_key="key_a", version=1, content="a1", created_at=now
+        )
+    )
+    await repo.save(
+        PromptVersion(
+            id=PromptVersionId(0), prompt_key="key_b", version=99, content="b99", created_at=now
+        )
+    )
 
     result = await get_latest_prompt(repo, "key_a")
 

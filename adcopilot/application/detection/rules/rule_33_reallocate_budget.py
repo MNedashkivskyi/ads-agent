@@ -24,11 +24,11 @@ from adcopilot.domain.recommendation import (
     RecommendationStatus,
 )
 
-_MIN_ROAS_HIGH = 3.0          # campaign A must have ROAS ≥ this
-_MAX_ROAS_LOW = 1.0           # campaign B must have ROAS < this
-_BUDGET_UTILISATION_HIGH = 0.95   # constrained: spending ≥ 95% of budget
-_BUDGET_UTILISATION_LOW = 0.50    # underspending: spending < 50% of budget
-_MIN_SPEND_MICROS = 10_000_000   # minimum weekly spend (€10) to be meaningful
+_MIN_ROAS_HIGH = 3.0  # campaign A must have ROAS ≥ this
+_MAX_ROAS_LOW = 1.0  # campaign B must have ROAS < this
+_BUDGET_UTILISATION_HIGH = 0.95  # constrained: spending ≥ 95% of budget
+_BUDGET_UTILISATION_LOW = 0.50  # underspending: spending < 50% of budget
+_MIN_SPEND_MICROS = 10_000_000  # minimum weekly spend (€10) to be meaningful
 
 
 def _roas(campaign) -> float:

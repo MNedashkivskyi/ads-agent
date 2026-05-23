@@ -199,9 +199,7 @@ async def _handle_subscription_event(
     sub_id: str = subscription["id"]
 
     trial_end_ts = subscription.get("trial_end")
-    trial_ends_at = (
-        datetime.fromtimestamp(trial_end_ts, tz=UTC) if trial_end_ts else None
-    )
+    trial_ends_at = datetime.fromtimestamp(trial_end_ts, tz=UTC) if trial_end_ts else None
 
     if event_type == "customer.subscription.deleted":
         new_status = "canceled"

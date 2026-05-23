@@ -21,9 +21,9 @@ from adcopilot.domain.recommendation import (
     RecommendationStatus,
 )
 
-_MIN_CTR_DROP = 0.25           # CTR must fall ≥ 25% week-over-week
+_MIN_CTR_DROP = 0.25  # CTR must fall ≥ 25% week-over-week
 _MAX_IMPRESSION_CHANGE = 0.20  # Impressions must be stable ± 20%
-_MIN_IMPRESSIONS = 500         # Require meaningful volume in both periods
+_MIN_IMPRESSIONS = 500  # Require meaningful volume in both periods
 
 
 class AdFatigueRule:

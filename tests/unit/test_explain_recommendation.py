@@ -117,9 +117,7 @@ async def test_explain_pause_keyword_mentions_keyword_text() -> None:
 @pytest.mark.asyncio
 async def test_explain_conversion_tracking_prompt_mentions_tracking() -> None:
     """Prompt for ENABLE_CONVERSION_TRACKING should contain cost mention."""
-    llm = FakeLLMClient(
-        default="You have no conversion tracking configured. This is critical."
-    )
+    llm = FakeLLMClient(default="You have no conversion tracking configured. This is critical.")
     rec = _rec(
         RecommendationKind.ENABLE_CONVERSION_TRACKING,
         evidence={"total_cost_micros": 200_000_000, "total_conversions": 0},

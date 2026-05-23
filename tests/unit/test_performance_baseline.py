@@ -5,8 +5,6 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime
 
-import pytest
-
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.performance_tracking import PerformanceBaseline, PerformanceComparison
 from adcopilot.domain.recommendation import RecommendationId
@@ -68,7 +66,7 @@ def test_comparison_improved_verdict() -> None:
 def test_comparison_degraded_verdict() -> None:
     b = _baseline(conversions=10.0, cost_micros=500_000_000)
     # CPA rises from 50M to 70M = +40%, conversions drop → DEGRADED
-    comp = PerformanceComparison.create(
+    PerformanceComparison.create(
         recommendation_id=b.recommendation_id,
         baseline=b,
         comparison_window_days=7,

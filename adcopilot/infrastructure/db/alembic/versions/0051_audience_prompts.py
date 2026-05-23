@@ -42,4 +42,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("DELETE FROM prompt_versions WHERE prompt_key IN ('audience_strategy_v1', 'custom_intent_v1')")
+    op.execute(
+        "DELETE FROM prompt_versions WHERE prompt_key IN ('audience_strategy_v1', 'custom_intent_v1')"
+    )

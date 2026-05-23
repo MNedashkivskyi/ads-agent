@@ -242,9 +242,7 @@ class SqlSnapshotRepository:
     # Ads
     # ------------------------------------------------------------------
 
-    async def upsert_ads(
-        self, account_id: AccountId, snapshots: list[AdSnapshot]
-    ) -> None:
+    async def upsert_ads(self, account_id: AccountId, snapshots: list[AdSnapshot]) -> None:
         if not snapshots:
             return
         rows = [
@@ -424,9 +422,7 @@ class SqlSnapshotRepository:
             for m in res.scalars().all()
         ]
 
-    async def get_ads_by_date(
-        self, account_id: AccountId, snapshot_date: date
-    ) -> list[AdSnapshot]:
+    async def get_ads_by_date(self, account_id: AccountId, snapshot_date: date) -> list[AdSnapshot]:
         acct_uuid = uuid.UUID(account_id)
         res = await self._session.execute(
             select(AdSnapshotModel).where(
@@ -1169,8 +1165,9 @@ class SqlSnapshotRepository:
         self, account_id: AccountId, start_date: date, end_date: date
     ) -> list[dict]:
         """Return raw auction insights rows as dicts for competitive rules."""
-        from adcopilot.infrastructure.db.models import AuctionInsightsSnapshotModel
         from sqlalchemy import select
+
+        from adcopilot.infrastructure.db.models import AuctionInsightsSnapshotModel
 
         acct_uuid = uuid.UUID(account_id)
         res = await self._session.execute(

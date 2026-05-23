@@ -13,9 +13,9 @@ from enum import StrEnum
 
 
 class BudgetTier(StrEnum):
-    MICRO = "micro"   # 100–499 PLN/mo (~$25–$125)
-    MID = "mid"       # 500–2,999 PLN/mo (~$125–$750)
-    GROWTH = "growth" # 3,000–20,000 PLN/mo (~$750–$5,000)
+    MICRO = "micro"  # 100–499 PLN/mo (~$25–$125)
+    MID = "mid"  # 500–2,999 PLN/mo (~$125–$750)
+    GROWTH = "growth"  # 3,000–20,000 PLN/mo (~$750–$5,000)
 
 
 # Thresholds in PLN

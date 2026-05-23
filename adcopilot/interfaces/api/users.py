@@ -184,9 +184,9 @@ async def get_stats(
             total_savings: int = savings_result.scalar_one() or 0
 
             counts_result = await session.execute(
-                select(RecommendationModel.status, func.count()).where(
-                    RecommendationModel.account_id.in_(account_uuids)
-                ).group_by(RecommendationModel.status)
+                select(RecommendationModel.status, func.count())
+                .where(RecommendationModel.account_id.in_(account_uuids))
+                .group_by(RecommendationModel.status)
             )
             counts: dict[str, int] = {row[0]: row[1] for row in counts_result.all()}
     finally:

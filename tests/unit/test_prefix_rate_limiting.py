@@ -88,7 +88,6 @@ def test_webhook_prefix_has_its_own_counter() -> None:
     assert client.get("/webhooks/stripe", headers=hdr).status_code == 429
 
 
-
 def test_unrelated_path_is_not_limited() -> None:
     """/health must not be touched by prefix limiter."""
     client = _app([PrefixRateLimitConfig("/api/", "1/minute")])

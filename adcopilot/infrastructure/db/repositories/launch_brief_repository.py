@@ -111,9 +111,7 @@ class SqlCampaignBriefRepository:
         await self._session.flush()
         return brief
 
-    async def update_status(
-        self, brief_id: CampaignBriefId, status: LaunchStatus
-    ) -> None:
+    async def update_status(self, brief_id: CampaignBriefId, status: LaunchStatus) -> None:
         m = await self._session.get(LaunchBriefModel, uuid.UUID(brief_id))
         if m is not None:
             m.status = status.value

@@ -1264,10 +1264,7 @@ class TestOverstuffedAdGroupRule:
 
     def test_ad_group_with_16_enabled_keywords_triggers(self):
         ag = _ad_group(ad_group_id=10, campaign_id=1)
-        keywords = [
-            _keyword(criterion_id=i, ad_group_id=10, status="ENABLED")
-            for i in range(16)
-        ]
+        keywords = [_keyword(criterion_id=i, ad_group_id=10, status="ENABLED") for i in range(16)]
         ctx = _ctx(ad_groups=[ag], keywords=keywords)
         recs = self.rule.detect(ctx)
         assert len(recs) == 1
@@ -1276,10 +1273,7 @@ class TestOverstuffedAdGroupRule:
 
     def test_ad_group_with_15_keywords_not_triggered(self):
         ag = _ad_group(ad_group_id=10)
-        keywords = [
-            _keyword(criterion_id=i, ad_group_id=10, status="ENABLED")
-            for i in range(15)
-        ]
+        keywords = [_keyword(criterion_id=i, ad_group_id=10, status="ENABLED") for i in range(15)]
         ctx = _ctx(ad_groups=[ag], keywords=keywords)
         assert self.rule.detect(ctx) == []
 
@@ -1295,7 +1289,9 @@ class TestOverstuffedAdGroupRule:
         ag1 = _ad_group(ad_group_id=10, campaign_id=1)
         ag2 = _ad_group(ad_group_id=20, campaign_id=1)
         kws_ag1 = [_keyword(criterion_id=i, ad_group_id=10, status="ENABLED") for i in range(20)]
-        kws_ag2 = [_keyword(criterion_id=i + 100, ad_group_id=20, status="ENABLED") for i in range(5)]
+        kws_ag2 = [
+            _keyword(criterion_id=i + 100, ad_group_id=20, status="ENABLED") for i in range(5)
+        ]
         ctx = _ctx(ad_groups=[ag1, ag2], keywords=kws_ag1 + kws_ag2)
         recs = self.rule.detect(ctx)
         assert len(recs) == 1
@@ -1455,8 +1451,12 @@ class TestMatchTypeRedundancyRule:
 
     def test_broad_and_exact_same_ad_group_triggers(self):
         ag = _ad_group(ad_group_id=10, campaign_id=1)
-        kw_broad = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD")
-        kw_exact = _keyword(criterion_id=2, ad_group_id=10, text="running shoes", match_type="EXACT")
+        kw_broad = _keyword(
+            criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD"
+        )
+        kw_exact = _keyword(
+            criterion_id=2, ad_group_id=10, text="running shoes", match_type="EXACT"
+        )
         ctx = _ctx(ad_groups=[ag], keywords=[kw_broad, kw_exact])
         recs = self.rule.detect(ctx)
         assert len(recs) == 1
@@ -1465,8 +1465,12 @@ class TestMatchTypeRedundancyRule:
 
     def test_broad_and_phrase_same_ad_group_triggers(self):
         ag = _ad_group(ad_group_id=10, campaign_id=1)
-        kw_broad = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD")
-        kw_phrase = _keyword(criterion_id=2, ad_group_id=10, text="running shoes", match_type="PHRASE")
+        kw_broad = _keyword(
+            criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD"
+        )
+        kw_phrase = _keyword(
+            criterion_id=2, ad_group_id=10, text="running shoes", match_type="PHRASE"
+        )
         ctx = _ctx(ad_groups=[ag], keywords=[kw_broad, kw_phrase])
         assert len(self.rule.detect(ctx)) == 1
 
@@ -1485,15 +1489,31 @@ class TestMatchTypeRedundancyRule:
     def test_same_text_different_ad_groups_not_triggered(self):
         ag1 = _ad_group(ad_group_id=10, campaign_id=1)
         ag2 = _ad_group(ad_group_id=20, campaign_id=1)
-        kw_broad = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD")
-        kw_exact = _keyword(criterion_id=2, ad_group_id=20, text="running shoes", match_type="EXACT")
+        kw_broad = _keyword(
+            criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD"
+        )
+        kw_exact = _keyword(
+            criterion_id=2, ad_group_id=20, text="running shoes", match_type="EXACT"
+        )
         ctx = _ctx(ad_groups=[ag1, ag2], keywords=[kw_broad, kw_exact])
         assert self.rule.detect(ctx) == []
 
     def test_paused_keywords_ignored(self):
         ag = _ad_group(ad_group_id=10, campaign_id=1)
-        kw_broad = _keyword(criterion_id=1, ad_group_id=10, text="running shoes", match_type="BROAD", status="PAUSED")
-        kw_exact = _keyword(criterion_id=2, ad_group_id=10, text="running shoes", match_type="EXACT", status="ENABLED")
+        kw_broad = _keyword(
+            criterion_id=1,
+            ad_group_id=10,
+            text="running shoes",
+            match_type="BROAD",
+            status="PAUSED",
+        )
+        kw_exact = _keyword(
+            criterion_id=2,
+            ad_group_id=10,
+            text="running shoes",
+            match_type="EXACT",
+            status="ENABLED",
+        )
         ctx = _ctx(ad_groups=[ag], keywords=[kw_broad, kw_exact])
         assert self.rule.detect(ctx) == []
 
@@ -1702,8 +1722,12 @@ class TestAdScheduleAdjustmentRule:
 
     def test_aggregation_across_days(self):
         # Two rows for same campaign+hour on different days — should aggregate
-        h1 = _hour_perf(snapshot_date=date(2026, 4, 1), hour_of_day=3, cost_micros=12_000_000, conversions=0.0)
-        h2 = _hour_perf(snapshot_date=date(2026, 4, 2), hour_of_day=3, cost_micros=12_000_000, conversions=0.0)
+        h1 = _hour_perf(
+            snapshot_date=date(2026, 4, 1), hour_of_day=3, cost_micros=12_000_000, conversions=0.0
+        )
+        h2 = _hour_perf(
+            snapshot_date=date(2026, 4, 2), hour_of_day=3, cost_micros=12_000_000, conversions=0.0
+        )
         ctx = _ctx(hour_performance=[h1, h2])
         recs = self.rule.detect(ctx)
         assert len(recs) == 1
@@ -1822,9 +1846,9 @@ class TestReallocateBudgetRule:
         """ROAS=4.0, budget utilisation=98% (constrained)."""
         return _campaign(
             campaign_id=campaign_id,
-            cost_micros=19_600_000,   # ~98% of budget
+            cost_micros=19_600_000,  # ~98% of budget
             budget_micros=20_000_000,
-            conv_value=78.4,          # ROAS = 78.4 / 19.6 = 4.0
+            conv_value=78.4,  # ROAS = 78.4 / 19.6 = 4.0
             status="ENABLED",
         )
 
@@ -1832,9 +1856,9 @@ class TestReallocateBudgetRule:
         """ROAS=0.5, budget utilisation=30% (underspending)."""
         return _campaign(
             campaign_id=campaign_id,
-            cost_micros=6_000_000,    # 30% of budget
+            cost_micros=6_000_000,  # 30% of budget
             budget_micros=20_000_000,
-            conv_value=3.0,           # ROAS = 3.0 / 6.0 = 0.5
+            conv_value=3.0,  # ROAS = 3.0 / 6.0 = 0.5
             status="ENABLED",
         )
 
@@ -2468,7 +2492,7 @@ class TestCtrDeclineRule:
 
     def test_triggers_on_significant_ctr_drop(self):
         # prev CTR = 5%, curr CTR = 3% → 40% drop with stable impressions
-        ag = _ad_group(ad_group_id=10, impressions=500, clicks=15)   # CTR = 3%
+        ag = _ad_group(ad_group_id=10, impressions=500, clicks=15)  # CTR = 3%
         prev = _ad_group(ad_group_id=10, impressions=500, clicks=25)  # CTR = 5%
         ctx = _ctx(ad_groups=[ag], prev_ad_groups=[prev])
         recs = self.rule.detect(ctx)
@@ -2841,8 +2865,12 @@ class TestWeakRsaStrengthRule:
         assert "ad_strength=POOR" in recs[0].evidence["reason"]
 
     def test_triggers_on_average_ad_strength(self):
-        ad = _rsa_ad(ad_id=200, impressions=200, ad_strength="AVERAGE",
-                     headlines_json='["A", "B", "C", "D", "E", "F", "G", "H"]')
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=200,
+            ad_strength="AVERAGE",
+            headlines_json='["A", "B", "C", "D", "E", "F", "G", "H"]',
+        )
         ctx = _ctx(ads=[ad])
         recs = self.rule.detect(ctx)
         assert len(recs) == 1
@@ -2851,8 +2879,12 @@ class TestWeakRsaStrengthRule:
     def test_triggers_when_too_few_unique_headlines(self):
         # Only 5 unique headlines — below the 8-minimum threshold
         headlines = ["Buy Now", "Great Deals", "Fast Delivery", "Free Shipping", "Best Price"]
-        ad = _rsa_ad(ad_id=200, impressions=200, ad_strength="GOOD",
-                     headlines_json=str(headlines).replace("'", '"'))
+        ad = _rsa_ad(
+            ad_id=200,
+            impressions=200,
+            ad_strength="GOOD",
+            headlines_json=str(headlines).replace("'", '"'),
+        )
         ctx = _ctx(ads=[ad])
         recs = self.rule.detect(ctx)
         assert len(recs) == 1
@@ -2861,14 +2893,15 @@ class TestWeakRsaStrengthRule:
     def test_no_trigger_when_good_strength_and_enough_headlines(self):
         headlines = [f"Headline {i}" for i in range(9)]
         import json
-        ad = _rsa_ad(ad_id=200, impressions=200, ad_strength="GOOD",
-                     headlines_json=json.dumps(headlines))
+
+        ad = _rsa_ad(
+            ad_id=200, impressions=200, ad_strength="GOOD", headlines_json=json.dumps(headlines)
+        )
         ctx = _ctx(ads=[ad])
         assert self.rule.detect(ctx) == []
 
     def test_no_trigger_when_impressions_below_minimum(self):
-        ad = _rsa_ad(ad_id=200, impressions=50, ad_strength="POOR",
-                     headlines_json='["A", "B"]')
+        ad = _rsa_ad(ad_id=200, impressions=50, ad_strength="POOR", headlines_json='["A", "B"]')
         ctx = _ctx(ads=[ad])
         assert self.rule.detect(ctx) == []
 
@@ -2880,10 +2913,22 @@ class TestAdFatigueRule:
 
     def test_triggers_on_ctr_drop(self):
         # prev CTR = 4%, curr CTR = 2.5% → 37.5% drop with stable impressions
-        ad = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=15,
-                 cost_micros=1_000_000, conversions=0.1)
-        prev = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=24,
-                   cost_micros=1_000_000, conversions=0.1)
+        ad = _ad(
+            ad_id=200,
+            status="ENABLED",
+            impressions=600,
+            clicks=15,
+            cost_micros=1_000_000,
+            conversions=0.1,
+        )
+        prev = _ad(
+            ad_id=200,
+            status="ENABLED",
+            impressions=600,
+            clicks=24,
+            cost_micros=1_000_000,
+            conversions=0.1,
+        )
         ctx = _ctx(ads=[ad], prev_ads=[prev])
         recs = self.rule.detect(ctx)
         assert len(recs) == 1
@@ -2892,34 +2937,76 @@ class TestAdFatigueRule:
 
     def test_no_trigger_when_drop_below_threshold(self):
         # prev CTR = 4%, curr CTR = 3.5% → 12.5% drop (below 25%)
-        ad = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=21,
-                 cost_micros=1_000_000, conversions=0.1)
-        prev = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=24,
-                   cost_micros=1_000_000, conversions=0.1)
+        ad = _ad(
+            ad_id=200,
+            status="ENABLED",
+            impressions=600,
+            clicks=21,
+            cost_micros=1_000_000,
+            conversions=0.1,
+        )
+        prev = _ad(
+            ad_id=200,
+            status="ENABLED",
+            impressions=600,
+            clicks=24,
+            cost_micros=1_000_000,
+            conversions=0.1,
+        )
         ctx = _ctx(ads=[ad], prev_ads=[prev])
         assert self.rule.detect(ctx) == []
 
     def test_no_trigger_when_impressions_unstable(self):
         # Impressions: 600 → 300 (50% drop — unstable)
-        ad = _ad(ad_id=200, status="ENABLED", impressions=300, clicks=6,
-                 cost_micros=1_000_000, conversions=0.1)
-        prev = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=24,
-                   cost_micros=1_000_000, conversions=0.1)
+        ad = _ad(
+            ad_id=200,
+            status="ENABLED",
+            impressions=300,
+            clicks=6,
+            cost_micros=1_000_000,
+            conversions=0.1,
+        )
+        prev = _ad(
+            ad_id=200,
+            status="ENABLED",
+            impressions=600,
+            clicks=24,
+            cost_micros=1_000_000,
+            conversions=0.1,
+        )
         ctx = _ctx(ads=[ad], prev_ads=[prev])
         assert self.rule.detect(ctx) == []
 
     def test_no_trigger_when_impressions_below_minimum(self):
         # 400 impressions < 500 minimum
-        ad = _ad(ad_id=200, status="ENABLED", impressions=400, clicks=8,
-                 cost_micros=1_000_000, conversions=0.1)
-        prev = _ad(ad_id=200, status="ENABLED", impressions=400, clicks=16,
-                   cost_micros=1_000_000, conversions=0.1)
+        ad = _ad(
+            ad_id=200,
+            status="ENABLED",
+            impressions=400,
+            clicks=8,
+            cost_micros=1_000_000,
+            conversions=0.1,
+        )
+        prev = _ad(
+            ad_id=200,
+            status="ENABLED",
+            impressions=400,
+            clicks=16,
+            cost_micros=1_000_000,
+            conversions=0.1,
+        )
         ctx = _ctx(ads=[ad], prev_ads=[prev])
         assert self.rule.detect(ctx) == []
 
     def test_no_trigger_without_historical_data(self):
-        ad = _ad(ad_id=200, status="ENABLED", impressions=600, clicks=15,
-                 cost_micros=1_000_000, conversions=0.1)
+        ad = _ad(
+            ad_id=200,
+            status="ENABLED",
+            impressions=600,
+            clicks=15,
+            cost_micros=1_000_000,
+            conversions=0.1,
+        )
         ctx = _ctx(ads=[ad], prev_ads=[])
         assert self.rule.detect(ctx) == []
 
@@ -2931,6 +3018,7 @@ class TestRedundantHeadlinesRule:
 
     def test_triggers_on_very_similar_headlines(self):
         import json
+
         # Three nearly identical headlines — all share the same core tokens
         headlines = [
             "Best Running Shoes Online",
@@ -2945,6 +3033,7 @@ class TestRedundantHeadlinesRule:
 
     def test_no_trigger_when_headlines_are_diverse(self):
         import json
+
         headlines = [
             "Buy Running Shoes",
             "Free Next Day Delivery",
@@ -2956,6 +3045,7 @@ class TestRedundantHeadlinesRule:
 
     def test_no_trigger_when_impressions_below_minimum(self):
         import json
+
         headlines = ["Best Shoes Online", "Top Shoes Online", "Great Shoes Online"]
         ad = _rsa_ad(ad_id=200, impressions=50, headlines_json=json.dumps(headlines))
         ctx = _ctx(ads=[ad])
@@ -2963,8 +3053,10 @@ class TestRedundantHeadlinesRule:
 
     def test_no_trigger_when_fewer_than_3_headlines(self):
         import json
-        ad = _rsa_ad(ad_id=200, impressions=200,
-                     headlines_json=json.dumps(["Best Shoes", "Top Shoes"]))
+
+        ad = _rsa_ad(
+            ad_id=200, impressions=200, headlines_json=json.dumps(["Best Shoes", "Top Shoes"])
+        )
         ctx = _ctx(ads=[ad])
         assert self.rule.detect(ctx) == []
 
@@ -2976,13 +3068,16 @@ class TestGenericDescriptionRule:
 
     def test_triggers_when_all_descriptions_generic(self):
         import json
+
         ad = _rsa_ad(
             ad_id=200,
             impressions=300,
-            descriptions_json=json.dumps([
-                "We are the best service provider.",
-                "High quality solutions for your business.",
-            ]),
+            descriptions_json=json.dumps(
+                [
+                    "We are the best service provider.",
+                    "High quality solutions for your business.",
+                ]
+            ),
         )
         ctx = _ctx(ads=[ad])
         recs = self.rule.detect(ctx)
@@ -2991,6 +3086,7 @@ class TestGenericDescriptionRule:
 
     def test_no_trigger_when_description_contains_number(self):
         import json
+
         ad = _rsa_ad(
             ad_id=200,
             impressions=300,
@@ -3001,6 +3097,7 @@ class TestGenericDescriptionRule:
 
     def test_no_trigger_when_description_contains_percentage(self):
         import json
+
         ad = _rsa_ad(
             ad_id=200,
             impressions=300,
@@ -3011,6 +3108,7 @@ class TestGenericDescriptionRule:
 
     def test_no_trigger_when_description_contains_anchor_word(self):
         import json
+
         ad = _rsa_ad(
             ad_id=200,
             impressions=300,
@@ -3021,6 +3119,7 @@ class TestGenericDescriptionRule:
 
     def test_no_trigger_when_impressions_below_minimum(self):
         import json
+
         ad = _rsa_ad(
             ad_id=200,
             impressions=100,
@@ -3031,6 +3130,7 @@ class TestGenericDescriptionRule:
 
     def test_no_trigger_for_non_rsa_ad(self):
         import json
+
         ad = _ad(
             ad_id=200,
             type="EXPANDED_TEXT_AD",

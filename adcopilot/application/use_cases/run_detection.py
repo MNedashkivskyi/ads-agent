@@ -109,7 +109,9 @@ class RunDetectionUseCase:
         landing_page_results = await _fetch_landing_pages(snapshot.ads)
 
         # 3f. Load GA4 page metrics if available (best-effort)
-        ga4_page_metrics = await _load_ga4_metrics(str(account_id), snapshot_date, self._snapshot_repo)
+        ga4_page_metrics = await _load_ga4_metrics(
+            str(account_id), snapshot_date, self._snapshot_repo
+        )
 
         # 3g. Load 14-day auction insights for competitive rules (best-effort)
         try:
@@ -284,10 +286,12 @@ async def _load_ga4_metrics(
 ) -> dict:
     """Load GA4 page metrics from DB for the detection context (best-effort)."""
     try:
+        import uuid
+
         from sqlalchemy import select
+
         from adcopilot.application.detection.base import GA4PageMetrics as GA4Metrics
         from adcopilot.infrastructure.db.models import GA4PageSnapshotModel
-        import uuid
 
         # snapshot_repo may not expose GA4 directly; use the underlying session
         session = getattr(snapshot_repo, "_session", None)

@@ -12,7 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from adcopilot.application.ports.llm import LLMClient
 from adcopilot.application.ports.prompt_version_repository import PromptVersionRepository
 from adcopilot.application.use_cases.get_latest_prompt import get_latest_prompt
-from adcopilot.infrastructure.db.models import QSImprovementPlanModel, RecommendationModel, SnapshotRunModel
+from adcopilot.infrastructure.db.models import (
+    QSImprovementPlanModel,
+    RecommendationModel,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -137,12 +140,16 @@ async def generate_performance_report(
     # -----------------------------------------------------------------------
     # QS improvement plan summary for this account
     # -----------------------------------------------------------------------
-    qs_stmt = select(
-        QSImprovementPlanModel.status,
-        func.count(QSImprovementPlanModel.id).label("count"),
-    ).where(
-        QSImprovementPlanModel.account_id == account_uuid,
-    ).group_by(QSImprovementPlanModel.status)
+    qs_stmt = (
+        select(
+            QSImprovementPlanModel.status,
+            func.count(QSImprovementPlanModel.id).label("count"),
+        )
+        .where(
+            QSImprovementPlanModel.account_id == account_uuid,
+        )
+        .group_by(QSImprovementPlanModel.status)
+    )
 
     qs_rows = (await session.execute(qs_stmt)).all()
     qs_plan_summary = {row.status: row.count for row in qs_rows}
@@ -161,7 +168,9 @@ async def generate_performance_report(
     }
 
     prompt_template = await get_latest_prompt(prompt_repo, _PROMPT_KEY)
-    user_msg = prompt_template.format(account_context=json.dumps(account_context, ensure_ascii=False, indent=2))
+    user_msg = prompt_template.format(
+        account_context=json.dumps(account_context, ensure_ascii=False, indent=2)
+    )
 
     summary_pl = await llm.complete(
         system=_SYSTEM,

@@ -33,6 +33,7 @@ from adcopilot.domain.launch.entities import (
 # Factories — build valid baseline objects
 # ---------------------------------------------------------------------------
 
+
 def _kw(text: str, match: MatchType = MatchType.PHRASE, cpc: int = 1_000_000) -> KeywordProposal:
     return KeywordProposal(text=text, match_type=match, estimated_cpc_micros=cpc)
 
@@ -83,10 +84,10 @@ def _proposal(
     if negatives is None:
         negatives = [
             "za darmo",  # covers darmowy
-            "praca",     # covers praca
-            "jak zrobić",# covers diy
-            "kurs",      # covers edukacja
-            "youtube",   # covers forum/media
+            "praca",  # covers praca
+            "jak zrobić",  # covers diy
+            "kurs",  # covers edukacja
+            "youtube",  # covers forum/media
         ]
     return CampaignProposal(
         id=CampaignProposalId(str(uuid.uuid4())),
@@ -142,6 +143,7 @@ def _landing_ok(url: str, lang: str = "en") -> LandingPageCheckResult:
 # ---------------------------------------------------------------------------
 # Rule 1 — Budget
 # ---------------------------------------------------------------------------
+
 
 class TestRule1Budget:
     """daily_budget_micros must equal monthly_budget_pln / 30 ± 5 %."""
@@ -199,6 +201,7 @@ class TestRule1Budget:
 # Rule 2 — Protected keywords
 # ---------------------------------------------------------------------------
 
+
 class TestRule2ProtectedKeywords:
     """No keyword may match a protected brand or trademark."""
 
@@ -210,11 +213,13 @@ class TestRule2ProtectedKeywords:
 
     def test_competitor_platform_keyword_fails(self):
         """Keyword containing 'google ads' is rejected."""
-        ag = _ag(keywords=[
-            _kw("google ads specialist"),
-            _kw("normal service"),
-            _kw("another keyword"),
-        ])
+        ag = _ag(
+            keywords=[
+                _kw("google ads specialist"),
+                _kw("normal service"),
+                _kw("another keyword"),
+            ]
+        )
         result = validate_proposal(_proposal(ad_groups=[ag]), _brief())
         errs = result.rule_results["protected_keywords"]
         assert errs
@@ -223,22 +228,26 @@ class TestRule2ProtectedKeywords:
 
     def test_adwords_keyword_fails(self):
         """Keyword containing 'adwords' is rejected."""
-        ag = _ag(keywords=[
-            _kw("adwords consultant"),
-            _kw("service keyword"),
-            _kw("another term"),
-        ])
+        ag = _ag(
+            keywords=[
+                _kw("adwords consultant"),
+                _kw("service keyword"),
+                _kw("another term"),
+            ]
+        )
         result = validate_proposal(_proposal(ad_groups=[ag]), _brief())
         assert result.rule_results["protected_keywords"]
 
     def test_custom_protected_brand_fails(self):
         """Caller-supplied protected brand is rejected in keywords."""
         ctx = ValidationContext(protected_brands={"acmecorp"})
-        ag = _ag(keywords=[
-            _kw("acmecorp alternative"),
-            _kw("buy service"),
-            _kw("cheap option"),
-        ])
+        ag = _ag(
+            keywords=[
+                _kw("acmecorp alternative"),
+                _kw("buy service"),
+                _kw("cheap option"),
+            ]
+        )
         result = validate_proposal(_proposal(ad_groups=[ag]), _brief(), ctx)
         errs = result.rule_results["protected_keywords"]
         assert errs
@@ -263,6 +272,7 @@ class TestRule2ProtectedKeywords:
 # ---------------------------------------------------------------------------
 # Rule 3 — Keyword count
 # ---------------------------------------------------------------------------
+
 
 class TestRule3KeywordCount:
     """Each ad group: 3–15 keywords (inclusive)."""
@@ -320,6 +330,7 @@ class TestRule3KeywordCount:
 # Rule 4 — Negatives completeness
 # ---------------------------------------------------------------------------
 
+
 class TestRule4Negatives:
     """Must include standard categories + vertical + user exclusions."""
 
@@ -327,12 +338,12 @@ class TestRule4Negatives:
         # Covers all 6 Polish standard categories:
         # darmowy, praca, diy, edukacja, forum/media, pobieranie
         return [
-            "za darmo",   # darmowy
-            "praca",      # praca
-            "jak zrobić", # diy
-            "kurs",       # edukacja
-            "youtube",    # forum/media
-            "szablon",    # pobieranie
+            "za darmo",  # darmowy
+            "praca",  # praca
+            "jak zrobić",  # diy
+            "kurs",  # edukacja
+            "youtube",  # forum/media
+            "szablon",  # pobieranie
         ] + (extra or [])
 
     def test_full_standard_negatives_pass(self):
@@ -410,6 +421,7 @@ class TestRule4Negatives:
 # ---------------------------------------------------------------------------
 # Rule 5 — Ad copy
 # ---------------------------------------------------------------------------
+
 
 class TestRule5AdCopy:
     """≥3 headlines ≤30 chars, ≥2 descriptions ≤90 chars, paths ≤15 chars."""
@@ -500,6 +512,7 @@ class TestRule5AdCopy:
 # ---------------------------------------------------------------------------
 # Rule 6 — Landing page
 # ---------------------------------------------------------------------------
+
 
 class TestRule6LandingPage:
     """final_url must be HTTPS, 200 OK, ≤5 s, matching campaign language."""
@@ -639,6 +652,7 @@ class TestRule6LandingPage:
 # Rule 7 — Bidding
 # ---------------------------------------------------------------------------
 
+
 class TestRule7Bidding:
     """No conversion-based strategy when account has no conversion tracking."""
 
@@ -704,6 +718,7 @@ class TestRule7Bidding:
 # ---------------------------------------------------------------------------
 # Rule 8 — Geographic targeting
 # ---------------------------------------------------------------------------
+
 
 class TestRule8Geographic:
     """location_targeting must not be wider than the user's stated country."""
@@ -772,6 +787,7 @@ class TestRule8Geographic:
 # ValidationResult structure tests
 # ---------------------------------------------------------------------------
 
+
 class TestValidationResult:
     """Test the ValidationResult structure and passed flag."""
 
@@ -802,8 +818,14 @@ class TestValidationResult:
         """rule_results dict contains an entry for every rule."""
         result = validate_proposal(_proposal(), _brief())
         expected_keys = {
-            "budget", "protected_keywords", "keyword_count",
-            "negatives", "ad_copy", "landing_page", "bidding", "geographic",
+            "budget",
+            "protected_keywords",
+            "keyword_count",
+            "negatives",
+            "ad_copy",
+            "landing_page",
+            "bidding",
+            "geographic",
         }
         assert expected_keys.issubset(result.rule_results.keys())
 
@@ -835,14 +857,14 @@ class TestValidationResult:
         for err in result.rule_results["keyword_count"]:
             assert "Rule" in err, f"Error should mention rule: {err}"
             assert any(
-                word in err.lower()
-                for word in ["minimum", "maximum", "add", "split", "remove"]
+                word in err.lower() for word in ["minimum", "maximum", "add", "split", "remove"]
             ), f"Error should contain remediation hint: {err}"
 
 
 # ---------------------------------------------------------------------------
 # Cross-rule integration tests
 # ---------------------------------------------------------------------------
+
 
 class TestFullValidation:
     """End-to-end tests with multiple rules interacting."""
@@ -855,10 +877,10 @@ class TestFullValidation:
             keywords=[_kw("google ads expert"), _kw("kw2")],  # 2 kws (< 3) + protected
         )
         proposal = _proposal(
-            daily_budget_micros=1,                 # wrong budget
-            bidding="MAXIMIZE_CONVERSIONS",        # no tracking
+            daily_budget_micros=1,  # wrong budget
+            bidding="MAXIMIZE_CONVERSIONS",  # no tracking
             ad_groups=[ag],
-            negatives=[],                          # all standard categories missing
+            negatives=[],  # all standard categories missing
         )
         brief = _brief(exclusions=["my competitor"])
         ctx = ValidationContext(has_conversion_tracking=False)
@@ -892,7 +914,13 @@ class TestFullValidation:
             location="Warsaw, PL",
             ad_groups=[ag],
             negatives=[
-                "za darmo", "praca", "jak zrobić", "kurs", "youtube", "szablon", "peruka",
+                "za darmo",
+                "praca",
+                "jak zrobić",
+                "kurs",
+                "youtube",
+                "szablon",
+                "peruka",
             ],
         )
         brief = _brief(

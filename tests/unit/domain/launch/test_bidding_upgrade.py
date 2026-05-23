@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -92,7 +92,9 @@ class TestMaximizeClicksUpgrade:
 
     @pytest.mark.asyncio
     async def test_skips_paused_campaigns(self) -> None:
-        campaign = _make_campaign(conversions=50.0, status="PAUSED", bidding_strategy="MAXIMIZE_CLICKS")
+        campaign = _make_campaign(
+            conversions=50.0, status="PAUSED", bidding_strategy="MAXIMIZE_CLICKS"
+        )
         uc, rec_repo = _make_use_case([campaign])
         recs = await uc.execute(AccountId("acc-1"))
         assert recs == []
@@ -133,7 +135,9 @@ class TestDeduplication:
             RecommendationSeverity,
         )
 
-        campaign = _make_campaign(campaign_id=42, conversions=35.0, bidding_strategy="MAXIMIZE_CLICKS")
+        campaign = _make_campaign(
+            campaign_id=42, conversions=35.0, bidding_strategy="MAXIMIZE_CLICKS"
+        )
         existing_rec = Recommendation(
             id=RecommendationId("existing"),
             account_id=AccountId("acc-1"),

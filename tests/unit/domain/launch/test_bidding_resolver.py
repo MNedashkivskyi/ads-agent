@@ -1,13 +1,10 @@
 """Unit tests for resolve_bidding_strategy() — all 7 logic branches."""
 
-import pytest
-
 from adcopilot.domain.launch.bidding_resolver import (
     BiddingRecommendation,
     resolve_bidding_strategy,
 )
 from adcopilot.domain.launch.budget_tier import BudgetTier
-
 
 # ---------------------------------------------------------------------------
 # No conversion tracking — always MAXIMIZE_CLICKS, no upgrade
