@@ -94,9 +94,8 @@ async def get_user_me(
     try:
         async with AsyncSession(engine) as session:
             repo = SqlUserRepository(session)
-            user = await repo.get_by_id(UserId(user_id))
-            if user is None:
-                raise HTTPException(status_code=404, detail="User not found")
+            user = await repo.ensure_exists(UserId(user_id))
+            await session.commit()
             admin_ids = {uid.strip() for uid in settings.ADMIN_USER_IDS.split(",") if uid.strip()}
             role = "admin" if user_id in admin_ids else "client"
             return UserMeResponse(

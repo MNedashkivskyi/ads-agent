@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,6 +60,22 @@ class SqlUserRepository:
         result = await self._session.execute(select(UserModel).where(UserModel.email == email))
         model = result.scalar_one_or_none()
         return _model_to_domain(model) if model else None
+
+    async def ensure_exists(self, user_id: UserId, email: str = "") -> User:
+        """Return existing user or create a minimal record for a Supabase-sourced ID."""
+        user = await self.get_by_id(user_id)
+        if user is not None:
+            return user
+        user = User(
+            id=user_id,
+            email=email,
+            telegram_chat_id=None,
+            created_at=datetime.now(UTC),
+            plan=PlanTier.STARTER,
+        )
+        saved = await self.save(user)
+        await self._session.flush()
+        return saved
 
     async def save(self, user: User) -> User:
         result = await self._session.execute(

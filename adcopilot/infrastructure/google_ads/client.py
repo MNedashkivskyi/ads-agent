@@ -84,52 +84,76 @@ class GoogleAdsClientAdapter:
             raise GoogleAdsUnavailable(f"Failed to build Google Ads client: {exc}") from exc
 
     async def list_accessible_customers(self, refresh_token: str) -> list[str]:
-        """Returns list of accessible customer resource names."""
-        try:
-            client = self._build_client(refresh_token)
-            customer_service = client.get_service("CustomerService")
-            response = customer_service.list_accessible_customers()
-            result: list[str] = list(response.resource_names)
-            return result
-        except GoogleAdsAuthError:
-            raise
-        except Exception as exc:
-            if is_google_auth_error(exc):
-                raise GoogleAdsAuthError(str(exc)) from exc
-            if is_test_token_error(exc):
-                raise GoogleAdsTokenNotApproved(
-                    "Developer token is in test mode or not yet approved for production access. "
-                    "Apply for Standard Access at Google Ads → Admin → API Center."
-                ) from exc
-            raise GoogleAdsUnavailable(str(exc)) from exc
+        """Returns list of accessible customer resource names.
+
+        The google-ads library uses synchronous gRPC under the hood.
+        We run it in a thread so it does not block the async event loop.
+        """
+        import asyncio
+
+        def _blocking() -> list[str]:
+            try:
+                client = self._build_client(refresh_token)
+                customer_service = client.get_service("CustomerService")
+                response = customer_service.list_accessible_customers()
+                return list(response.resource_names)
+            except GoogleAdsAuthError:
+                raise
+            except Exception as exc:
+                if is_google_auth_error(exc):
+                    raise GoogleAdsAuthError(str(exc)) from exc
+                if is_test_token_error(exc):
+                    raise GoogleAdsTokenNotApproved(
+                        "Developer token is in test mode or not yet approved for production access. "
+                        "Apply for Standard Access at Google Ads → Admin → API Center."
+                    ) from exc
+                raise GoogleAdsUnavailable(str(exc)) from exc
+
+        return await asyncio.wait_for(
+            asyncio.to_thread(_blocking),
+            timeout=30,
+        )
 
     async def get_customer_info(self, refresh_token: str, customer_id: str) -> CustomerInfo:
-        """Returns basic customer info for the given customer_id."""
-        try:
-            client = self._build_client(refresh_token)
-            ga_service = client.get_service("GoogleAdsService")
+        """Returns basic customer info for the given customer_id.
 
-            query = """
-                SELECT
-                    customer.descriptive_name,
-                    customer.currency_code,
-                    customer.time_zone,
-                    customer.manager
-                FROM customer
-                LIMIT 1
-            """
-            response = ga_service.search(customer_id=customer_id.replace("-", ""), query=query)
-            for row in response:
-                return CustomerInfo(
-                    descriptive_name=row.customer.descriptive_name,
-                    currency=row.customer.currency_code,
-                    timezone=row.customer.time_zone,
-                    is_manager=row.customer.manager,
+        The google-ads library uses synchronous gRPC under the hood.
+        We run it in a thread so it does not block the async event loop.
+        """
+        import asyncio
+
+        def _blocking() -> CustomerInfo:
+            try:
+                client = self._build_client(refresh_token)
+                ga_service = client.get_service("GoogleAdsService")
+                query = """
+                    SELECT
+                        customer.descriptive_name,
+                        customer.currency_code,
+                        customer.time_zone,
+                        customer.manager
+                    FROM customer
+                    LIMIT 1
+                """
+                response = ga_service.search(
+                    customer_id=customer_id.replace("-", ""), query=query
                 )
-            raise GoogleAdsUnavailable(f"No customer data returned for {customer_id}")
-        except (GoogleAdsAuthError, GoogleAdsUnavailable):
-            raise
-        except Exception as exc:
-            if is_google_auth_error(exc):
-                raise GoogleAdsAuthError(str(exc)) from exc
-            raise GoogleAdsUnavailable(str(exc)) from exc
+                for row in response:
+                    return CustomerInfo(
+                        descriptive_name=row.customer.descriptive_name,
+                        currency=row.customer.currency_code,
+                        timezone=row.customer.time_zone,
+                        is_manager=row.customer.manager,
+                    )
+                raise GoogleAdsUnavailable(f"No customer data returned for {customer_id}")
+            except (GoogleAdsAuthError, GoogleAdsUnavailable):
+                raise
+            except Exception as exc:
+                if is_google_auth_error(exc):
+                    raise GoogleAdsAuthError(str(exc)) from exc
+                raise GoogleAdsUnavailable(str(exc)) from exc
+
+        return await asyncio.wait_for(
+            asyncio.to_thread(_blocking),
+            timeout=20,
+        )
