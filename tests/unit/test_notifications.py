@@ -190,24 +190,23 @@ async def test_digest_use_case_calls_notifier_when_provided():
     from adcopilot.domain.recommendation import (
         Recommendation,
         RecommendationId,
+        RecommendationKind,
         RecommendationSeverity,
         RecommendationStatus,
-        RecommendationType,
     )
 
     # Stub recommendation
     rec = Recommendation(
         id=RecommendationId(str(uuid.uuid4())),
         account_id=AccountId("acc-1"),
-        recommendation_type=RecommendationType.BUDGET_INCREASE,
+        kind=RecommendationKind.INCREASE_BUDGET,
         severity=RecommendationSeverity.HIGH,
-        title="Zwiększ budżet",
-        description="Opis",
+        target={},
+        payload={},
         estimated_monthly_savings_micros=1_000_000,
+        evidence={},
         status=RecommendationStatus.PENDING,
-        metadata={},
         created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
     )
 
     # Stub repos

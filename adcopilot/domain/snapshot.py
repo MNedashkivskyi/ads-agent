@@ -60,15 +60,15 @@ class KeywordSnapshot:
     match_type: str
     status: str
     quality_score: int | None
-    expected_ctr: str | None
-    ad_relevance: str | None
-    landing_page_experience: str | None
     impressions: int
     clicks: int
     cost_micros: int
     conversions: float
     ctr: float
     avg_cpc_micros: int
+    expected_ctr: str | None = None
+    ad_relevance: str | None = None
+    landing_page_experience: str | None = None
 
 
 @dataclass(frozen=True)

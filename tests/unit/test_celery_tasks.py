@@ -62,7 +62,24 @@ def test_snapshot_task_releases_lock_on_success() -> None:
             "adcopilot.interfaces.worker.tasks._run_snapshot",
             new=AsyncMock(return_value=fake_result),
         ),
+        patch(
+            "adcopilot.interfaces.worker.tasks._run_detection",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "adcopilot.interfaces.worker.tasks._record_qs_history",
+            new=AsyncMock(return_value=None),
+        ),
+        patch(
+            "adcopilot.interfaces.worker.tasks.snapshot_ga4_data_task",
+        ) as mock_ga4_task,
+        patch(
+            "adcopilot.interfaces.worker.tasks.snapshot_auction_insights_task",
+        ) as mock_auction_task,
     ):
+        mock_ga4_task.delay = MagicMock()
+        mock_auction_task.delay = MagicMock()
+
         from adcopilot.interfaces.worker.tasks import snapshot_account_task
 
         result = snapshot_account_task.__wrapped__(
