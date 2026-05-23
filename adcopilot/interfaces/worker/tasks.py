@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, date
+from datetime import UTC, date, datetime
 
 import structlog
 from redis import Redis
@@ -12,6 +12,9 @@ from adcopilot.application.use_cases.snapshot_account import SnapshotResult
 from adcopilot.interfaces.worker.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
+
+_PLAN_ACCOUNT_LIMITS: dict[str, int] = {"starter": 1, "growth": 3, "pro": 10}
+_OAUTH_PENDING_KEY_PREFIX = "oauth_pending:"
 
 _LOCK_TTL_SECONDS = 7200  # 2 hours
 _MONITORING_INTERVAL_SECONDS = 3600  # 1 hour
@@ -23,6 +26,184 @@ def _redis_client() -> Redis:  # type: ignore[type-arg]
 
     settings = get_settings()
     return Redis.from_url(settings.REDIS_URL)
+
+
+# ---------------------------------------------------------------------------
+# Google Ads account-linking task (dispatched from the OAuth callback so the
+# blocking gRPC calls never touch the FastAPI event loop).
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.link_google_ads_accounts_task",
+    max_retries=2,
+    default_retry_delay=30,
+)
+def link_google_ads_accounts_task(user_id: str) -> dict[str, object]:
+    """Fetch Google Ads customer IDs and persist accounts after OAuth consent.
+
+    The refresh token is read from a temporary encrypted Redis entry written
+    by the OAuth callback.  After processing, the entry is deleted regardless
+    of outcome so it cannot be replayed.
+    """
+    import asyncio
+
+    from adcopilot.config import get_settings
+
+    settings = get_settings()
+    try:
+        return asyncio.run(_async_link_google_ads_accounts(settings, user_id))
+    except Exception as exc:
+        logger.error(
+            "link_google_ads_accounts_task failed",
+            user_id=user_id,
+            error=str(exc),
+            error_type=type(exc).__name__,
+        )
+        return {"success": False, "error": str(exc)}
+
+
+async def _async_link_google_ads_accounts(
+    settings: object,
+    user_id: str,
+) -> dict[str, object]:
+    """Async implementation of account linking — runs inside asyncio.run()."""
+    import base64
+    import hashlib
+    import json
+
+    from cryptography.fernet import Fernet
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import Settings
+    from adcopilot.domain.entities import AccountId, GoogleAdsAccount, OAuthCredentials, UserId
+    from adcopilot.domain.exceptions import GoogleAdsTokenNotApproved
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
+    from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter
+
+    assert isinstance(settings, Settings)
+
+    # --- decrypt pending token from Redis ---
+    redis = _redis_client()
+    pending_key = f"{_OAUTH_PENDING_KEY_PREFIX}{user_id}"
+    enc_data = redis.get(pending_key)
+    if not enc_data:
+        logger.warning("no pending oauth token found", user_id=user_id)
+        return {"success": False, "error": "no_pending_token"}
+
+    fernet_key = base64.urlsafe_b64encode(
+        hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest()
+    )
+    fernet = Fernet(fernet_key)
+    raw = json.loads(fernet.decrypt(enc_data).decode())
+    refresh_token: str = raw["refresh_token"]
+    access_token: str | None = raw.get("access_token")
+    expires_at_iso: str | None = raw.get("expires_at")
+    expires_at: datetime | None = (
+        datetime.fromisoformat(expires_at_iso) if expires_at_iso else None
+    )
+
+    # --- open DB session ---
+    engine = create_async_engine(settings.DATABASE_URL)
+    linked_ids: list[str] = []
+    try:
+        async with AsyncSession(engine) as session:
+            user_repo = SqlUserRepository(session)
+            acc_repo = SqlGoogleAdsAccountRepository(session)
+            creds_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
+
+            user = await user_repo.get_by_id(UserId(user_id))
+            if user is None:
+                logger.error("user not found in oauth linking task", user_id=user_id)
+                redis.delete(pending_key)
+                return {"success": False, "error": "user_not_found"}
+
+            existing_accounts = await acc_repo.list_for_user(UserId(user_id))
+            account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
+            slots_remaining = account_limit - len(existing_accounts)
+            if slots_remaining <= 0:
+                logger.warning(
+                    "account limit reached in oauth linking task",
+                    user_id=user_id,
+                    plan=user.plan.value,
+                )
+                redis.delete(pending_key)
+                return {"success": False, "error": "account_limit_reached"}
+
+            # --- call Google Ads API (runs in a thread pool inside asyncio.run) ---
+            ads_client = GoogleAdsClientAdapter(settings)
+            try:
+                resource_names = await ads_client.list_accessible_customers(refresh_token)
+                customer_ids = [rn.split("/")[-1] for rn in resource_names]
+            except GoogleAdsTokenNotApproved as exc:
+                logger.error("developer token not approved", error=str(exc))
+                redis.delete(pending_key)
+                return {"success": False, "error": "token_not_approved"}
+            except Exception as exc:
+                logger.error("failed to list google ads customers", error=str(exc))
+                redis.delete(pending_key)
+                return {"success": False, "error": str(exc)}
+
+            for customer_id in customer_ids[:slots_remaining]:
+                account_id = AccountId(
+                    str(uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}"))
+                )
+                descriptive_name = ""
+                currency = ""
+                timezone = ""
+                is_manager = False
+                try:
+                    info = await ads_client.get_customer_info(refresh_token, customer_id)
+                    descriptive_name = info.descriptive_name
+                    currency = info.currency
+                    timezone = info.timezone
+                    is_manager = info.is_manager
+                except Exception as exc:
+                    logger.warning(
+                        "failed to fetch customer info — saving with defaults",
+                        customer_id=customer_id,
+                        error=str(exc),
+                    )
+
+                account = GoogleAdsAccount(
+                    id=account_id,
+                    user_id=UserId(user_id),
+                    customer_id=customer_id,
+                    descriptive_name=descriptive_name,
+                    currency=currency,
+                    timezone=timezone,
+                    is_manager=is_manager,
+                    write_enabled=not is_manager,
+                    connected_at=datetime.now(UTC),
+                )
+                await acc_repo.save(account)
+
+                creds = OAuthCredentials(
+                    account_id=account_id,
+                    refresh_token=refresh_token,
+                    access_token=access_token,
+                    expires_at=expires_at,
+                )
+                await creds_repo.save(creds)
+                linked_ids.append(customer_id)
+
+            await session.commit()
+    finally:
+        await engine.dispose()
+        redis.delete(pending_key)
+
+    logger.info(
+        "google ads accounts linked via celery task",
+        user_id=user_id,
+        linked_count=len(linked_ids),
+    )
+    return {"success": True, "linked_count": len(linked_ids), "linked_ids": linked_ids}
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]

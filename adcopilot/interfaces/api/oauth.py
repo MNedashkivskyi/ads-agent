@@ -13,13 +13,9 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import Settings, get_settings
-from adcopilot.domain.entities import AccountId, GoogleAdsAccount, OAuthCredentials, UserId
-from adcopilot.domain.exceptions import GoogleAdsTokenNotApproved
+from adcopilot.domain.entities import UserId
 from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
     SqlGoogleAdsAccountRepository,
-)
-from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
-    SqlOAuthCredentialsRepository,
 )
 from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
 from adcopilot.security import (
@@ -45,8 +41,15 @@ def _get_redis_client(settings: Annotated[Settings, Depends(get_settings)]) -> r
     performs a single ``SET NX`` call, and building the client per request
     (connection pooled under the hood) is simpler than managing an async
     pool in the single-consumer OAuth callback hot path.
+
+    We set short socket timeouts so a Redis outage fails fast (5 s)
+    instead of blocking the event loop for the Linux TCP default (~120 s).
     """
-    return redis_sync.Redis.from_url(settings.REDIS_URL)
+    return redis_sync.Redis.from_url(
+        settings.REDIS_URL,
+        socket_connect_timeout=5,
+        socket_timeout=5,
+    )
 
 
 from collections.abc import AsyncGenerator  # noqa: E402
@@ -93,27 +96,53 @@ async def oauth_google_callback(
     session: Annotated[AsyncSession, Depends(_get_db_session)],
     redis_client: Annotated[redis_sync.Redis, Depends(_get_redis_client)],
 ) -> RedirectResponse | dict[str, object]:
-    """Exchanges code for tokens, stores credentials, returns linked customer IDs."""
+    """Exchange code for tokens, queue account-linking as a Celery task, redirect.
+
+    The Google Ads API calls (list_accessible_customers, get_customer_info) use
+    synchronous gRPC under the hood.  Running them inside the FastAPI event loop
+    — even via asyncio.to_thread — risks starving the event loop when the gRPC
+    C extension holds the GIL.  We therefore do *no* Google Ads API calls here:
+    the refresh token is stored encrypted in Redis and a Celery worker (separate
+    process, separate GIL) picks it up to finish account linking.
+    """
+    import asyncio
+    import base64
+    import hashlib
+    import json
+
+    from cryptography.fernet import Fernet
+
     if not settings.GOOGLE_ADS_CLIENT_ID or not settings.GOOGLE_ADS_CLIENT_SECRET:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
 
-    # Validate state JWT — prevents CSRF and, via Redis single-use marker,
-    # also prevents replay of a captured state value.
+    # Validate state JWT — prevents CSRF and replay attacks.
+    # consume_state_jwt uses a *synchronous* Redis SET NX call.  We run it
+    # in a thread so a slow/unreachable Redis doesn't block the event loop.
     try:
-        user_id = consume_state_jwt(state, settings.SECRET_KEY, redis_client=redis_client)
+        user_id = await asyncio.wait_for(
+            asyncio.to_thread(
+                consume_state_jwt, state, settings.SECRET_KEY, redis_client=redis_client
+            ),
+            timeout=10,
+        )
     except StateAlreadyUsedError as exc:
         logger.warning("oauth state replay attempted")
         raise HTTPException(status_code=400, detail="OAuth state already used") from exc
     except StateTokenInvalidError as exc:
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state") from exc
+    except (redis_sync.ConnectionError, redis_sync.TimeoutError, TimeoutError, OSError) as exc:
+        logger.error("redis unavailable during oauth state validation", error=str(exc))
+        raise HTTPException(
+            status_code=503, detail="Service temporarily unavailable — please try again"
+        ) from exc
 
     user_repo = SqlUserRepository(session)
     user = await user_repo.get_by_id(UserId(user_id))
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Exchange authorization code for tokens
-    async with httpx.AsyncClient() as client:
+    # Exchange authorization code for tokens (fast httpx call, has 15 s timeout).
+    async with httpx.AsyncClient(timeout=15) as client:
         token_resp = await client.post(
             GOOGLE_TOKEN_URL,
             data={
@@ -138,28 +167,17 @@ async def oauth_google_callback(
     if not refresh_token:
         raise HTTPException(status_code=400, detail="No refresh_token in Google response")
 
+    # Enforce per-plan account limits *before* queuing the task so the user
+    # gets an immediate error rather than a silent no-op from the worker.
     acc_repo = SqlGoogleAdsAccountRepository(session)
-    creds_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
-
-    # Enforce per-plan account limits before calling the Google Ads API
-    _PLAN_ACCOUNT_LIMITS: dict[str, int] = {
-        "starter": 1,
-        "growth": 3,
-        "pro": 10,
-    }
+    _PLAN_ACCOUNT_LIMITS: dict[str, int] = {"starter": 1, "growth": 3, "pro": 10}
     existing_accounts = await acc_repo.list_for_user(UserId(user_id))
     account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
-    slots_remaining = account_limit - len(existing_accounts)
-    if slots_remaining <= 0:
+    if len(existing_accounts) >= account_limit:
         raise HTTPException(
             status_code=402,
             detail=f"Account limit reached for {user.plan.value} plan ({account_limit} max). Upgrade to add more accounts.",
         )
-
-    # List accessible Google Ads customer IDs.
-    # list_accessible_customers returns resource names like "customers/1234567890".
-    # Extract the plain numeric ID from each resource name.
-    from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter
 
     # Guard: developer token is required for every Google Ads API call.
     if not settings.GOOGLE_ADS_DEVELOPER_TOKEN:
@@ -169,7 +187,7 @@ async def oauth_google_callback(
         )
         if settings.APP_URL:
             return RedirectResponse(
-                url=f"{settings.APP_URL.rstrip('/')}/app?connected=0&error=missing_developer_token",
+                url=f"{settings.APP_URL.rstrip('/')}/app/google-ads-connect?connected=0&error=missing_developer_token",
                 status_code=302,
             )
         raise HTTPException(
@@ -177,99 +195,48 @@ async def oauth_google_callback(
             detail="Google Ads API not configured: missing GOOGLE_ADS_DEVELOPER_TOKEN",
         )
 
-    ads_client = GoogleAdsClientAdapter(settings)
-    google_ads_api_error: str | None = None
+    # Encrypt and store the refresh token in Redis.  The Celery task reads it,
+    # calls the Google Ads API (in a separate worker process), and cleans up.
+    fernet_key = base64.urlsafe_b64encode(
+        hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest()
+    )
+    fernet = Fernet(fernet_key)
+    pending_payload = json.dumps(
+        {
+            "refresh_token": refresh_token,
+            "access_token": access_token,
+            "expires_at": expires_at.isoformat() if expires_at else None,
+        }
+    ).encode()
+    enc_token = fernet.encrypt(pending_payload)
+    pending_redis_key = f"oauth_pending:{user_id}"
+
     try:
-        resource_names = await ads_client.list_accessible_customers(refresh_token)
-        customer_ids = [rn.split("/")[-1] for rn in resource_names]
-    except GoogleAdsTokenNotApproved as exc:
-        logger.error(
-            "google ads developer token not approved for production — "
-            "apply for Standard Access at Google Ads → Admin → API Center",
-            error=str(exc),
+        await asyncio.wait_for(
+            asyncio.to_thread(redis_client.set, pending_redis_key, enc_token, ex=3600),
+            timeout=10,
         )
-        if settings.APP_URL:
-            return RedirectResponse(
-                url=f"{settings.APP_URL.rstrip('/')}/app?connected=0&error=token_not_approved",
-                status_code=302,
-            )
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except Exception as exc:
-        import traceback
+    except (redis_sync.ConnectionError, redis_sync.TimeoutError, TimeoutError, OSError) as exc:
+        logger.error("redis unavailable — cannot store pending token", error=str(exc))
+        raise HTTPException(
+            status_code=503, detail="Service temporarily unavailable — please try again"
+        ) from exc
 
-        logger.error(
-            "failed to list google ads customers",
-            error=str(exc),
-            error_type=type(exc).__name__,
-            traceback=traceback.format_exc(),
-            developer_token_set=bool(settings.GOOGLE_ADS_DEVELOPER_TOKEN),
-            client_id_set=bool(settings.GOOGLE_ADS_CLIENT_ID),
-        )
-        google_ads_api_error = f"{type(exc).__name__}: {exc}"
-        customer_ids = []
+    # Dispatch the linking task to a Celery worker.
+    from adcopilot.interfaces.worker.tasks import link_google_ads_accounts_task
 
-    linked_ids: list[str] = []
-    for customer_id in customer_ids[:slots_remaining]:
-        account_id = AccountId(str(uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}")))
+    link_google_ads_accounts_task.delay(user_id)
+    logger.info("google oauth code exchanged — account linking queued", user_id=user_id)
 
-        # Fetch real account details so the dashboard shows name/currency/timezone.
-        descriptive_name = ""
-        currency = ""
-        timezone = ""
-        is_manager = False
-        try:
-            info = await ads_client.get_customer_info(refresh_token, customer_id)
-            descriptive_name = info.descriptive_name
-            currency = info.currency
-            timezone = info.timezone
-            is_manager = info.is_manager
-        except Exception as exc:
-            logger.warning(
-                "failed to fetch customer info — saving with defaults",
-                customer_id=customer_id,
-                error=str(exc),
-            )
-
-        account = GoogleAdsAccount(
-            id=account_id,
-            user_id=UserId(user_id),
-            customer_id=customer_id,
-            descriptive_name=descriptive_name,
-            currency=currency,
-            timezone=timezone,
-            is_manager=is_manager,
-            write_enabled=not is_manager,
-            connected_at=datetime.now(UTC),
-        )
-        await acc_repo.save(account)
-
-        creds = OAuthCredentials(
-            account_id=account_id,
-            refresh_token=refresh_token,
-            access_token=access_token,
-            expires_at=expires_at,
-        )
-        await creds_repo.save(creds)
-        linked_ids.append(customer_id)
-
-    await session.commit()
-    logger.info("google oauth complete", user_id=user_id, accounts=len(linked_ids))
-
-    # TODO(phase-0.2): notify user via new notifier when Google Ads connected
-
-    # Redirect the browser back to the frontend dashboard.
-    # APP_URL is the frontend origin (e.g. https://adswise.xyz).
-    # Falls back to a generic success message if APP_URL is not configured.
+    # Redirect immediately.  The frontend shows a "pending" state; accounts
+    # appear after the Celery worker finishes (usually within 10–30 seconds).
     if settings.APP_URL:
         base = settings.APP_URL.rstrip("/")
-        if google_ads_api_error and not linked_ids:
-            # API call failed — show a distinct error message on the frontend
-            # so the user knows it's a configuration issue, not "no accounts".
-            redirect_url = f"{base}/app?connected=0&error=google_ads_api_error"
-        else:
-            redirect_url = f"{base}/app?connected={len(linked_ids)}"
-        return RedirectResponse(url=redirect_url, status_code=302)
-    return {"user_id": user_id, "linked_customer_ids": linked_ids}
+        return RedirectResponse(
+            url=f"{base}/app/google-ads-connect?pending=1",
+            status_code=302,
+        )
+    return {"user_id": user_id, "status": "pending"}
 
 
 GA4_SCOPE = "https://www.googleapis.com/auth/analytics.readonly"
@@ -312,13 +279,25 @@ async def oauth_ga4_callback(
     if not settings.GOOGLE_ADS_CLIENT_ID or not settings.GOOGLE_ADS_CLIENT_SECRET:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
 
+    import asyncio
+
     try:
-        payload = consume_state_jwt(state, settings.SECRET_KEY, redis_client=redis_client)
+        payload = await asyncio.wait_for(
+            asyncio.to_thread(
+                consume_state_jwt, state, settings.SECRET_KEY, redis_client=redis_client
+            ),
+            timeout=10,
+        )
         user_id, account_id = payload.split(":", 1)
     except (StateAlreadyUsedError, StateTokenInvalidError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="Invalid or expired OAuth state") from exc
+    except (redis_sync.ConnectionError, redis_sync.TimeoutError, TimeoutError, OSError) as exc:
+        logger.error("redis unavailable during ga4 oauth state validation", error=str(exc))
+        raise HTTPException(
+            status_code=503, detail="Service temporarily unavailable — please try again"
+        ) from exc
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=15) as client:
         token_resp = await client.post(
             GA4_TOKEN_URL,
             data={
