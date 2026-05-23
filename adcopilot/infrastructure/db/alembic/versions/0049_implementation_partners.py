@@ -7,8 +7,6 @@ Create Date: 2026-05-20
 
 from __future__ import annotations
 
-import contextlib
-
 import sqlalchemy as sa
 from alembic import op
 
@@ -67,12 +65,19 @@ def upgrade() -> None:
     op.create_index("ix_implementation_requests_client_id", "implementation_requests", ["client_id"])
     op.create_index("ix_implementation_requests_status", "implementation_requests", ["status"])
 
-    # Add marketplace_enabled config flag to existing config if table exists
-    with contextlib.suppress(Exception):
+    # Add marketplace_enabled config flag to existing config if table exists.
+    # Use a savepoint so that a failure (e.g. missing config table) does not
+    # abort the surrounding Alembic transaction.
+    conn = op.get_bind()
+    conn.execute(sa.text("SAVEPOINT config_insert"))
+    try:
         op.execute(
             "INSERT INTO config (key, value) VALUES ('marketplace_enabled', 'true') "
             "ON CONFLICT (key) DO NOTHING"
         )
+        conn.execute(sa.text("RELEASE SAVEPOINT config_insert"))
+    except Exception:
+        conn.execute(sa.text("ROLLBACK TO SAVEPOINT config_insert"))
 
     # Seed placeholder partners
     for name, email, website, city, voivodeship, platforms, price, hours, rating, jobs in _SEED_PARTNERS:
