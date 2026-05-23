@@ -215,9 +215,10 @@ class FakeSnapshotRepository:
     ) -> None:
         # Simple upsert: replace any matching (account_id, snapshot_date, campaign_id)
         self.campaigns = [
-            s for s in self.campaigns
-            if (s.account_id, s.snapshot_date, s.campaign_id) not in
-            {(n.account_id, n.snapshot_date, n.campaign_id) for n in snapshots}
+            s
+            for s in self.campaigns
+            if (s.account_id, s.snapshot_date, s.campaign_id)
+            not in {(n.account_id, n.snapshot_date, n.campaign_id) for n in snapshots}
         ]
         self.campaigns.extend(snapshots)
 
@@ -225,9 +226,10 @@ class FakeSnapshotRepository:
         self, account_id: AccountId, snapshots: list[AdGroupSnapshot]
     ) -> None:
         self.ad_groups = [
-            s for s in self.ad_groups
-            if (s.account_id, s.snapshot_date, s.ad_group_id) not in
-            {(n.account_id, n.snapshot_date, n.ad_group_id) for n in snapshots}
+            s
+            for s in self.ad_groups
+            if (s.account_id, s.snapshot_date, s.ad_group_id)
+            not in {(n.account_id, n.snapshot_date, n.ad_group_id) for n in snapshots}
         ]
         self.ad_groups.extend(snapshots)
 
@@ -241,9 +243,7 @@ class FakeSnapshotRepository:
     ) -> None:
         self.search_terms.extend(snapshots)
 
-    async def upsert_ads(
-        self, account_id: AccountId, snapshots: list[AdSnapshot]
-    ) -> None:
+    async def upsert_ads(self, account_id: AccountId, snapshots: list[AdSnapshot]) -> None:
         self.ads.extend(snapshots)
 
     async def upsert_negative_keywords(
@@ -301,7 +301,9 @@ _SENTINEL = object()
 
 class FakeAccountRepository:
     def __init__(self, account: GoogleAdsAccount | None = _SENTINEL) -> None:  # type: ignore[assignment]
-        self._account: GoogleAdsAccount | None = _make_account() if account is _SENTINEL else account
+        self._account: GoogleAdsAccount | None = (
+            _make_account() if account is _SENTINEL else account
+        )
         self.saved: GoogleAdsAccount | None = None
 
     async def get(self, account_id: AccountId) -> GoogleAdsAccount | None:
@@ -377,8 +379,7 @@ async def test_idempotency_running_twice_same_date() -> None:
 
     # After two runs, there should still be only 1 campaign row for this date/id
     matching = [
-        c for c in snap_repo.campaigns
-        if c.campaign_id == 1 and c.snapshot_date == _SNAPSHOT_DATE
+        c for c in snap_repo.campaigns if c.campaign_id == 1 and c.snapshot_date == _SNAPSHOT_DATE
     ]
     assert len(matching) == 1
 

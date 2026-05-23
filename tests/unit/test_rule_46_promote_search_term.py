@@ -203,9 +203,11 @@ def test_payload_contains_expected_fields() -> None:
 
 def test_duplicate_terms_deduplicated() -> None:
     rule = PromoteSearchTermRule()
-    ctx = _ctx([
-        _st(term="salon beauty", conversions=5.0, clicks=10),
-        _st(term="salon beauty", conversions=5.0, clicks=10),
-    ])
+    ctx = _ctx(
+        [
+            _st(term="salon beauty", conversions=5.0, clicks=10),
+            _st(term="salon beauty", conversions=5.0, clicks=10),
+        ]
+    )
     recs = rule.detect(ctx)
     assert len(recs) == 1

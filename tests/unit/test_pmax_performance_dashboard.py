@@ -18,6 +18,7 @@ from adcopilot.interfaces.api.pmax import router
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_app(user_id: str = "user-1") -> FastAPI:
     app = FastAPI()
     app.include_router(router)
@@ -111,6 +112,7 @@ def _infra_patches(account=None, creds=None):
 # Repository: get_campaigns_date_range
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_campaigns_date_range_filters_by_channel_type():
     """The endpoint returns only PERFORMANCE_MAX campaigns."""
@@ -136,6 +138,7 @@ async def test_get_campaigns_date_range_filters_by_channel_type():
 # API endpoint tests
 # ---------------------------------------------------------------------------
 
+
 def test_pmax_performance_forbidden():
     app = _make_app(user_id="other-user")
     client = TestClient(app, raise_server_exceptions=False)
@@ -155,8 +158,12 @@ def test_pmax_performance_invalid_days():
 def test_pmax_performance_returns_time_series():
     app = _make_app()
     snaps = [
-        _mock_pmax_snap(campaign_id=1, snapshot_date=date(2026, 5, 18), cost_micros=50_000_000, conv_value=150.0),
-        _mock_pmax_snap(campaign_id=1, snapshot_date=date(2026, 5, 19), cost_micros=60_000_000, conv_value=200.0),
+        _mock_pmax_snap(
+            campaign_id=1, snapshot_date=date(2026, 5, 18), cost_micros=50_000_000, conv_value=150.0
+        ),
+        _mock_pmax_snap(
+            campaign_id=1, snapshot_date=date(2026, 5, 19), cost_micros=60_000_000, conv_value=200.0
+        ),
     ]
 
     import adcopilot.infrastructure.db.repositories.snapshot_repository as sr_mod
@@ -173,7 +180,13 @@ def test_pmax_performance_returns_time_series():
     p1, p2, p3, p4, mock_session = _infra_patches()
     mock_session.execute = AsyncMock(return_value=execute_result)
 
-    with p1, p2, p3, p4, patch.object(sr_mod, "SqlSnapshotRepository", return_value=mock_snapshot_repo):
+    with (
+        p1,
+        p2,
+        p3,
+        p4,
+        patch.object(sr_mod, "SqlSnapshotRepository", return_value=mock_snapshot_repo),
+    ):
         client = TestClient(app, raise_server_exceptions=True)
         response = client.get("/api/user-1/pmax/performance?account_id=acc-uuid-1&days=30")
 
@@ -196,9 +209,7 @@ def test_pmax_performance_returns_time_series():
 
 def test_pmax_performance_roas_null_when_no_cost():
     app = _make_app()
-    snaps = [
-        _mock_pmax_snap(campaign_id=1, cost_micros=0, conv_value=0.0)
-    ]
+    snaps = [_mock_pmax_snap(campaign_id=1, cost_micros=0, conv_value=0.0)]
 
     import adcopilot.infrastructure.db.repositories.snapshot_repository as sr_mod
 
@@ -213,7 +224,13 @@ def test_pmax_performance_roas_null_when_no_cost():
     p1, p2, p3, p4, mock_session = _infra_patches()
     mock_session.execute = AsyncMock(return_value=execute_result)
 
-    with p1, p2, p3, p4, patch.object(sr_mod, "SqlSnapshotRepository", return_value=mock_snapshot_repo):
+    with (
+        p1,
+        p2,
+        p3,
+        p4,
+        patch.object(sr_mod, "SqlSnapshotRepository", return_value=mock_snapshot_repo),
+    ):
         client = TestClient(app, raise_server_exceptions=True)
         response = client.get("/api/user-1/pmax/performance?account_id=acc-uuid-1&days=7")
 
@@ -227,12 +244,20 @@ def test_pmax_performance_empty_when_no_pmax_campaigns():
     # Only SEARCH campaigns
     snaps = [
         CampaignSnapshot(
-            id="snap-1", account_id=_ACCOUNT_UUID,
-            snapshot_date=date(2026, 5, 19), campaign_id=1,
-            name="Search", status="ENABLED", channel_type="SEARCH",
-            budget_micros=0, bidding_strategy="MANUAL_CPC",
-            impressions=100, clicks=5, cost_micros=1_000_000,
-            conversions=0.0, conv_value=0.0,
+            id="snap-1",
+            account_id=_ACCOUNT_UUID,
+            snapshot_date=date(2026, 5, 19),
+            campaign_id=1,
+            name="Search",
+            status="ENABLED",
+            channel_type="SEARCH",
+            budget_micros=0,
+            bidding_strategy="MANUAL_CPC",
+            impressions=100,
+            clicks=5,
+            cost_micros=1_000_000,
+            conversions=0.0,
+            conv_value=0.0,
         )
     ]
 
@@ -249,7 +274,13 @@ def test_pmax_performance_empty_when_no_pmax_campaigns():
     p1, p2, p3, p4, mock_session = _infra_patches()
     mock_session.execute = AsyncMock(return_value=execute_result)
 
-    with p1, p2, p3, p4, patch.object(sr_mod, "SqlSnapshotRepository", return_value=mock_snapshot_repo):
+    with (
+        p1,
+        p2,
+        p3,
+        p4,
+        patch.object(sr_mod, "SqlSnapshotRepository", return_value=mock_snapshot_repo),
+    ):
         client = TestClient(app, raise_server_exceptions=True)
         response = client.get("/api/user-1/pmax/performance?account_id=acc-uuid-1&days=7")
 

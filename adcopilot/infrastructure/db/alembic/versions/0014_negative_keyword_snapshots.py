@@ -25,9 +25,7 @@ def upgrade() -> None:
         sa.Column("snapshot_date", sa.Date(), nullable=False),
         sa.Column("criterion_id", sa.BigInteger(), nullable=False),
         sa.Column("campaign_id", sa.BigInteger(), nullable=False),
-        sa.Column(
-            "ad_group_id", sa.BigInteger(), nullable=False, server_default="0"
-        ),
+        sa.Column("ad_group_id", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("text", sa.Text(), nullable=False, server_default=""),
         sa.Column("match_type", sa.String(50), nullable=False, server_default=""),
         sa.Column(

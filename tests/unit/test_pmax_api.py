@@ -16,6 +16,7 @@ from adcopilot.interfaces.api.pmax import _NO_MC_INSTRUCTIONS, router
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_app(user_id: str = "user-1") -> FastAPI:
     app = FastAPI()
     app.include_router(router)
@@ -51,6 +52,7 @@ def _mock_creds() -> MagicMock:
 
 def _mock_user(plan: str = "growth") -> MagicMock:
     from adcopilot.domain.entities import PlanTier
+
     user = MagicMock()
     user.plan = PlanTier(plan)
     return user
@@ -92,6 +94,7 @@ def _infra_patches(account=None, creds=None):
 # ---------------------------------------------------------------------------
 # Eligibility
 # ---------------------------------------------------------------------------
+
 
 def test_eligibility_with_mc_link():
     app = _make_app()
@@ -146,18 +149,22 @@ def test_eligibility_forbidden():
 # Create PMax
 # ---------------------------------------------------------------------------
 
+
 def test_create_pmax_forbidden_write_disabled():
     app = _make_app()
 
     p1, p2, p3, p4 = _infra_patches(account=_mock_account(write_enabled=False))
     with p1, p2, p3, p4:
         client = TestClient(app, raise_server_exceptions=False)
-        response = client.post("/api/user-1/pmax/create", json={
-            "account_id": "acc-uuid-1",
-            "monthly_budget_pln": 1500,
-            "campaign_name": "Test",
-            "final_url": "https://sklep.pl",
-        })
+        response = client.post(
+            "/api/user-1/pmax/create",
+            json={
+                "account_id": "acc-uuid-1",
+                "monthly_budget_pln": 1500,
+                "campaign_name": "Test",
+                "final_url": "https://sklep.pl",
+            },
+        )
 
     assert response.status_code == 403
     assert "zapisu" in response.json()["detail"]
@@ -174,12 +181,15 @@ def test_create_pmax_forbidden_starter_plan():
     p1, p2, p3, p4 = _infra_patches()
     with p1, p2, p3, p4, patch.object(user_mod, "SqlUserRepository", return_value=mock_user_repo):
         client = TestClient(app, raise_server_exceptions=False)
-        response = client.post("/api/user-1/pmax/create", json={
-            "account_id": "acc-uuid-1",
-            "monthly_budget_pln": 1500,
-            "campaign_name": "Test",
-            "final_url": "https://sklep.pl",
-        })
+        response = client.post(
+            "/api/user-1/pmax/create",
+            json={
+                "account_id": "acc-uuid-1",
+                "monthly_budget_pln": 1500,
+                "campaign_name": "Test",
+                "final_url": "https://sklep.pl",
+            },
+        )
 
     assert response.status_code == 403
     assert "Growth" in response.json()["detail"]
@@ -198,17 +208,23 @@ def test_create_pmax_no_merchant_center():
 
     p1, p2, p3, p4 = _infra_patches()
     with (
-        p1, p2, p3, p4,
+        p1,
+        p2,
+        p3,
+        p4,
         patch.object(user_mod, "SqlUserRepository", return_value=mock_user_repo),
         patch.object(qa_mod, "GoogleAdsQueriesAdapter", return_value=mock_adapter),
     ):
         client = TestClient(app, raise_server_exceptions=False)
-        response = client.post("/api/user-1/pmax/create", json={
-            "account_id": "acc-uuid-1",
-            "monthly_budget_pln": 1500,
-            "campaign_name": "Test",
-            "final_url": "https://sklep.pl",
-        })
+        response = client.post(
+            "/api/user-1/pmax/create",
+            json={
+                "account_id": "acc-uuid-1",
+                "monthly_budget_pln": 1500,
+                "campaign_name": "Test",
+                "final_url": "https://sklep.pl",
+            },
+        )
 
     assert response.status_code == 400
     assert "Merchant Center" in response.json()["detail"]
@@ -217,6 +233,7 @@ def test_create_pmax_no_merchant_center():
 # ---------------------------------------------------------------------------
 # Enable PMax
 # ---------------------------------------------------------------------------
+
 
 def test_enable_pmax_forbidden_write_disabled():
     app = _make_app()
@@ -235,6 +252,7 @@ def test_enable_pmax_forbidden_write_disabled():
 # Status endpoint
 # ---------------------------------------------------------------------------
 
+
 def test_pmax_status_forbidden():
     app = _make_app(user_id="other-user")
     client = TestClient(app, raise_server_exceptions=False)
@@ -245,6 +263,7 @@ def test_pmax_status_forbidden():
 # ---------------------------------------------------------------------------
 # Misc
 # ---------------------------------------------------------------------------
+
 
 def test_no_mc_instructions_in_polish():
     assert "Merchant Center" in _NO_MC_INSTRUCTIONS

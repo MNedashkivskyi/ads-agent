@@ -236,7 +236,11 @@ async def test_undo_add_negative_keyword_calls_remove() -> None:
 async def test_undo_increase_budget_restores_old_budget() -> None:
     rec = _rec(
         RecommendationKind.INCREASE_BUDGET,
-        payload={"campaign_id": 200, "current_budget_micros": 5_000_000, "suggested_budget_micros": 6_000_000},
+        payload={
+            "campaign_id": 200,
+            "current_budget_micros": 5_000_000,
+            "suggested_budget_micros": 6_000_000,
+        },
     )
     log = AuditLog(
         id=AuditLogId(str(uuid.uuid4())),

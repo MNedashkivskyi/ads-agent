@@ -1,6 +1,5 @@
 """Unit tests for resolve_bidding_strategy() — all 7 logic branches."""
 
-
 from adcopilot.domain.launch.bidding_resolver import (
     BiddingRecommendation,
     resolve_bidding_strategy,

@@ -21,22 +21,46 @@ class InMemoryWebNotifier:
 
     async def send_digest(self, user_id, title, body, metadata=None):
         self.sent.append(
-            {"type": NotificationType.DIGEST, "user_id": user_id, "title": title, "body": body, "metadata": metadata}
+            {
+                "type": NotificationType.DIGEST,
+                "user_id": user_id,
+                "title": title,
+                "body": body,
+                "metadata": metadata,
+            }
         )
 
     async def send_alert(self, user_id, title, body, metadata=None):
         self.sent.append(
-            {"type": NotificationType.ALERT, "user_id": user_id, "title": title, "body": body, "metadata": metadata}
+            {
+                "type": NotificationType.ALERT,
+                "user_id": user_id,
+                "title": title,
+                "body": body,
+                "metadata": metadata,
+            }
         )
 
     async def send_execution_result(self, user_id, title, body, metadata=None):
         self.sent.append(
-            {"type": NotificationType.EXECUTION_RESULT, "user_id": user_id, "title": title, "body": body, "metadata": metadata}
+            {
+                "type": NotificationType.EXECUTION_RESULT,
+                "user_id": user_id,
+                "title": title,
+                "body": body,
+                "metadata": metadata,
+            }
         )
 
     async def send_reauth_required(self, user_id, title, body, metadata=None):
         self.sent.append(
-            {"type": NotificationType.REAUTH_REQUIRED, "user_id": user_id, "title": title, "body": body, "metadata": metadata}
+            {
+                "type": NotificationType.REAUTH_REQUIRED,
+                "user_id": user_id,
+                "title": title,
+                "body": body,
+                "metadata": metadata,
+            }
         )
 
 
@@ -47,7 +71,9 @@ class InMemoryNotificationRepository:
     async def save(self, notification: Notification) -> None:
         self._store[notification.id] = notification
 
-    async def list_for_user(self, user_id: str, limit: int = 50, offset: int = 0) -> list[Notification]:
+    async def list_for_user(
+        self, user_id: str, limit: int = 50, offset: int = 0
+    ) -> list[Notification]:
         results = [n for n in self._store.values() if n.user_id == user_id]
         results.sort(key=lambda n: n.created_at, reverse=True)
         return results[offset : offset + limit]
@@ -93,7 +119,9 @@ class InMemoryNotificationRepository:
 # ---------------------------------------------------------------------------
 
 
-def _make_notification(user_id: str = "user-1", ntype: NotificationType = NotificationType.DIGEST) -> Notification:
+def _make_notification(
+    user_id: str = "user-1", ntype: NotificationType = NotificationType.DIGEST
+) -> Notification:
     return Notification(
         id=NotificationId(str(uuid.uuid4())),
         user_id=user_id,
@@ -114,7 +142,12 @@ def _make_notification(user_id: str = "user-1", ntype: NotificationType = Notifi
 @pytest.mark.asyncio
 async def test_send_digest_records_correct_type():
     notifier = InMemoryWebNotifier()
-    await notifier.send_digest("u1", "Dzienny raport rekomendacji", "Masz 3 nowe rekomendacje.", metadata={"recommendation_ids": ["r1"]})
+    await notifier.send_digest(
+        "u1",
+        "Dzienny raport rekomendacji",
+        "Masz 3 nowe rekomendacje.",
+        metadata={"recommendation_ids": ["r1"]},
+    )
     assert len(notifier.sent) == 1
     entry = notifier.sent[0]
     assert entry["type"] == NotificationType.DIGEST

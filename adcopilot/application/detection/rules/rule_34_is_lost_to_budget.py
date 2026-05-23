@@ -24,7 +24,7 @@ from adcopilot.domain.recommendation import (
     RecommendationStatus,
 )
 
-_IS_BUDGET_THRESHOLD = 0.30   # > 30% IS lost to budget
+_IS_BUDGET_THRESHOLD = 0.30  # > 30% IS lost to budget
 
 
 class IsLostToBudgetRule:

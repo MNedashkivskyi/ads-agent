@@ -55,13 +55,18 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("account_id", "snapshot_date", "campaign_id",
-                            name="uq_campaign_snapshots"),
+        sa.UniqueConstraint(
+            "account_id", "snapshot_date", "campaign_id", name="uq_campaign_snapshots"
+        ),
     )
-    op.create_index("ix_campaign_snapshots_account_date",
-                    "campaign_snapshots", ["account_id", "snapshot_date"])
-    op.create_index("ix_campaign_snapshots_account_campaign",
-                    "campaign_snapshots", ["account_id", "campaign_id"])
+    op.create_index(
+        "ix_campaign_snapshots_account_date", "campaign_snapshots", ["account_id", "snapshot_date"]
+    )
+    op.create_index(
+        "ix_campaign_snapshots_account_campaign",
+        "campaign_snapshots",
+        ["account_id", "campaign_id"],
+    )
 
     # ad_group_snapshots
     op.create_table(
@@ -90,11 +95,13 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("account_id", "snapshot_date", "ad_group_id",
-                            name="uq_ad_group_snapshots"),
+        sa.UniqueConstraint(
+            "account_id", "snapshot_date", "ad_group_id", name="uq_ad_group_snapshots"
+        ),
     )
-    op.create_index("ix_ad_group_snapshots_account_date",
-                    "ad_group_snapshots", ["account_id", "snapshot_date"])
+    op.create_index(
+        "ix_ad_group_snapshots_account_date", "ad_group_snapshots", ["account_id", "snapshot_date"]
+    )
 
     # keyword_snapshots
     op.create_table(
@@ -127,11 +134,17 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("account_id", "snapshot_date", "criterion_id", "ad_group_id",
-                            name="uq_keyword_snapshots"),
+        sa.UniqueConstraint(
+            "account_id",
+            "snapshot_date",
+            "criterion_id",
+            "ad_group_id",
+            name="uq_keyword_snapshots",
+        ),
     )
-    op.create_index("ix_keyword_snapshots_account_date",
-                    "keyword_snapshots", ["account_id", "snapshot_date"])
+    op.create_index(
+        "ix_keyword_snapshots_account_date", "keyword_snapshots", ["account_id", "snapshot_date"]
+    )
 
     # search_term_snapshots
     op.create_table(
@@ -159,13 +172,24 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("account_id", "snapshot_date", "search_term", "ad_group_id",
-                            name="uq_search_term_snapshots"),
+        sa.UniqueConstraint(
+            "account_id",
+            "snapshot_date",
+            "search_term",
+            "ad_group_id",
+            name="uq_search_term_snapshots",
+        ),
     )
-    op.create_index("ix_search_term_snapshots_account_date",
-                    "search_term_snapshots", ["account_id", "snapshot_date"])
-    op.create_index("ix_search_term_snapshots_account_date_term",
-                    "search_term_snapshots", ["account_id", "snapshot_date", "search_term"])
+    op.create_index(
+        "ix_search_term_snapshots_account_date",
+        "search_term_snapshots",
+        ["account_id", "snapshot_date"],
+    )
+    op.create_index(
+        "ix_search_term_snapshots_account_date_term",
+        "search_term_snapshots",
+        ["account_id", "snapshot_date", "search_term"],
+    )
 
     # ad_snapshots
     op.create_table(
@@ -177,9 +201,15 @@ def upgrade() -> None:
         sa.Column("ad_group_id", sa.BigInteger(), nullable=False),
         sa.Column("type", sa.String(100), nullable=False, server_default=""),
         sa.Column("status", sa.String(50), nullable=False, server_default=""),
-        sa.Column("headlines_json", postgresql.JSONB(), nullable=False, server_default=sa.text("'[]'")),
-        sa.Column("descriptions_json", postgresql.JSONB(), nullable=False, server_default=sa.text("'[]'")),
-        sa.Column("final_urls_json", postgresql.JSONB(), nullable=False, server_default=sa.text("'[]'")),
+        sa.Column(
+            "headlines_json", postgresql.JSONB(), nullable=False, server_default=sa.text("'[]'")
+        ),
+        sa.Column(
+            "descriptions_json", postgresql.JSONB(), nullable=False, server_default=sa.text("'[]'")
+        ),
+        sa.Column(
+            "final_urls_json", postgresql.JSONB(), nullable=False, server_default=sa.text("'[]'")
+        ),
         sa.Column("impressions", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("clicks", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("cost_micros", sa.BigInteger(), nullable=False, server_default="0"),
@@ -197,11 +227,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("account_id", "snapshot_date", "ad_id",
-                            name="uq_ad_snapshots"),
+        sa.UniqueConstraint("account_id", "snapshot_date", "ad_id", name="uq_ad_snapshots"),
     )
-    op.create_index("ix_ad_snapshots_account_date",
-                    "ad_snapshots", ["account_id", "snapshot_date"])
+    op.create_index("ix_ad_snapshots_account_date", "ad_snapshots", ["account_id", "snapshot_date"])
 
 
 def downgrade() -> None:

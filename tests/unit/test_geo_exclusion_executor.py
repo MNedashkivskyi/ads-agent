@@ -60,4 +60,5 @@ async def test_missing_location_id_raises() -> None:
 
 def test_geo_exclusion_removed_from_non_executable() -> None:
     from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS
+
     assert RecommendationKind.GEO_EXCLUSION not in NON_EXECUTABLE_KINDS

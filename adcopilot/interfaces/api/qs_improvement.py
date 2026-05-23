@@ -72,21 +72,29 @@ def _plan_to_response(plan) -> QSImprovementPlanResponse:
             avg_qs=plan.baseline_metrics.avg_qs,
             avg_cpc_micros=plan.baseline_metrics.avg_cpc_micros,
             avg_ctr=plan.baseline_metrics.avg_ctr,
-        ) if plan.baseline_metrics else None,
+        )
+        if plan.baseline_metrics
+        else None,
         current_metrics=QSMetricsResponse(
             avg_qs=plan.current_metrics.avg_qs,
             avg_cpc_micros=plan.current_metrics.avg_cpc_micros,
             avg_ctr=plan.current_metrics.avg_ctr,
-        ) if plan.current_metrics else None,
+        )
+        if plan.current_metrics
+        else None,
         evaluation_summary_pl=plan.evaluation_summary_pl,
         created_at=plan.created_at.isoformat(),
         started_at=plan.started_at.isoformat() if plan.started_at else None,
-        measurement_ends_at=plan.measurement_ends_at.isoformat() if plan.measurement_ends_at else None,
+        measurement_ends_at=plan.measurement_ends_at.isoformat()
+        if plan.measurement_ends_at
+        else None,
         completed_at=plan.completed_at.isoformat() if plan.completed_at else None,
     )
 
 
-@router.get("/{user_id}/quality-score/improvement-plans", response_model=list[QSImprovementPlanResponse])
+@router.get(
+    "/{user_id}/quality-score/improvement-plans", response_model=list[QSImprovementPlanResponse]
+)
 async def list_qs_improvement_plans(
     user_id: str,
     current_user: CurrentUser,
@@ -161,7 +169,9 @@ async def create_qs_improvement_plan(
     return _plan_to_response(plan)
 
 
-@router.get("/{user_id}/quality-score/improvement-plans/{plan_id}", response_model=QSImprovementPlanResponse)
+@router.get(
+    "/{user_id}/quality-score/improvement-plans/{plan_id}", response_model=QSImprovementPlanResponse
+)
 async def get_qs_improvement_plan(
     user_id: str,
     plan_id: str,
@@ -190,7 +200,10 @@ async def get_qs_improvement_plan(
     return _plan_to_response(plan)
 
 
-@router.post("/{user_id}/quality-score/improvement-plans/{plan_id}/execute", response_model=QSImprovementPlanResponse)
+@router.post(
+    "/{user_id}/quality-score/improvement-plans/{plan_id}/execute",
+    response_model=QSImprovementPlanResponse,
+)
 async def execute_qs_improvement_plan(
     user_id: str,
     plan_id: str,

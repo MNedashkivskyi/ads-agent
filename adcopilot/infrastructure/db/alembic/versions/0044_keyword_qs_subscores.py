@@ -4,6 +4,7 @@ Revision ID: 0044
 Revises: 0043
 Create Date: 2026-05-19
 """
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -16,7 +17,9 @@ depends_on = None
 def upgrade() -> None:
     op.add_column("keyword_snapshots", sa.Column("expected_ctr", sa.String(50), nullable=True))
     op.add_column("keyword_snapshots", sa.Column("ad_relevance", sa.String(50), nullable=True))
-    op.add_column("keyword_snapshots", sa.Column("landing_page_experience", sa.String(50), nullable=True))
+    op.add_column(
+        "keyword_snapshots", sa.Column("landing_page_experience", sa.String(50), nullable=True)
+    )
 
 
 def downgrade() -> None:

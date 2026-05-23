@@ -46,9 +46,7 @@ class UndoRecommendationUseCase:
         if rec is None:
             raise ValueError(f"Recommendation {rec_id} not found")
         if rec.status != RecommendationStatus.EXECUTED:
-            raise ValueError(
-                f"Recommendation {rec_id} is not EXECUTED (status={rec.status.value})"
-            )
+            raise ValueError(f"Recommendation {rec_id} is not EXECUTED (status={rec.status.value})")
 
         audit_log = await self._audit_log_repo.get_latest_execute(rec_id)
         if audit_log is None:
@@ -90,6 +88,7 @@ class UndoRecommendationUseCase:
         )
         # Override the action to UNDO
         from dataclasses import replace as dc_replace
+
         undo_log = dc_replace(undo_log, action="UNDO")
         await self._audit_log_repo.save(undo_log)
 
@@ -231,7 +230,11 @@ class UndoRecommendationUseCase:
                 ad_group_id=ad_group_id,
                 criterion_id=criterion_id,
             )
-            return {"ad_group_id": ad_group_id, "criterion_id": criterion_id, "action": "broad_keyword_enabled"}
+            return {
+                "ad_group_id": ad_group_id,
+                "criterion_id": criterion_id,
+                "action": "broad_keyword_enabled",
+            }
 
         if kind == RecommendationKind.NEGATIVE_KEYWORD_CONFLICT:
             campaign_id = int(payload["campaign_id"])
@@ -255,7 +258,11 @@ class UndoRecommendationUseCase:
                     keyword_text=keyword_text,
                     match_type=match_type,
                 )
-            return {"campaign_id": campaign_id, "keyword_text": keyword_text, "action": "negative_keyword_restored"}
+            return {
+                "campaign_id": campaign_id,
+                "keyword_text": keyword_text,
+                "action": "negative_keyword_restored",
+            }
 
         if kind == RecommendationKind.RELAX_TARGET_CPA:
             campaign_id = int(payload["campaign_id"])
@@ -266,7 +273,11 @@ class UndoRecommendationUseCase:
                 campaign_id=campaign_id,
                 target_cpa_micros=original_cpa,
             )
-            return {"campaign_id": campaign_id, "restored_target_cpa_micros": original_cpa, "action": "target_cpa_restored"}
+            return {
+                "campaign_id": campaign_id,
+                "restored_target_cpa_micros": original_cpa,
+                "action": "target_cpa_restored",
+            }
 
         if kind == RecommendationKind.REALLOCATE_BUDGET:
             from_campaign_id = int(payload["from_campaign_id"])
@@ -302,7 +313,11 @@ class UndoRecommendationUseCase:
                 campaign_id=campaign_id,
                 hour_of_day=hour_of_day,
             )
-            return {"campaign_id": campaign_id, "hour_of_day": hour_of_day, "action": "ad_schedule_removed"}
+            return {
+                "campaign_id": campaign_id,
+                "hour_of_day": hour_of_day,
+                "action": "ad_schedule_removed",
+            }
 
         if kind == RecommendationKind.GEO_EXCLUSION:
             campaign_id = int(payload["campaign_id"])
@@ -313,7 +328,11 @@ class UndoRecommendationUseCase:
                 campaign_id=campaign_id,
                 location_id=location_id,
             )
-            return {"campaign_id": campaign_id, "location_id": location_id, "action": "geo_exclusion_removed"}
+            return {
+                "campaign_id": campaign_id,
+                "location_id": location_id,
+                "action": "geo_exclusion_removed",
+            }
 
         if kind == RecommendationKind.DEVICE_BID_ADJUSTMENT:
             campaign_id = int(payload["campaign_id"])

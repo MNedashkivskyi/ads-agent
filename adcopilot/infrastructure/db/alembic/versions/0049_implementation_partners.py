@@ -16,16 +16,66 @@ branch_labels = None
 depends_on = None
 
 _SEED_PARTNERS = [
-    ("Piotr Kowalski GTM", "piotr@gtmexpert.pl", "https://gtmexpert.pl", "Warszawa", "Mazowieckie",
-     ["shopify", "woocommerce", "wordpress", "shoper", "custom"], 120, 48, 4.8, 34),
-    ("Anna Nowak Digital", "anna@digitalwdrożenia.pl", None, "Kraków", "Małopolskie",
-     ["woocommerce", "wordpress", "shoper"], 100, 72, 4.7, 21),
-    ("WebTag Poznań", "kontakt@webtag.pl", "https://webtag.pl", "Poznań", "Wielkopolskie",
-     ["shopify", "custom", "wordpress"], 150, 24, 4.9, 58),
-    ("GTM Wrocław", "info@gtmwroclaw.pl", None, "Wrocław", "Dolnośląskie",
-     ["woocommerce", "shoper", "custom"], 130, 48, 4.6, 15),
-    ("Marcin Ślązak Consulting", "marcin@slazak.dev", "https://slazak.dev", "Katowice", "Śląskie",
-     ["wordpress", "woocommerce", "shopify", "shoper", "custom"], 100, 36, 4.9, 42),
+    (
+        "Piotr Kowalski GTM",
+        "piotr@gtmexpert.pl",
+        "https://gtmexpert.pl",
+        "Warszawa",
+        "Mazowieckie",
+        ["shopify", "woocommerce", "wordpress", "shoper", "custom"],
+        120,
+        48,
+        4.8,
+        34,
+    ),
+    (
+        "Anna Nowak Digital",
+        "anna@digitalwdrożenia.pl",
+        None,
+        "Kraków",
+        "Małopolskie",
+        ["woocommerce", "wordpress", "shoper"],
+        100,
+        72,
+        4.7,
+        21,
+    ),
+    (
+        "WebTag Poznań",
+        "kontakt@webtag.pl",
+        "https://webtag.pl",
+        "Poznań",
+        "Wielkopolskie",
+        ["shopify", "custom", "wordpress"],
+        150,
+        24,
+        4.9,
+        58,
+    ),
+    (
+        "GTM Wrocław",
+        "info@gtmwroclaw.pl",
+        None,
+        "Wrocław",
+        "Dolnośląskie",
+        ["woocommerce", "shoper", "custom"],
+        130,
+        48,
+        4.6,
+        15,
+    ),
+    (
+        "Marcin Ślązak Consulting",
+        "marcin@slazak.dev",
+        "https://slazak.dev",
+        "Katowice",
+        "Śląskie",
+        ["wordpress", "woocommerce", "shopify", "shoper", "custom"],
+        100,
+        36,
+        4.9,
+        42,
+    ),
 ]
 
 
@@ -62,7 +112,9 @@ def upgrade() -> None:
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("cancelled_at", sa.DateTime(timezone=True), nullable=True),
     )
-    op.create_index("ix_implementation_requests_client_id", "implementation_requests", ["client_id"])
+    op.create_index(
+        "ix_implementation_requests_client_id", "implementation_requests", ["client_id"]
+    )
     op.create_index("ix_implementation_requests_status", "implementation_requests", ["status"])
 
     # Add marketplace_enabled config flag to existing config if table exists.
@@ -80,8 +132,20 @@ def upgrade() -> None:
         conn.execute(sa.text("ROLLBACK TO SAVEPOINT config_insert"))
 
     # Seed placeholder partners
-    for name, email, website, city, voivodeship, platforms, price, hours, rating, jobs in _SEED_PARTNERS:
+    for (
+        name,
+        email,
+        website,
+        city,
+        voivodeship,
+        platforms,
+        price,
+        hours,
+        rating,
+        jobs,
+    ) in _SEED_PARTNERS:
         import json as _json
+
         platforms_json = _json.dumps(platforms)
         op.execute(
             sa.text(
@@ -91,9 +155,16 @@ def upgrade() -> None:
                 "VALUES (:name, :email, :website, :city, :voivodeship, CAST(:platforms AS json), "
                 ":price, :hours, :rating, :jobs, true)"
             ).bindparams(
-                name=name, email=email, website=website, city=city,
-                voivodeship=voivodeship, platforms=platforms_json,
-                price=price, hours=hours, rating=rating, jobs=jobs,
+                name=name,
+                email=email,
+                website=website,
+                city=city,
+                voivodeship=voivodeship,
+                platforms=platforms_json,
+                price=price,
+                hours=hours,
+                rating=rating,
+                jobs=jobs,
             )
         )
 

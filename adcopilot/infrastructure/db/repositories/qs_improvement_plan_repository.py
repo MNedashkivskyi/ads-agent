@@ -27,9 +27,7 @@ class QSImprovementPlanRepository:
 
     async def get(self, plan_id: str) -> QSImprovementPlan | None:
         result = await self._session.execute(
-            select(QSImprovementPlanModel).where(
-                QSImprovementPlanModel.id == uuid.UUID(plan_id)
-            )
+            select(QSImprovementPlanModel).where(QSImprovementPlanModel.id == uuid.UUID(plan_id))
         )
         row = result.scalar_one_or_none()
         return _to_domain(row) if row else None
@@ -56,11 +54,13 @@ class QSImprovementPlanRepository:
             select(QSImprovementPlanModel)
             .where(QSImprovementPlanModel.account_id == uuid.UUID(account_id))
             .where(
-                QSImprovementPlanModel.status.in_([
-                    QSPlanStatus.PROPOSED.value,
-                    QSPlanStatus.IN_PROGRESS.value,
-                    QSPlanStatus.MEASURING.value,
-                ])
+                QSImprovementPlanModel.status.in_(
+                    [
+                        QSPlanStatus.PROPOSED.value,
+                        QSPlanStatus.IN_PROGRESS.value,
+                        QSPlanStatus.MEASURING.value,
+                    ]
+                )
             )
         )
         return [_to_domain(r) for r in result.scalars().all()]

@@ -17,9 +17,7 @@ class BenchmarkRepository(Protocol):
 class AccountSummaryProvider(Protocol):
     """Provides aggregated account-level metrics for a given week."""
 
-    async def list_account_summaries(
-        self, week_start: date
-    ) -> list[dict[str, object]]:
+    async def list_account_summaries(self, week_start: date) -> list[dict[str, object]]:
         """Return list of dicts with keys: account_id, vertical, city, cpa_micros,
         ctr, conversion_rate, monthly_spend_micros."""
         ...

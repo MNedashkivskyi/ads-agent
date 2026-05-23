@@ -79,13 +79,9 @@ async def test_oauth_callback_stores_encrypted_credentials(db_session: AsyncSess
         )
 
         # Mock the Google Ads client list_accessible_customers
-        with patch(
-            "adcopilot.interfaces.api.oauth.GoogleAdsClientAdapter"
-        ) as mock_ads_cls:
+        with patch("adcopilot.interfaces.api.oauth.GoogleAdsClientAdapter") as mock_ads_cls:
             mock_ads_instance = AsyncMock()
-            mock_ads_instance.list_accessible_customers.return_value = [
-                "customers/1234567890"
-            ]
+            mock_ads_instance.list_accessible_customers.return_value = ["customers/1234567890"]
             mock_ads_cls.return_value = mock_ads_instance
 
             from adcopilot.security import issue_state_jwt
@@ -97,6 +93,7 @@ async def test_oauth_callback_stores_encrypted_credentials(db_session: AsyncSess
 
             # Override settings dependency
             from adcopilot.config import get_settings
+
             app.dependency_overrides[get_settings] = lambda: settings
 
             # Fake Redis for single-use state storage — the real integration

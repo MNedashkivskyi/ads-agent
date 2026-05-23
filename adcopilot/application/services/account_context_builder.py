@@ -108,10 +108,7 @@ class AccountContextBuilder:
 
         # Active alerts (PENDING recommendations)
         pending_recs = await self._rec_repo.list_pending(account_id)
-        alerts = [
-            {"kind": r.kind.value, "severity": r.severity.value}
-            for r in pending_recs[:10]
-        ]
+        alerts = [{"kind": r.kind.value, "severity": r.severity.value} for r in pending_recs[:10]]
 
         # Top 3 recently executed recommendations
         recent_logs = await self._audit_log_repo.list_recent_executes([account_id], since_7d)
@@ -131,7 +128,9 @@ class AccountContextBuilder:
                 "status": c.status,
                 "spend_pln": _micros_to_pln(c.cost_micros),
                 "budget_pln": _micros_to_pln(c.budget_micros),
-                "budget_utilisation_pct": round(c.cost_micros / c.budget_micros * 100, 1) if c.budget_micros else None,
+                "budget_utilisation_pct": round(c.cost_micros / c.budget_micros * 100, 1)
+                if c.budget_micros
+                else None,
                 "clicks": c.clicks,
                 "conversions": c.conversions,
                 "cpc_pln": _safe_cpc(c.cost_micros, c.clicks),
@@ -146,7 +145,9 @@ class AccountContextBuilder:
             "summary": {
                 "total_spend_pln": _micros_to_pln(total_cost),
                 "total_budget_pln": _micros_to_pln(total_budget),
-                "budget_utilisation_pct": round(total_cost / total_budget * 100, 1) if total_budget else None,
+                "budget_utilisation_pct": round(total_cost / total_budget * 100, 1)
+                if total_budget
+                else None,
                 "total_clicks": total_clicks,
                 "total_impressions": total_impressions,
                 "total_conversions": total_conversions,
@@ -175,6 +176,7 @@ class AccountContextBuilder:
     async def _build_competitor_context(self, account_id: AccountId, snapshot_date) -> list[dict]:
         """Return top competitors by impression share for LLM context (best-effort)."""
         from datetime import timedelta
+
         try:
             rows = await self._snapshot_repo.get_auction_insights(
                 account_id,
@@ -193,10 +195,7 @@ class AccountContextBuilder:
                 domain_is[domain] = is_val
 
         top = sorted(domain_is.items(), key=lambda x: -x[1])[:5]
-        return [
-            {"domain": d, "impression_share": round(is_val, 4)}
-            for d, is_val in top
-        ]
+        return [{"domain": d, "impression_share": round(is_val, 4)} for d, is_val in top]
 
 
 def _empty_context(account_id: AccountId) -> dict[str, Any]:

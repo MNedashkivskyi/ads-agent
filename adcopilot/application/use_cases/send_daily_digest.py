@@ -100,7 +100,8 @@ class SendDailyDigestUseCase:
             from adcopilot.domain.recommendation import RecommendationKind
 
             ad_fatigue_recs = [
-                r for r in top_recs
+                r
+                for r in top_recs
                 if r.kind in (RecommendationKind.AD_FATIGUE, RecommendationKind.WEAK_RSA_STRENGTH)
             ]
             body = f"Masz {len(top_recs)} nowych rekomendacji do przejrzenia."

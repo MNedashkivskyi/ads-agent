@@ -163,6 +163,7 @@ async def list_audiences(
                 raise HTTPException(status_code=404, detail="No Google Ads accounts found")
 
             import uuid
+
             account_uuid = uuid.UUID(accounts[0].id)
             result = await session.execute(
                 select(AudiencePerformanceSnapshotModel)

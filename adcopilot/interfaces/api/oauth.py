@@ -172,7 +172,10 @@ async def oauth_google_callback(
                 url=f"{settings.APP_URL.rstrip('/')}/app?connected=0&error=missing_developer_token",
                 status_code=302,
             )
-        raise HTTPException(status_code=503, detail="Google Ads API not configured: missing GOOGLE_ADS_DEVELOPER_TOKEN")
+        raise HTTPException(
+            status_code=503,
+            detail="Google Ads API not configured: missing GOOGLE_ADS_DEVELOPER_TOKEN",
+        )
 
     ads_client = GoogleAdsClientAdapter(settings)
     google_ads_api_error: str | None = None
@@ -337,6 +340,7 @@ async def oauth_ga4_callback(
     from cryptography.fernet import Fernet
 
     from adcopilot.infrastructure.db.models import GA4CredentialsModel
+
     key = base64.urlsafe_b64encode(hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest())
     fernet = Fernet(key)
     enc_refresh = fernet.encrypt(refresh_token.encode()).decode()
@@ -344,6 +348,7 @@ async def oauth_ga4_callback(
 
     # Upsert into ga4_credentials
     from sqlalchemy import select
+
     result = await session.execute(
         select(GA4CredentialsModel).where(GA4CredentialsModel.account_id == uuid.UUID(account_id))
     )
@@ -352,14 +357,18 @@ async def oauth_ga4_callback(
         existing.property_id = pid
         existing.refresh_token_enc = enc_refresh
     else:
-        session.add(GA4CredentialsModel(
-            account_id=uuid.UUID(account_id),
-            property_id=pid,
-            refresh_token_enc=enc_refresh,
-        ))
+        session.add(
+            GA4CredentialsModel(
+                account_id=uuid.UUID(account_id),
+                property_id=pid,
+                refresh_token_enc=enc_refresh,
+            )
+        )
     await session.commit()
     logger.info("ga4 oauth complete", user_id=user_id, account_id=account_id)
 
     if settings.APP_URL:
-        return RedirectResponse(url=f"{settings.APP_URL.rstrip('/')}/app/audiences?ga4=connected", status_code=302)
+        return RedirectResponse(
+            url=f"{settings.APP_URL.rstrip('/')}/app/audiences?ga4=connected", status_code=302
+        )
     return {"status": "ok", "account_id": account_id}

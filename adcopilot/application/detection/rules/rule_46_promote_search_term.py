@@ -24,7 +24,7 @@ from adcopilot.domain.recommendation import (
 
 _MIN_CONVERSIONS = 3
 _MIN_CLICKS = 5
-_CPA_MULTIPLIER = 1.2   # allow up to 120% of account average CPA
+_CPA_MULTIPLIER = 1.2  # allow up to 120% of account average CPA
 _JACCARD_THRESHOLD = 0.8
 
 

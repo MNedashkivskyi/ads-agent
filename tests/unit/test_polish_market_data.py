@@ -8,7 +8,16 @@ from adcopilot.domain.polish_market.city_tiers import classify_city
 from adcopilot.domain.polish_market.cpc_benchmarks import BENCHMARKS, get_benchmark
 from adcopilot.domain.polish_market.seasonality import get_seasonal_multiplier
 
-VERTICALS = ["salon", "restauracja", "prawnik", "lekarz", "e-commerce", "nieruchomości", "edukacja", "usługi domowe"]
+VERTICALS = [
+    "salon",
+    "restauracja",
+    "prawnik",
+    "lekarz",
+    "e-commerce",
+    "nieruchomości",
+    "edukacja",
+    "usługi domowe",
+]
 
 
 def test_city_tier_warsaw_is_1() -> None:

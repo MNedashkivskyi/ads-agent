@@ -94,6 +94,7 @@ class LandingPageKeywordMismatchRule:
 
             # Enrich evidence with GA4 bounce rate when available
             from urllib.parse import urlparse
+
             page_path = urlparse(url).path or "/"
             ga4 = ctx.ga4_page_metrics.get(page_path)
             ga4_evidence: dict = {}

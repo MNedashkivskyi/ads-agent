@@ -39,7 +39,9 @@ def _parse_proposals(raw: str, final_url: str) -> list[AdCopyProposal]:
     for item in data[:_NUM_VARIANTS]:
         headlines = [_truncate(h, _MAX_HEADLINE) for h in item.get("headlines", [])[:3]]
         descriptions = [_truncate(d, _MAX_DESCRIPTION) for d in item.get("descriptions", [])[:2]]
-        proposals.append(AdCopyProposal(headlines=headlines, descriptions=descriptions, final_url=final_url))
+        proposals.append(
+            AdCopyProposal(headlines=headlines, descriptions=descriptions, final_url=final_url)
+        )
     return proposals
 
 
@@ -67,7 +69,9 @@ class AdCopyRefreshUseCase:
             existing_descriptions=existing_descriptions or "(brak)",
         )
 
-        raw = await self._llm.complete(system=_SYSTEM, user=user_msg, max_tokens=1200, temperature=0.7)
+        raw = await self._llm.complete(
+            system=_SYSTEM, user=user_msg, max_tokens=1200, temperature=0.7
+        )
         proposals = _parse_proposals(raw, final_url)
 
         if len(proposals) < _NUM_VARIANTS:

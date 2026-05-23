@@ -218,9 +218,7 @@ async def test_run_detection_returns_counts_by_severity() -> None:
 
     snapshot_repo = MagicMock()
     snapshot_repo.load_snapshot = AsyncMock(
-        return_value=SnapshotData(
-            campaigns=[], ad_groups=[], keywords=[], search_terms=[], ads=[]
-        )
+        return_value=SnapshotData(campaigns=[], ad_groups=[], keywords=[], search_terms=[], ads=[])
     )
 
     critical_rec = Recommendation(

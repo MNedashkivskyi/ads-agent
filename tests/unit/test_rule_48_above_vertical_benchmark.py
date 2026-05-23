@@ -42,7 +42,9 @@ def _history(avg_cpa_micros: int) -> HistoricalStats:
     )
 
 
-def _benchmark(p75_cpa_micros: int, median_cpa_micros: int = 2_000_000) -> VerticalBenchmarkSnapshot:
+def _benchmark(
+    p75_cpa_micros: int, median_cpa_micros: int = 2_000_000
+) -> VerticalBenchmarkSnapshot:
     return VerticalBenchmarkSnapshot(
         id=BenchmarkId(str(uuid4())),
         vertical="salon",

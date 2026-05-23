@@ -163,7 +163,6 @@ async def get_platform_detection(
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-
     from sqlalchemy import desc, select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -187,6 +186,7 @@ async def get_platform_detection(
 
             account = accounts[0]
             import uuid
+
             acct_uuid = uuid.UUID(str(account.id))
 
             stmt = (
@@ -293,15 +293,14 @@ async def validate_conversion_tracking(
     return TrackingValidationResponse(
         status=result.status,
         message_pl=result.message_pl,
-        failing_actions=[
-            ValidationActionDetail(**a) for a in result.failing_actions
-        ],
+        failing_actions=[ValidationActionDetail(**a) for a in result.failing_actions],
     )
 
 
 # ---------------------------------------------------------------------------
 # GTM Container download
 # ---------------------------------------------------------------------------
+
 
 class GTMContainerResponse(BaseModel):
     platform: str
@@ -374,6 +373,7 @@ async def get_gtm_container(
 # Implementation partner marketplace
 # ---------------------------------------------------------------------------
 
+
 class PartnerResponse(BaseModel):
     id: str
     name: str
@@ -430,9 +430,13 @@ async def list_implementation_partners(
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with AsyncSession(engine) as session:
-            stmt = select(ImplementationPartnerModel).where(
-                ImplementationPartnerModel.is_active == True  # noqa: E712
-            ).order_by(ImplementationPartnerModel.rating.desc())
+            stmt = (
+                select(ImplementationPartnerModel)
+                .where(
+                    ImplementationPartnerModel.is_active == True  # noqa: E712
+                )
+                .order_by(ImplementationPartnerModel.rating.desc())
+            )
             result = await session.execute(stmt)
             partners = list(result.scalars().all())
     finally:

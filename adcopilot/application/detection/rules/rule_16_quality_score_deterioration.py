@@ -29,9 +29,7 @@ class QualityScoreDeteriorationRule:
             return []
 
         # Key: (criterion_id, ad_group_id) — unique keyword instance
-        prev_by_key = {
-            (kw.criterion_id, kw.ad_group_id): kw for kw in ctx.prev_keywords
-        }
+        prev_by_key = {(kw.criterion_id, kw.ad_group_id): kw for kw in ctx.prev_keywords}
         recs: list[Recommendation] = []
 
         for kw in ctx.keywords:
@@ -53,9 +51,7 @@ class QualityScoreDeteriorationRule:
             # We use the simpler proxy: extra cost vs. what the keyword would have
             # spent at the old QS, scaled to monthly.
             cpc_penalty_factor = 1 + (drop * 0.16)
-            estimated_monthly_waste = int(
-                kw.cost_micros * (cpc_penalty_factor - 1) * 4
-            )
+            estimated_monthly_waste = int(kw.cost_micros * (cpc_penalty_factor - 1) * 4)
 
             target = {"criterion_id": kw.criterion_id, "ad_group_id": kw.ad_group_id}
             payload = {"criterion_id": kw.criterion_id, "ad_group_id": kw.ad_group_id}

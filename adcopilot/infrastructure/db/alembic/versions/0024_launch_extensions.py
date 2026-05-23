@@ -90,7 +90,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_launch_structured_snippets_proposal_id", table_name="launch_structured_snippets")
+    op.drop_index(
+        "ix_launch_structured_snippets_proposal_id", table_name="launch_structured_snippets"
+    )
     op.drop_table("launch_structured_snippets")
     op.drop_index("ix_launch_callouts_proposal_id", table_name="launch_callouts")
     op.drop_table("launch_callouts")

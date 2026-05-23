@@ -4,8 +4,16 @@ from __future__ import annotations
 
 _TIER_1 = {"warszawa", "krakow", "kraków", "wroclaw", "wrocław"}
 _TIER_2 = {
-    "gdansk", "gdańsk", "poznan", "poznań", "lodz", "łódź",
-    "katowice", "szczecin", "bydgoszcz", "lublin",
+    "gdansk",
+    "gdańsk",
+    "poznan",
+    "poznań",
+    "lodz",
+    "łódź",
+    "katowice",
+    "szczecin",
+    "bydgoszcz",
+    "lublin",
 }
 
 

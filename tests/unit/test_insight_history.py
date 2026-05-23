@@ -17,6 +17,7 @@ from adcopilot.infrastructure.db.repositories.weekly_insight_repository import (
 # Repository unit tests
 # ---------------------------------------------------------------------------
 
+
 def _make_model(
     user_id: str = "user-1",
     account_id: str | None = "acc-1",
@@ -112,6 +113,7 @@ async def test_list_for_user_empty():
 # API endpoint tests
 # ---------------------------------------------------------------------------
 
+
 def _mock_insight_items() -> list[WeeklyInsight]:
     return [
         WeeklyInsight(
@@ -159,7 +161,9 @@ async def test_insights_endpoint_returns_items():
 
     with (
         patch.object(repo_mod, "SqlWeeklyInsightRepository", return_value=mock_repo_instance),
-        patch.object(sqla_async, "create_async_engine", return_value=MagicMock(dispose=AsyncMock())),
+        patch.object(
+            sqla_async, "create_async_engine", return_value=MagicMock(dispose=AsyncMock())
+        ),
         patch.object(sqla_async, "AsyncSession", return_value=mock_session_instance),
     ):
         app = FastAPI()

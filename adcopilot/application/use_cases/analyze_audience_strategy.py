@@ -93,9 +93,7 @@ async def analyze_audience_strategy(
     underperformers: list[dict] = []
 
     if audiences:
-        avg_conv_rate = (
-            sum(a["conv_rate"] for a in audiences) / len(audiences)
-        )
+        avg_conv_rate = sum(a["conv_rate"] for a in audiences) / len(audiences)
         cpas = [a["cpa"] for a in audiences if a["cpa"] is not None]
         avg_cpa = sum(cpas) / len(cpas) if cpas else None
 
@@ -139,9 +137,13 @@ async def analyze_audience_strategy(
     try:
         prompt_template = await prompt_repo.get_latest(_PROMPT_KEY)
         prompt_text = (
-            prompt_template.content.format(audience_context=json.dumps(audience_context, ensure_ascii=False, indent=2))
+            prompt_template.content.format(
+                audience_context=json.dumps(audience_context, ensure_ascii=False, indent=2)
+            )
             if prompt_template
-            else _FALLBACK_PROMPT.format(audience_context=json.dumps(audience_context, ensure_ascii=False, indent=2))
+            else _FALLBACK_PROMPT.format(
+                audience_context=json.dumps(audience_context, ensure_ascii=False, indent=2)
+            )
         )
     except Exception:
         prompt_text = _FALLBACK_PROMPT.format(

@@ -59,7 +59,9 @@ class CompareRecommendationPerformanceUseCase:
                         comparisons_skipped += 1
                         continue
 
-                    baseline = await self._baseline_repo.get_by_recommendation(RecommendationId(rec.id))
+                    baseline = await self._baseline_repo.get_by_recommendation(
+                        RecommendationId(rec.id)
+                    )
                     if baseline is None:
                         comparisons_skipped += 1
                         continue

@@ -126,9 +126,7 @@ class CampaignWriter:
             budget = budget_op.create
             budget.name = f"{proposal.campaign_name} Budget"
             budget.amount_micros = proposal.daily_budget_micros
-            budget.delivery_method = (
-                client.enums.BudgetDeliveryMethodEnum.STANDARD
-            )
+            budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
 
             budget_response = budget_service.mutate_campaign_budgets(
                 customer_id=cid, operations=[budget_op]
@@ -142,9 +140,7 @@ class CampaignWriter:
             campaign.name = proposal.campaign_name
             campaign.status = client.enums.CampaignStatusEnum.PAUSED
             campaign.campaign_budget = budget_rn
-            campaign.advertising_channel_type = (
-                client.enums.AdvertisingChannelTypeEnum.SEARCH
-            )
+            campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
 
             strategy = proposal.bidding_strategy.upper().replace(" ", "_")
             _STRATEGY_MAP = {
@@ -220,9 +216,7 @@ class CampaignWriter:
                 ag.type_ = client.enums.AdGroupTypeEnum.SEARCH_STANDARD
                 operations.append(op)
 
-            response = ag_service.mutate_ad_groups(
-                customer_id=cid, operations=operations
-            )
+            response = ag_service.mutate_ad_groups(customer_id=cid, operations=operations)
             rns = [r.resource_name for r in response.results]
 
             logger.info(
@@ -295,8 +289,7 @@ class CampaignWriter:
                     "ad_group_resource_name": ad_group_resource_name,
                     "keyword_resource_names": rns,
                     "keywords": [
-                        {"text": k.text, "match_type": k.match_type}
-                        for k in keyword_proposals
+                        {"text": k.text, "match_type": k.match_type} for k in keyword_proposals
                     ],
                 },
             )
@@ -418,9 +411,7 @@ class CampaignWriter:
                 criterion.campaign = campaign_resource_name
                 criterion.negative = True
                 criterion.keyword.text = text
-                criterion.keyword.match_type = (
-                    client.enums.KeywordMatchTypeEnum.BROAD
-                )
+                criterion.keyword.match_type = client.enums.KeywordMatchTypeEnum.BROAD
                 operations.append(op)
 
             response = criterion_service.mutate_campaign_criteria(
@@ -499,9 +490,7 @@ class CampaignWriter:
                     asset.structured_snippet_asset.values.append(v)
                 asset_ops.append(op)
 
-            asset_response = asset_service.mutate_assets(
-                customer_id=cid, operations=asset_ops
-            )
+            asset_response = asset_service.mutate_assets(customer_id=cid, operations=asset_ops)
             asset_rns = [r.resource_name for r in asset_response.results]
 
             # Determine field types for linking
@@ -596,9 +585,7 @@ class CampaignWriter:
                 sched.end_minute = _MINUTE_MAP.get(entry.end_minute, 0)
                 ops.append(op)
 
-            response = cc_service.mutate_campaign_criteria(
-                customer_id=cid, operations=ops
-            )
+            response = cc_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
             resource_names = [r.resource_name for r in response.results]
 
             logger.info(
@@ -769,9 +756,7 @@ class CampaignWriter:
                     )
                     ops.append(op)
 
-            response = agc_service.mutate_ad_group_criteria(
-                customer_id=cid, operations=ops
-            )
+            response = agc_service.mutate_ad_group_criteria(customer_id=cid, operations=ops)
             resource_names = [r.resource_name for r in response.results]
 
             logger.info(
@@ -831,9 +816,7 @@ class CampaignWriter:
             campaign_op = client.get_type("CampaignOperation")
             campaign = campaign_op.create
             campaign.name = proposal.campaign_name
-            campaign.advertising_channel_type = (
-                client.enums.AdvertisingChannelTypeEnum.DISPLAY
-            )
+            campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.DISPLAY
             campaign.status = client.enums.CampaignStatusEnum.PAUSED
             campaign.campaign_budget = budget_rn
             campaign.bidding_strategy_type = (
@@ -929,9 +912,7 @@ class CampaignWriter:
                 criterion.user_list.user_list = f"customers/{cid}/userLists/{user_list_id}"
                 ops.append(op)
 
-            response = agc_service.mutate_ad_group_criteria(
-                customer_id=cid, operations=ops
-            )
+            response = agc_service.mutate_ad_group_criteria(customer_id=cid, operations=ops)
             resource_names = [r.resource_name for r in response.results]
 
             logger.info(
@@ -980,6 +961,7 @@ class CampaignWriter:
             campaign.resource_name = campaign_resource_name
             campaign.status = client.enums.CampaignStatusEnum.ENABLED
             from google.protobuf import field_mask_pb2
+
             op.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
             campaign_service.mutate_campaigns(customer_id=cid, operations=[op])
 

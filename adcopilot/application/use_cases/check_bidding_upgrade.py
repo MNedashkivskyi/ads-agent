@@ -35,9 +35,9 @@ from adcopilot.domain.recommendation import (
 
 logger = structlog.get_logger(__name__)
 
-_MAXIMIZE_CLICKS_UPGRADE_THRESHOLD = 30   # conversions/30 days
-_MAXIMIZE_CONV_UPGRADE_THRESHOLD = 50     # conversions/30 days
-_TARGET_CPA_RATIO = 0.75                  # 75 % of account avg CPA
+_MAXIMIZE_CLICKS_UPGRADE_THRESHOLD = 30  # conversions/30 days
+_MAXIMIZE_CONV_UPGRADE_THRESHOLD = 50  # conversions/30 days
+_TARGET_CPA_RATIO = 0.75  # 75 % of account avg CPA
 
 
 class CheckBiddingUpgradeUseCase:
@@ -65,8 +65,7 @@ class CheckBiddingUpgradeUseCase:
         pending_campaign_ids: set[int] = {
             int(r.payload["campaign_id"])
             for r in pending
-            if r.kind == RecommendationKind.ADJUST_BIDDING_STRATEGY
-            and "campaign_id" in r.payload
+            if r.kind == RecommendationKind.ADJUST_BIDDING_STRATEGY and "campaign_id" in r.payload
         }
 
         # Sum conversions across all snapshots in last 30 days for each campaign

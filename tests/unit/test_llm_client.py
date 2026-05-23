@@ -104,7 +104,10 @@ async def test_anthropic_client_raises_llm_error_on_timeout() -> None:
     client._client.messages.create = _slow_create  # type: ignore[method-assign]
 
     # Patch the timeout to 0 so it fires immediately
-    with patch("adcopilot.infrastructure.llm.anthropic_client._TIMEOUT_SECONDS", 0.01), pytest.raises(LLMError, match="timed out"):
+    with (
+        patch("adcopilot.infrastructure.llm.anthropic_client._TIMEOUT_SECONDS", 0.01),
+        pytest.raises(LLMError, match="timed out"),
+    ):
         await client.complete(system="s", user="u")
 
 

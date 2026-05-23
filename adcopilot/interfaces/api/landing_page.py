@@ -72,7 +72,9 @@ async def get_landing_page_score(
     try:
         async with AsyncSession(engine) as session, session.begin():
             prompt_repo = SqlPromptVersionRepository(session)
-            use_case = LandingPageScoreUseCase(page_analyzer=adapter, llm=llm, prompt_repo=prompt_repo)
+            use_case = LandingPageScoreUseCase(
+                page_analyzer=adapter, llm=llm, prompt_repo=prompt_repo
+            )
             try:
                 score = await use_case.execute(url)
             except PageAnalyzerError as exc:

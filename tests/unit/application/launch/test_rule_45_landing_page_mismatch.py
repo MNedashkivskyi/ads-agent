@@ -1,4 +1,5 @@
 """Unit tests for Rule 45 — Landing Page Keyword Mismatch."""
+
 from __future__ import annotations
 
 import json

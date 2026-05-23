@@ -29,15 +29,15 @@ _FALLBACK_PROMPT = (
 
 # Polish market vertical seasonal multipliers (month number → multiplier)
 _MONTHLY_MULTIPLIERS: dict[int, float] = {
-    1: 0.8,   # January — post-holiday slump
-    2: 0.9,   # February
-    3: 1.1,   # March — spring
-    4: 1.1,   # April — spring
-    5: 1.0,   # May
-    6: 1.0,   # June
-    7: 1.0,   # July
-    8: 1.0,   # August
-    9: 1.1,   # September — back to school
+    1: 0.8,  # January — post-holiday slump
+    2: 0.9,  # February
+    3: 1.1,  # March — spring
+    4: 1.1,  # April — spring
+    5: 1.0,  # May
+    6: 1.0,  # June
+    7: 1.0,  # July
+    8: 1.0,  # August
+    9: 1.1,  # September — back to school
     10: 1.0,  # October
     11: 1.3,  # November — Black Friday
     12: 1.4,  # December — holiday shopping
@@ -141,9 +141,7 @@ async def forecast_seasonality(
             ).days
             if days_until_month_end <= 14:
                 event_type = "peak"
-                event_name_pl = (
-                    f"Nadchodzący szczyt sezonowy — {_MONTH_NAMES_PL[next_month_num]}"
-                )
+                event_name_pl = f"Nadchodzący szczyt sezonowy — {_MONTH_NAMES_PL[next_month_num]}"
                 recommended_budget_change_pct = round((next_multiplier - 1.0) * 100, 1)
                 confidence = 0.75
 
@@ -232,6 +230,8 @@ async def forecast_seasonality(
         "monthly_history": monthly_history,
         "multipliers": {str(k): v for k, v in _MONTHLY_MULTIPLIERS.items()},
         "upcoming_events": upcoming_events,
-        "recommendations_pl": recommendations_pl.strip() if isinstance(recommendations_pl, str) else recommendations_pl,
+        "recommendations_pl": recommendations_pl.strip()
+        if isinstance(recommendations_pl, str)
+        else recommendations_pl,
         "generated_at": generated_at,
     }

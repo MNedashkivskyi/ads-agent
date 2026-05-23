@@ -12,9 +12,7 @@ class SqlAccountSummaryProvider:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_account_summaries(
-        self, week_start: date
-    ) -> list[dict[str, object]]:
+    async def list_account_summaries(self, week_start: date) -> list[dict[str, object]]:
         """Return aggregated account metrics for the 7-day window starting at week_start."""
         week_end = week_start + timedelta(days=6)
         result = await self._session.execute(

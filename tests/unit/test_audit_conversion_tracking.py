@@ -33,7 +33,9 @@ def _make_snapshot(
     )
 
 
-def _make_use_case(snapshots: list[ConversionActionSnapshot], llm_response: str = "OK po polsku") -> ConversionTrackingAuditUseCase:
+def _make_use_case(
+    snapshots: list[ConversionActionSnapshot], llm_response: str = "OK po polsku"
+) -> ConversionTrackingAuditUseCase:
     google_ads = MagicMock()
     google_ads.list_conversion_actions = AsyncMock(return_value=snapshots)
 
@@ -83,7 +85,11 @@ async def test_missing_returns_missing_health_and_gtm_guide() -> None:
 
     assert result.overall_health == ConversionActionHealth.MISSING
     assert result.action_statuses == []
-    assert "Tag Manager" in result.diagnostic_message_pl or "GTM" in result.diagnostic_message_pl or "śledzenia" in result.diagnostic_message_pl
+    assert (
+        "Tag Manager" in result.diagnostic_message_pl
+        or "GTM" in result.diagnostic_message_pl
+        or "śledzenia" in result.diagnostic_message_pl
+    )
 
 
 @pytest.mark.asyncio

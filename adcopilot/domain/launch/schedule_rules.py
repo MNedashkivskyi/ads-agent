@@ -22,25 +22,19 @@ _LOCAL_VERTICALS = {"salon", "restaurant", "restauracja", "usługi domowe"}
 
 @dataclass(frozen=True)
 class AdScheduleEntry:
-    day_of_week: str   # "MONDAY" ... "SUNDAY"
-    start_hour: int    # 0–23
+    day_of_week: str  # "MONDAY" ... "SUNDAY"
+    start_hour: int  # 0–23
     start_minute: int  # 0, 15, 30, 45
-    end_hour: int      # 0–23
-    end_minute: int    # 0, 15, 30, 45
+    end_hour: int  # 0–23
+    end_minute: int  # 0, 15, 30, 45
 
 
 def _weekday_schedule(start_hour: int, end_hour: int) -> list[AdScheduleEntry]:
-    return [
-        AdScheduleEntry(day, start_hour, 0, end_hour, 0)
-        for day in _WEEKDAYS
-    ]
+    return [AdScheduleEntry(day, start_hour, 0, end_hour, 0) for day in _WEEKDAYS]
 
 
 def _allday_schedule(start_hour: int, end_hour: int) -> list[AdScheduleEntry]:
-    return [
-        AdScheduleEntry(day, start_hour, 0, end_hour, 0)
-        for day in _ALL_DAYS
-    ]
+    return [AdScheduleEntry(day, start_hour, 0, end_hour, 0) for day in _ALL_DAYS]
 
 
 def get_ad_schedule(vertical: str, tier: BudgetTier) -> list[AdScheduleEntry]:

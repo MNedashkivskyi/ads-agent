@@ -137,9 +137,7 @@ class TestCampaignWriterIntegration:
         )
 
     @pytest.mark.asyncio
-    async def test_full_lifecycle_create_verify_delete(
-        self, writer: CampaignWriter
-    ) -> None:
+    async def test_full_lifecycle_create_verify_delete(self, writer: CampaignWriter) -> None:
         """Create a campaign with one ad group, verify PAUSED state, delete it."""
         proposal = _make_test_proposal()
         cid = _CUSTOMER_ID
@@ -155,9 +153,7 @@ class TestCampaignWriterIntegration:
             print(f"  Budget:    {budget_rn}")
 
             # Step 2 — ad groups
-            ag_rns = await writer.create_ad_groups(
-                cid, rt, campaign_rn, proposal.ad_groups
-            )
+            ag_rns = await writer.create_ad_groups(cid, rt, campaign_rn, proposal.ad_groups)
             assert len(ag_rns) == len(proposal.ad_groups)
             print(f"  AdGroups:  {ag_rns}")
 

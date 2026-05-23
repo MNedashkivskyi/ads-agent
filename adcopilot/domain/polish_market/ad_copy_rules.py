@@ -13,11 +13,7 @@ POLISH_CTAS: dict[str, list[str]] = {
 }
 
 # Flat list for CTA presence detection
-POLISH_CTA_VERBS: list[str] = [
-    verb.lower()
-    for verbs in POLISH_CTAS.values()
-    for verb in verbs
-]
+POLISH_CTA_VERBS: list[str] = [verb.lower() for verbs in POLISH_CTAS.values() for verb in verbs]
 
 HEADLINE_MAX_CHARS = 30
 DESCRIPTION_MAX_CHARS = 90

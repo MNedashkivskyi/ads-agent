@@ -69,4 +69,5 @@ async def test_executor_handles_hour_23() -> None:
 
 def test_ad_schedule_removed_from_non_executable() -> None:
     from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS
+
     assert RecommendationKind.AD_SCHEDULE_ADJUSTMENT not in NON_EXECUTABLE_KINDS

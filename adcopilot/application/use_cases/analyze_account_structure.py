@@ -99,10 +99,7 @@ async def analyze_account_structure(
 
     # --- 4.1 CAMPAIGN_FRAGMENTATION -------------------------------------------
     # Non-paused campaigns with < 10 clicks in last 30 days
-    low_click_campaigns = [
-        t for t in tree
-        if t["status"].upper() != "PAUSED" and t["clicks"] < 10
-    ]
+    low_click_campaigns = [t for t in tree if t["status"].upper() != "PAUSED" and t["clicks"] < 10]
     if len(low_click_campaigns) > 5:
         issues.append(
             {
@@ -123,10 +120,7 @@ async def analyze_account_structure(
 
     # --- 4.2 DEVICE_PERFORMANCE_DIVERGENCE ------------------------------------
     # Simplified: if > 3 campaigns have < 5 clicks but non-zero spend
-    diverging = [
-        t for t in tree
-        if t["clicks"] < 5 and t["spend_micros"] > 0
-    ]
+    diverging = [t for t in tree if t["clicks"] < 5 and t["spend_micros"] > 0]
     if len(diverging) > 3:
         issues.append(
             {
@@ -148,7 +142,8 @@ async def analyze_account_structure(
     # --- 4.3 BUDGET_OPTIMIZATION ----------------------------------------------
     # Campaigns with impressions > 1000, conversions == 0, spend > 500 000 micros
     budget_starved = [
-        t for t in tree
+        t
+        for t in tree
         if t["impressions"] > 1000 and t["conversions"] == 0.0 and t["spend_micros"] > 500_000
     ]
     if budget_starved:

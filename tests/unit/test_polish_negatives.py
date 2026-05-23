@@ -11,11 +11,22 @@ from adcopilot.domain.polish_market.negative_keywords import (
 )
 
 REQUIRED_STANDARD_CATEGORIES = {
-    "darmowy", "praca", "diy", "edukacja", "forum/media", "pobieranie",
+    "darmowy",
+    "praca",
+    "diy",
+    "edukacja",
+    "forum/media",
+    "pobieranie",
 }
 REQUIRED_VERTICALS = {
-    "salon", "prawnik", "restauracja", "lekarz", "ecommerce",
-    "nieruchomości", "edukacja", "usługi domowe",
+    "salon",
+    "prawnik",
+    "restauracja",
+    "lekarz",
+    "ecommerce",
+    "nieruchomości",
+    "edukacja",
+    "usługi domowe",
 }
 
 
@@ -44,8 +55,5 @@ def test_each_vertical_has_min_negatives(vertical: str) -> None:
 def test_templates_include_polish_negatives(vertical: str, template) -> None:
     negs_lower = [n.lower() for n in template.negatives]
     polish_standard_terms = [t for _, terms in POLISH_STANDARD_NEGATIVES for t in terms]
-    has_polish = any(
-        any(t in neg for t in polish_standard_terms)
-        for neg in negs_lower
-    )
+    has_polish = any(any(t in neg for t in polish_standard_terms) for neg in negs_lower)
     assert has_polish, f"Template '{vertical}' has no Polish standard negatives"

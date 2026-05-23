@@ -13,7 +13,15 @@ from adcopilot.infrastructure.db.models import WeeklyInsightModel
 
 
 class WeeklyInsight:
-    __slots__ = ("id", "user_id", "account_id", "week_start", "insight_text", "context_snapshot", "created_at")
+    __slots__ = (
+        "id",
+        "user_id",
+        "account_id",
+        "week_start",
+        "insight_text",
+        "context_snapshot",
+        "created_at",
+    )
 
     def __init__(
         self,

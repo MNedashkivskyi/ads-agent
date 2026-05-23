@@ -48,7 +48,8 @@ class SendPerformanceReportUseCase:
                 # Filter to last 14 days
                 cutoff = now - timedelta(days=_REPORT_WINDOW_DAYS)
                 recent = [
-                    c for c in comparisons_raw
+                    c
+                    for c in comparisons_raw
                     if c.compared_at.replace(tzinfo=UTC) >= cutoff
                     if c.compared_at.tzinfo is None or c.compared_at >= cutoff
                 ]
@@ -65,7 +66,12 @@ class SendPerformanceReportUseCase:
 
                 # Compute cumulative savings from IMPROVED comparisons
                 cumulative = sum(
-                    int(abs(c.delta_cpa_pct / 100) * c.current_cpa_micros * c.current_conversions * 4)
+                    int(
+                        abs(c.delta_cpa_pct / 100)
+                        * c.current_cpa_micros
+                        * c.current_conversions
+                        * 4
+                    )
                     for c, _ in pairs
                     if c.verdict == "IMPROVED"
                 )

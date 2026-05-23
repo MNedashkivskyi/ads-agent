@@ -188,8 +188,7 @@ async def test_use_case_saves_when_enough_accounts() -> None:
     from adcopilot.application.use_cases.aggregate_benchmarks import AggregateBenchmarksUseCase
 
     summaries = [
-        _make_summary(f"a{i}", "salon", cpa_micros=1_000_000 + i * 50_000)
-        for i in range(6)
+        _make_summary(f"a{i}", "salon", cpa_micros=1_000_000 + i * 50_000) for i in range(6)
     ]
 
     provider = MagicMock()

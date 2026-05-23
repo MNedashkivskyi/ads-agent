@@ -26,9 +26,9 @@ from adcopilot.domain.recommendation import (
     RecommendationStatus,
 )
 
-_MIN_COST_MICROS = 20_000_000   # current spend ≥ €20/week to be meaningful
-_COST_GROWTH_THRESHOLD = 0.20   # cost must have grown ≥ 20%
-_CONV_GROWTH_MAX = 0.10         # conversions grew < 10% (diminishing returns)
+_MIN_COST_MICROS = 20_000_000  # current spend ≥ €20/week to be meaningful
+_COST_GROWTH_THRESHOLD = 0.20  # cost must have grown ≥ 20%
+_CONV_GROWTH_MAX = 0.10  # conversions grew < 10% (diminishing returns)
 
 
 class DiversifyChannelsRule:

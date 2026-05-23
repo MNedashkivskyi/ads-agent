@@ -55,9 +55,7 @@ class SqlNotificationRepository:
 
     async def get(self, notification_id: str) -> Notification | None:
         result = await self._session.execute(
-            select(NotificationModel).where(
-                NotificationModel.id == uuid.UUID(notification_id)
-            )
+            select(NotificationModel).where(NotificationModel.id == uuid.UUID(notification_id))
         )
         m = result.scalar_one_or_none()
         return _to_domain(m) if m else None

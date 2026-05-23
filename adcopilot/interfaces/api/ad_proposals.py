@@ -64,7 +64,10 @@ async def get_ad_proposals(
             if str(rec.account_id) not in [user_id] and True:
                 pass  # account ownership verified below via account_repo if needed
 
-            if rec.kind not in (RecommendationKind.AD_FATIGUE, RecommendationKind.WEAK_RSA_STRENGTH):
+            if rec.kind not in (
+                RecommendationKind.AD_FATIGUE,
+                RecommendationKind.WEAK_RSA_STRENGTH,
+            ):
                 raise HTTPException(
                     status_code=422,
                     detail=f"Recommendation kind {rec.kind.value} does not support ad proposals",
@@ -129,7 +132,10 @@ async def approve_ad_proposal(
             rec = await rec_repo.get(RecommendationId(rec_id))
             if rec is None:
                 raise HTTPException(status_code=404, detail="Recommendation not found")
-            if rec.kind not in (RecommendationKind.AD_FATIGUE, RecommendationKind.WEAK_RSA_STRENGTH):
+            if rec.kind not in (
+                RecommendationKind.AD_FATIGUE,
+                RecommendationKind.WEAK_RSA_STRENGTH,
+            ):
                 raise HTTPException(
                     status_code=422,
                     detail=f"Recommendation kind {rec.kind.value} does not support ad proposals",
@@ -148,7 +154,9 @@ async def approve_ad_proposal(
     # Store experiment mode flag in the task payload for the executor to handle.
     # The executor checks payload["run_as_experiment"] to decide whether to
     # replace the ad or create an A/B experiment.
-    execute_recommendation_task.delay(rec_id, {"run_as_experiment": not body.force_replace, "variant_index": body.variant_index})
+    execute_recommendation_task.delay(
+        rec_id, {"run_as_experiment": not body.force_replace, "variant_index": body.variant_index}
+    )
     logger.info(
         "ad_proposal.approved",
         user_id=user_id,

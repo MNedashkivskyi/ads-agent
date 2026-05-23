@@ -659,9 +659,7 @@ async def query_negative_keywords(
                         )
                     )
         except Exception as exc:
-            logger.warning(
-                "failed to fetch ad-group-level negative keywords", error=str(exc)
-            )
+            logger.warning("failed to fetch ad-group-level negative keywords", error=str(exc))
 
         return results
     except (GoogleAdsAuthError, GoogleAdsUnavailable):
@@ -1146,7 +1144,9 @@ async def query_merchant_center_feed(
                     {
                         "feed_id": link.id,
                         "name": link.merchant_center_account_name or "",
-                        "status": link.status.name if hasattr(link.status, "name") else str(link.status),
+                        "status": link.status.name
+                        if hasattr(link.status, "name")
+                        else str(link.status),
                     }
                 )
         return results
@@ -1187,13 +1187,17 @@ async def fetch_auction_insights(
         try:
             response = service.search(customer_id=customer_id, query=query)
             for row in response:
-                results.append({
-                    "campaign_id": row.campaign.id,
-                    "competitor_domain": row.auction_insight.domain,
-                    "impression_share": row.metrics.auction_insight_search_impression_share or None,
-                    "overlap_rate": row.metrics.auction_insight_search_overlap_rate or None,
-                    "position_above_rate": row.metrics.auction_insight_search_position_above_rate or None,
-                })
+                results.append(
+                    {
+                        "campaign_id": row.campaign.id,
+                        "competitor_domain": row.auction_insight.domain,
+                        "impression_share": row.metrics.auction_insight_search_impression_share
+                        or None,
+                        "overlap_rate": row.metrics.auction_insight_search_overlap_rate or None,
+                        "position_above_rate": row.metrics.auction_insight_search_position_above_rate
+                        or None,
+                    }
+                )
         except Exception as exc:
             raise _wrap_exc(exc) from exc
         return results

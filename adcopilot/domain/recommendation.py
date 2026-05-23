@@ -86,9 +86,9 @@ class RecommendationKind(Enum):
 
 class RecommendationSeverity(Enum):
     CRITICAL = "CRITICAL"  # actively losing money now
-    HIGH = "HIGH"          # significant savings/gain available
-    MEDIUM = "MEDIUM"      # worth doing this week
-    LOW = "LOW"            # nice to have
+    HIGH = "HIGH"  # significant savings/gain available
+    MEDIUM = "MEDIUM"  # worth doing this week
+    LOW = "LOW"  # nice to have
 
 
 class RecommendationStatus(Enum):

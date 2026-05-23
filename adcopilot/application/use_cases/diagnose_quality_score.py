@@ -100,7 +100,7 @@ async def _generate_llm_summary(keywords: list[KeywordQSDiagnosis]) -> str | Non
         lines = []
         for kw in keywords[:20]:
             lines.append(
-                f"- \"{kw.text}\" ({kw.match_type}): QS={kw.quality_score}, "
+                f'- "{kw.text}" ({kw.match_type}): QS={kw.quality_score}, '
                 f"CTR={_rating(kw.expected_ctr)}, "
                 f"Trafność reklamy={_rating(kw.ad_relevance)}, "
                 f"Str. docelowa={_rating(kw.landing_page_experience)}, "

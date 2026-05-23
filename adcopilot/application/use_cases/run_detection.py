@@ -109,7 +109,9 @@ class RunDetectionUseCase:
         landing_page_results = await _fetch_landing_pages(snapshot.ads)
 
         # 3f. Load GA4 page metrics if available (best-effort)
-        ga4_page_metrics = await _load_ga4_metrics(str(account_id), snapshot_date, self._snapshot_repo)
+        ga4_page_metrics = await _load_ga4_metrics(
+            str(account_id), snapshot_date, self._snapshot_repo
+        )
 
         # 3g. Load 14-day auction insights for competitive rules (best-effort)
         try:

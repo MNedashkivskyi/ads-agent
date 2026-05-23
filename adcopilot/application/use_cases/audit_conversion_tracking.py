@@ -56,7 +56,9 @@ def _build_action_summary(statuses: list[ConversionActionStatus]) -> str:
     lines = []
     for s in statuses:
         conv_str = f"{s.all_conversions:.1f}" if s.all_conversions else "0"
-        lines.append(f"- {s.name}: status={s.status}, konwersje(7d)={conv_str}, ocena={s.health.value}")
+        lines.append(
+            f"- {s.name}: status={s.status}, konwersje(7d)={conv_str}, ocena={s.health.value}"
+        )
     return "\n".join(lines)
 
 

@@ -21,7 +21,9 @@ def _make_settings() -> Settings:
     )
 
 
-def _make_row(term: str, campaign_name: str, cost: int, clicks: int, impressions: int, conversions: float) -> MagicMock:
+def _make_row(
+    term: str, campaign_name: str, cost: int, clicks: int, impressions: int, conversions: float
+) -> MagicMock:
     row = MagicMock()
     row.search_term_view.search_term = term
     row.campaign.name = campaign_name

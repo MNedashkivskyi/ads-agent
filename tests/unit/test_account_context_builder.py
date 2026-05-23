@@ -18,7 +18,15 @@ from adcopilot.domain.entities import AccountId
 from adcopilot.domain.snapshot import CampaignSnapshot
 
 
-def _make_campaign(name: str, cost: int, budget: int, clicks: int, conversions: float, conv_value: float, status: str = "ENABLED") -> CampaignSnapshot:
+def _make_campaign(
+    name: str,
+    cost: int,
+    budget: int,
+    clicks: int,
+    conversions: float,
+    conv_value: float,
+    status: str = "ENABLED",
+) -> CampaignSnapshot:
     return CampaignSnapshot(
         id="snap-1",  # type: ignore[arg-type]
         account_id=AccountId("acc-1"),

@@ -34,7 +34,10 @@ class AdCopyRefreshExecutor:
             _LazyPromptRepo,
         )
         from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
-        return cls(llm=AnthropicClient(api_key=settings.LLM_API_KEY), prompt_repo=_LazyPromptRepo(settings))  # type: ignore[arg-type]
+
+        return cls(
+            llm=AnthropicClient(api_key=settings.LLM_API_KEY), prompt_repo=_LazyPromptRepo(settings)
+        )  # type: ignore[arg-type]
 
     async def execute(
         self,

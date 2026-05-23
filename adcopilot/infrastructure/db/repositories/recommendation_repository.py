@@ -42,9 +42,7 @@ class SqlRecommendationRepository:
 
     async def get(self, rec_id: RecommendationId) -> Recommendation | None:
         result = await self._session.execute(
-            select(RecommendationModel).where(
-                RecommendationModel.id == uuid.UUID(rec_id)
-            )
+            select(RecommendationModel).where(RecommendationModel.id == uuid.UUID(rec_id))
         )
         m = result.scalar_one_or_none()
         return _model_to_domain(m) if m else None
@@ -75,13 +73,9 @@ class SqlRecommendationRepository:
         m.updated_at = datetime.now(tz=UTC)
         self._session.add(m)
 
-    async def update_status(
-        self, rec_id: RecommendationId, status: RecommendationStatus
-    ) -> None:
+    async def update_status(self, rec_id: RecommendationId, status: RecommendationStatus) -> None:
         result = await self._session.execute(
-            select(RecommendationModel).where(
-                RecommendationModel.id == uuid.UUID(rec_id)
-            )
+            select(RecommendationModel).where(RecommendationModel.id == uuid.UUID(rec_id))
         )
         m = result.scalar_one_or_none()
         if m:
@@ -89,18 +83,15 @@ class SqlRecommendationRepository:
 
     async def update_explanation(self, rec_id: RecommendationId, explanation: str) -> None:
         result = await self._session.execute(
-            select(RecommendationModel).where(
-                RecommendationModel.id == uuid.UUID(rec_id)
-            )
+            select(RecommendationModel).where(RecommendationModel.id == uuid.UUID(rec_id))
         )
         m = result.scalar_one_or_none()
         if m:
             m.explanation = explanation
 
-    async def list_executed_in_date_range(
-        self, start: date, end: date
-    ) -> list[Recommendation]:
+    async def list_executed_in_date_range(self, start: date, end: date) -> list[Recommendation]:
         from sqlalchemy import func as sqlfunc
+
         result = await self._session.execute(
             select(RecommendationModel).where(
                 RecommendationModel.status == RecommendationStatus.EXECUTED.value,

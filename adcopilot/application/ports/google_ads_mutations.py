@@ -239,4 +239,3 @@ class GoogleAdsMutationsPort(Protocol):
     ) -> int:
         """Create a PAUSED Responsive Search Ad; return new ad_id."""
         ...
-

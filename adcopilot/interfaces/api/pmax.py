@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api", tags=["pmax"])
 # Response / Request models
 # ---------------------------------------------------------------------------
 
+
 class MerchantCenterInfo(BaseModel):
     merchant_id: int
     account_name: str
@@ -85,9 +86,7 @@ _NO_MC_INSTRUCTIONS = (
 )
 
 
-async def _get_session_and_account(
-    user_id: str, account_id: str, settings: Settings
-):
+async def _get_session_and_account(user_id: str, account_id: str, settings: Settings):
     """Returns (session, engine, account, oauth_creds) or raises HTTPException."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -111,7 +110,9 @@ async def _get_session_and_account(
         await engine.dispose()
         raise HTTPException(status_code=404, detail="Konto Google Ads nie zostało znalezione")
 
-    oauth_repo = SqlOAuthCredentialsRepository(session, encryption_key=settings.TOKEN_ENCRYPTION_KEY)
+    oauth_repo = SqlOAuthCredentialsRepository(
+        session, encryption_key=settings.TOKEN_ENCRYPTION_KEY
+    )
     creds = await oauth_repo.get(AccountId(account_id))
     if creds is None:
         await session.rollback()
@@ -125,6 +126,7 @@ async def _get_session_and_account(
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get("/{user_id}/pmax/eligibility", response_model=PMaxEligibilityResponse)
 async def get_pmax_eligibility(
@@ -227,7 +229,9 @@ async def create_pmax_campaign(
 
         llm = AnthropicClient(api_key=settings.LLM_API_KEY)
         pmax_writer = PMaxCampaignWriter(settings)
-        use_case = CreatePMaxCampaignUseCase(llm=llm, prompt_repo=prompt_repo, pmax_writer=pmax_writer)
+        use_case = CreatePMaxCampaignUseCase(
+            llm=llm, prompt_repo=prompt_repo, pmax_writer=pmax_writer
+        )
 
         result = await use_case.execute(
             CreatePMaxCampaignInput(
@@ -249,7 +253,9 @@ async def create_pmax_campaign(
     except Exception as exc:
         await session.rollback()
         logger.error("pmax.create.error", user_id=user_id, error=str(exc))
-        raise HTTPException(status_code=500, detail="Błąd podczas tworzenia kampanii PMax.") from exc
+        raise HTTPException(
+            status_code=500, detail="Błąd podczas tworzenia kampanii PMax."
+        ) from exc
     finally:
         await session.close()
         await engine.dispose()
@@ -263,7 +269,9 @@ async def create_pmax_campaign(
     )
 
 
-@router.post("/{user_id}/pmax/{campaign_resource_name:path}/enable", response_model=EnablePMaxResponse)
+@router.post(
+    "/{user_id}/pmax/{campaign_resource_name:path}/enable", response_model=EnablePMaxResponse
+)
 async def enable_pmax_campaign(
     user_id: str,
     campaign_resource_name: str,
@@ -292,7 +300,9 @@ async def enable_pmax_campaign(
         raise
     except Exception as exc:
         logger.error("pmax.enable.error", user_id=user_id, error=str(exc))
-        raise HTTPException(status_code=500, detail="Błąd podczas aktywacji kampanii PMax.") from exc
+        raise HTTPException(
+            status_code=500, detail="Błąd podczas aktywacji kampanii PMax."
+        ) from exc
     finally:
         await session.rollback()
         await session.close()
@@ -331,7 +341,9 @@ async def get_pmax_status(
         snapshots = await snapshot_repo.get_campaigns_by_date(AccountId(str(account.id)), today)
         if not snapshots:
             yesterday = today - _dt.timedelta(days=1)
-            snapshots = await snapshot_repo.get_campaigns_by_date(AccountId(str(account.id)), yesterday)
+            snapshots = await snapshot_repo.get_campaigns_by_date(
+                AccountId(str(account.id)), yesterday
+            )
 
         campaigns = []
         for snap in snapshots:
@@ -365,6 +377,7 @@ async def get_pmax_status(
 # ---------------------------------------------------------------------------
 # Performance time-series
 # ---------------------------------------------------------------------------
+
 
 class PMaxDailyDataPoint(BaseModel):
     date: str

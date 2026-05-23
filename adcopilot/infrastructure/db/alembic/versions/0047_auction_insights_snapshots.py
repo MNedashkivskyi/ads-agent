@@ -29,7 +29,10 @@ def upgrade() -> None:
         sa.Column("snapshot_date", sa.Date(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.UniqueConstraint(
-            "account_id", "campaign_id", "competitor_domain", "snapshot_date",
+            "account_id",
+            "campaign_id",
+            "competitor_domain",
+            "snapshot_date",
             name="uq_auction_insights_per_day",
         ),
     )

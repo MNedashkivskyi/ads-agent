@@ -55,9 +55,7 @@ class NoConversionTrackingRule:
             return recs
 
         # Scenario 2: stale tracking — ENABLED actions with zero 7-day conversions
-        enabled_actions = [
-            a for a in ctx.conversion_actions if a.status == "ENABLED"
-        ]
+        enabled_actions = [a for a in ctx.conversion_actions if a.status == "ENABLED"]
         if enabled_actions and all(a.all_conversions == 0 for a in enabled_actions):
             action_names = [a.name for a in enabled_actions]
             recs.append(

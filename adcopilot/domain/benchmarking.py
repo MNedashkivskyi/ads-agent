@@ -18,7 +18,7 @@ class AccountMetrics:
     """Raw metrics for one account in a cohort (used only internally during aggregation)."""
 
     account_id: str
-    cpa_micros: int            # 0 if no conversions
+    cpa_micros: int  # 0 if no conversions
     ctr: float
     conversion_rate: float
     monthly_spend_micros: int
@@ -30,8 +30,8 @@ class VerticalBenchmarkSnapshot:
 
     id: BenchmarkId
     vertical: str
-    city_tier: int             # 1 = major cities, 2 = regional, 3 = rest
-    snapshot_week: date        # Monday of the ISO week
+    city_tier: int  # 1 = major cities, 2 = regional, 3 = rest
+    snapshot_week: date  # Monday of the ISO week
     account_count: int
     avg_cpa_micros: int
     median_cpa_micros: int
@@ -76,8 +76,6 @@ class VerticalBenchmarkSnapshot:
             p75_cpa_micros=p75,
             avg_ctr=statistics.mean(a.ctr for a in accounts),
             avg_conversion_rate=statistics.mean(a.conversion_rate for a in accounts),
-            avg_monthly_spend_micros=int(
-                statistics.mean(a.monthly_spend_micros for a in accounts)
-            ),
+            avg_monthly_spend_micros=int(statistics.mean(a.monthly_spend_micros for a in accounts)),
             created_at=created_at,
         )

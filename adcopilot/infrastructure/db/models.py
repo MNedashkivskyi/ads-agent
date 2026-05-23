@@ -725,7 +725,9 @@ class LaunchProposalModel(Base):
     estimated_cpc_max_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # Brand campaign fields (null for MICRO tier)
-    brand_campaign_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    brand_campaign_name: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, default=None
+    )
     brand_keywords: Mapped[list | None] = mapped_column(JSONB, nullable=True, default=None)
     brand_daily_budget_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     brand_ad: Mapped[dict | None] = mapped_column(JSONB, nullable=True, default=None)
@@ -922,7 +924,9 @@ class PerformanceComparisonModel(Base):
     )
 
     __table_args__ = (
-        sa.UniqueConstraint("recommendation_id", "comparison_window_days", name="uq_comparison_rec_window"),
+        sa.UniqueConstraint(
+            "recommendation_id", "comparison_window_days", name="uq_comparison_rec_window"
+        ),
     )
 
 
@@ -977,9 +981,7 @@ class VerticalBenchmarkSnapshotModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    __table_args__ = (
-        Index("ix_vbs_vertical_tier_week", "vertical", "city_tier", "snapshot_week"),
-    )
+    __table_args__ = (Index("ix_vbs_vertical_tier_week", "vertical", "city_tier", "snapshot_week"),)
 
 
 class PromptVersionModel(Base):
@@ -1012,9 +1014,7 @@ class NotificationModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    __table_args__ = (
-        Index("ix_notifications_user_created", "user_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_notifications_user_created", "user_id", "created_at"),)
 
 
 class QaConversationModel(Base):
@@ -1030,9 +1030,7 @@ class QaConversationModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    __table_args__ = (
-        Index("ix_qa_conversations_user_created", "user_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_qa_conversations_user_created", "user_id", "created_at"),)
 
 
 class AdExperimentModel(Base):
@@ -1117,7 +1115,9 @@ class GA4CredentialsModel(Base):
     __tablename__ = "ga4_credentials"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, unique=True, index=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, unique=True, index=True
+    )
     property_id: Mapped[str] = mapped_column(String(64), nullable=False)
     refresh_token_enc: Mapped[str] = mapped_column(Text, nullable=False)
     access_token_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -1199,7 +1199,9 @@ class QSImprovementPlanModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    measurement_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    measurement_ends_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

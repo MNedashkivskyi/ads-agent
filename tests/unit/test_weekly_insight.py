@@ -62,4 +62,5 @@ def test_beat_schedule_includes_weekly_insight() -> None:
 
 def test_send_insight_method_exists_on_notifier() -> None:
     from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+
     assert hasattr(SqlWebNotifier, "send_insight")

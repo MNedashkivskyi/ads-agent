@@ -68,9 +68,7 @@ class GoogleAdsQueriesAdapter:
     async def query_ads(
         self, refresh_token: str, customer_id: str, snapshot_date: date
     ) -> list[AdSnapshot]:
-        return await queries.query_ads(
-            refresh_token, customer_id, snapshot_date, self._settings
-        )
+        return await queries.query_ads(refresh_token, customer_id, snapshot_date, self._settings)
 
     async def query_negative_keywords(
         self, refresh_token: str, customer_id: str, snapshot_date: date
@@ -135,19 +133,13 @@ class GoogleAdsQueriesAdapter:
             refresh_token, customer_id, snapshot_date, self._settings
         )
 
-    async def query_remarketing_lists(
-        self, refresh_token: str, customer_id: str
-    ) -> list:
-        return await queries.query_remarketing_lists(
-            refresh_token, customer_id, self._settings
-        )
+    async def query_remarketing_lists(self, refresh_token: str, customer_id: str) -> list:
+        return await queries.query_remarketing_lists(refresh_token, customer_id, self._settings)
 
     async def list_conversion_actions(
         self, refresh_token: str, customer_id: str
     ) -> list[ConversionActionSnapshot]:
-        return await queries.list_conversion_actions(
-            refresh_token, customer_id, self._settings
-        )
+        return await queries.list_conversion_actions(refresh_token, customer_id, self._settings)
 
     async def list_recent_search_terms(
         self,
@@ -174,9 +166,7 @@ class GoogleAdsQueriesAdapter:
     async def get_merchant_center_link(
         self, refresh_token: str, customer_id: str
     ) -> MerchantCenterLink | None:
-        links = await queries.query_merchant_center_feed(
-            refresh_token, customer_id, self._settings
-        )
+        links = await queries.query_merchant_center_feed(refresh_token, customer_id, self._settings)
         for link in links:
             if str(link.get("status", "")).upper() in ("ENABLED", "PENDING"):
                 return MerchantCenterLink(

@@ -69,9 +69,7 @@ def validate_proposal(
         return errors  # no point checking further
 
     if len(proposal.ad_groups) > MAX_AD_GROUPS:
-        errors.append(
-            f"proposal has {len(proposal.ad_groups)} ad groups (max {MAX_AD_GROUPS})"
-        )
+        errors.append(f"proposal has {len(proposal.ad_groups)} ad groups (max {MAX_AD_GROUPS})")
 
     # ------------------------------------------------------------------
     # Per-ad-group checks
@@ -82,13 +80,9 @@ def validate_proposal(
         # Keyword count — tier-dependent limits
         kw_count = len(ag.keywords)
         if kw_count < min_kw:
-            errors.append(
-                f"{prefix}: {kw_count} keywords (min {min_kw} for {tier} tier)"
-            )
+            errors.append(f"{prefix}: {kw_count} keywords (min {min_kw} for {tier} tier)")
         if kw_count > max_kw:
-            errors.append(
-                f"{prefix}: {kw_count} keywords (max {max_kw} for {tier} tier)"
-            )
+            errors.append(f"{prefix}: {kw_count} keywords (max {max_kw} for {tier} tier)")
 
         # Ad copy
         if not ag.ads:
@@ -101,8 +95,7 @@ def validate_proposal(
             # Headline count
             if len(ad.headlines) < MIN_HEADLINES_PER_AD:
                 errors.append(
-                    f"{ad_prefix}: {len(ad.headlines)} headlines "
-                    f"(min {MIN_HEADLINES_PER_AD})"
+                    f"{ad_prefix}: {len(ad.headlines)} headlines (min {MIN_HEADLINES_PER_AD})"
                 )
             # Headline length
             for hl in ad.headlines:
@@ -139,7 +132,9 @@ def validate_proposal(
     # ------------------------------------------------------------------
     for sl in proposal.sitelinks:
         if len(sl.link_text) > 25:
-            errors.append(f"sitelink link_text too long ({len(sl.link_text)} > 25): '{sl.link_text}'")
+            errors.append(
+                f"sitelink link_text too long ({len(sl.link_text)} > 25): '{sl.link_text}'"
+            )
         if len(sl.description1) > 35:
             errors.append(f"sitelink description1 too long ({len(sl.description1)} > 35)")
         if len(sl.description2) > 35:

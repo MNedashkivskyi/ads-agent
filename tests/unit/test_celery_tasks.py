@@ -128,9 +128,7 @@ def test_trigger_snapshot_returns_202() -> None:
     mock_task = MagicMock()
     mock_task.id = "celery-task-uuid-123"
 
-    with patch(
-        "adcopilot.interfaces.api.snapshots.snapshot_account_task"
-    ) as mock_celery_task:
+    with patch("adcopilot.interfaces.api.snapshots.snapshot_account_task") as mock_celery_task:
         mock_celery_task.delay.return_value = mock_task
 
         from adcopilot.main import create_app
@@ -155,9 +153,7 @@ def test_trigger_snapshot_defaults_to_today() -> None:
     mock_task = MagicMock()
     mock_task.id = "task-abc"
 
-    with patch(
-        "adcopilot.interfaces.api.snapshots.snapshot_account_task"
-    ) as mock_celery_task:
+    with patch("adcopilot.interfaces.api.snapshots.snapshot_account_task") as mock_celery_task:
         mock_celery_task.delay.return_value = mock_task
 
         from adcopilot.main import create_app

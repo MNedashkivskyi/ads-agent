@@ -118,7 +118,9 @@ async def _execute_action(
         )
 
     except Exception as exc:
-        logger.warning("qs_action_execution_failed", action=action.action_type.value, error=str(exc))
+        logger.warning(
+            "qs_action_execution_failed", action=action.action_type.value, error=str(exc)
+        )
         return QSAction(
             action_type=action.action_type,
             status=QSActionStatus.FAILED,

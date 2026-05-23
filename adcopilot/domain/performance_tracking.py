@@ -98,7 +98,9 @@ class PerformanceComparison:
         current_conversions: float,
         compared_at: datetime,
     ) -> PerformanceComparison:
-        current_cpa_micros = int(current_cost_micros / current_conversions) if current_conversions > 0 else 0
+        current_cpa_micros = (
+            int(current_cost_micros / current_conversions) if current_conversions > 0 else 0
+        )
         current_ctr = current_clicks / current_impressions if current_impressions > 0 else 0.0
 
         def _pct_change(new: float, old: float) -> float:

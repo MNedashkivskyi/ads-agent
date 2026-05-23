@@ -1,4 +1,5 @@
 """Unit tests for conversion tracking check logic."""
+
 from datetime import date
 
 from adcopilot.application.use_cases.launch.check_conversion_setup import (
@@ -8,7 +9,9 @@ from adcopilot.domain.entities import AccountId
 from adcopilot.domain.snapshot import ConversionActionSnapshot, SnapshotId
 
 
-def _make_ca(category: str, status: str = "ENABLED", include: bool = True) -> ConversionActionSnapshot:
+def _make_ca(
+    category: str, status: str = "ENABLED", include: bool = True
+) -> ConversionActionSnapshot:
     return ConversionActionSnapshot(
         id=SnapshotId("00000000-0000-0000-0000-000000000001"),
         account_id=AccountId("123"),

@@ -242,9 +242,7 @@ class SqlSnapshotRepository:
     # Ads
     # ------------------------------------------------------------------
 
-    async def upsert_ads(
-        self, account_id: AccountId, snapshots: list[AdSnapshot]
-    ) -> None:
+    async def upsert_ads(self, account_id: AccountId, snapshots: list[AdSnapshot]) -> None:
         if not snapshots:
             return
         rows = [
@@ -424,9 +422,7 @@ class SqlSnapshotRepository:
             for m in res.scalars().all()
         ]
 
-    async def get_ads_by_date(
-        self, account_id: AccountId, snapshot_date: date
-    ) -> list[AdSnapshot]:
+    async def get_ads_by_date(self, account_id: AccountId, snapshot_date: date) -> list[AdSnapshot]:
         acct_uuid = uuid.UUID(account_id)
         res = await self._session.execute(
             select(AdSnapshotModel).where(

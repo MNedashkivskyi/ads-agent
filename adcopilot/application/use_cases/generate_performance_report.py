@@ -140,12 +140,16 @@ async def generate_performance_report(
     # -----------------------------------------------------------------------
     # QS improvement plan summary for this account
     # -----------------------------------------------------------------------
-    qs_stmt = select(
-        QSImprovementPlanModel.status,
-        func.count(QSImprovementPlanModel.id).label("count"),
-    ).where(
-        QSImprovementPlanModel.account_id == account_uuid,
-    ).group_by(QSImprovementPlanModel.status)
+    qs_stmt = (
+        select(
+            QSImprovementPlanModel.status,
+            func.count(QSImprovementPlanModel.id).label("count"),
+        )
+        .where(
+            QSImprovementPlanModel.account_id == account_uuid,
+        )
+        .group_by(QSImprovementPlanModel.status)
+    )
 
     qs_rows = (await session.execute(qs_stmt)).all()
     qs_plan_summary = {row.status: row.count for row in qs_rows}
@@ -164,7 +168,9 @@ async def generate_performance_report(
     }
 
     prompt_template = await get_latest_prompt(prompt_repo, _PROMPT_KEY)
-    user_msg = prompt_template.format(account_context=json.dumps(account_context, ensure_ascii=False, indent=2))
+    user_msg = prompt_template.format(
+        account_context=json.dumps(account_context, ensure_ascii=False, indent=2)
+    )
 
     summary_pl = await llm.complete(
         system=_SYSTEM,

@@ -47,9 +47,7 @@ async def evaluate_qs_improvement_plan(
     current_qs = current_metrics.avg_qs
 
     qs_improved = (
-        baseline_qs is not None
-        and current_qs is not None
-        and (current_qs - baseline_qs) >= 1.0
+        baseline_qs is not None and current_qs is not None and (current_qs - baseline_qs) >= 1.0
     )
     new_status = QSPlanStatus.COMPLETED if qs_improved else QSPlanStatus.FAILED
 

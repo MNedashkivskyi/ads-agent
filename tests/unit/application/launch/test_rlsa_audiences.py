@@ -1,4 +1,5 @@
 """Unit tests for AddRlsaAudiencesUseCase."""
+
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
@@ -28,7 +29,9 @@ def _make_uc(lists, ag_rns=_AG_RNS, create_rns=None):
     queries.query_remarketing_lists.return_value = lists
     writer = AsyncMock()
     writer.get_search_ad_group_resource_names.return_value = ag_rns
-    writer.create_rlsa_audiences.return_value = create_rns or [f"crit/{i}" for i in range(len(ag_rns))]
+    writer.create_rlsa_audiences.return_value = create_rns or [
+        f"crit/{i}" for i in range(len(ag_rns))
+    ]
     return AddRlsaAudiencesUseCase(queries, writer), queries, writer
 
 

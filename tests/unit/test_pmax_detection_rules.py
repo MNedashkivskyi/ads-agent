@@ -50,6 +50,7 @@ def _make_pmax_campaign(
 # PMaxLowRoasRule
 # ---------------------------------------------------------------------------
 
+
 class TestPMaxLowRoasRule:
     def test_fires_for_zero_conv_value(self):
         rule = PMaxLowRoasRule()
@@ -76,13 +77,17 @@ class TestPMaxLowRoasRule:
 
     def test_does_not_fire_for_non_pmax(self):
         rule = PMaxLowRoasRule()
-        campaign = _make_pmax_campaign(cost_micros=50_000_000, conv_value=0.0, channel_type="SEARCH")
+        campaign = _make_pmax_campaign(
+            cost_micros=50_000_000, conv_value=0.0, channel_type="SEARCH"
+        )
         recs = rule.detect(_make_ctx([campaign]))
         assert len(recs) == 0
 
     def test_does_not_fire_below_min_cost(self):
         rule = PMaxLowRoasRule()
-        campaign = _make_pmax_campaign(cost_micros=500_000, conv_value=0.0)  # 0.5 PLN < 10 PLN threshold
+        campaign = _make_pmax_campaign(
+            cost_micros=500_000, conv_value=0.0
+        )  # 0.5 PLN < 10 PLN threshold
         recs = rule.detect(_make_ctx([campaign]))
         assert len(recs) == 0
 
@@ -111,6 +116,7 @@ class TestPMaxLowRoasRule:
 # PMaxAssetDisapprovedRule
 # ---------------------------------------------------------------------------
 
+
 class TestPMaxAssetDisapprovedRule:
     def test_fires_for_enabled_pmax_with_spend_but_no_impressions(self):
         rule = PMaxAssetDisapprovedRule()
@@ -126,9 +132,7 @@ class TestPMaxAssetDisapprovedRule:
 
     def test_does_not_fire_when_impressions_exist(self):
         rule = PMaxAssetDisapprovedRule()
-        campaign = _make_pmax_campaign(
-            cost_micros=5_000_000, impressions=500, status="ENABLED"
-        )
+        campaign = _make_pmax_campaign(cost_micros=5_000_000, impressions=500, status="ENABLED")
         recs = rule.detect(_make_ctx([campaign]))
         assert len(recs) == 0
 
@@ -142,25 +146,23 @@ class TestPMaxAssetDisapprovedRule:
 
     def test_does_not_fire_for_paused(self):
         rule = PMaxAssetDisapprovedRule()
-        campaign = _make_pmax_campaign(
-            cost_micros=5_000_000, impressions=0, status="PAUSED"
-        )
+        campaign = _make_pmax_campaign(cost_micros=5_000_000, impressions=0, status="PAUSED")
         recs = rule.detect(_make_ctx([campaign]))
         assert len(recs) == 0
 
     def test_does_not_fire_below_min_cost(self):
         rule = PMaxAssetDisapprovedRule()
         campaign = _make_pmax_campaign(
-            cost_micros=500_000, impressions=0, status="ENABLED"  # 0.5 PLN < 1 PLN
+            cost_micros=500_000,
+            impressions=0,
+            status="ENABLED",  # 0.5 PLN < 1 PLN
         )
         recs = rule.detect(_make_ctx([campaign]))
         assert len(recs) == 0
 
     def test_evidence_contains_diagnosis(self):
         rule = PMaxAssetDisapprovedRule()
-        campaign = _make_pmax_campaign(
-            cost_micros=5_000_000, impressions=0, status="ENABLED"
-        )
+        campaign = _make_pmax_campaign(cost_micros=5_000_000, impressions=0, status="ENABLED")
         recs = rule.detect(_make_ctx([campaign]))
         assert "diagnosis" in recs[0].evidence
         assert "PMax" in recs[0].evidence["diagnosis"]
@@ -169,6 +171,7 @@ class TestPMaxAssetDisapprovedRule:
 # ---------------------------------------------------------------------------
 # Registry integration
 # ---------------------------------------------------------------------------
+
 
 def test_pmax_kinds_in_recommendation_kind():
     assert RecommendationKind.PMAX_LOW_ROAS.value == "PMAX_LOW_ROAS"

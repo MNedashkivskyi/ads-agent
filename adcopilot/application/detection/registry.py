@@ -141,12 +141,14 @@ from adcopilot.application.ports.snooze_repository import SnoozeRepository
 
 # Rules that require working conversion tracking to produce meaningful results.
 # When tracking is broken/missing, these rules are skipped to avoid noise.
-_CONVERSION_DEPENDENT_RULES = frozenset({
-    "ZeroConversionKeywordRule",
-    "CpaSpikeRule",
-    "ConversionRateDropRule",
-    "RelaxTargetCpaRule",
-})
+_CONVERSION_DEPENDENT_RULES = frozenset(
+    {
+        "ZeroConversionKeywordRule",
+        "CpaSpikeRule",
+        "ConversionRateDropRule",
+        "RelaxTargetCpaRule",
+    }
+)
 
 
 def build_rule_engine(

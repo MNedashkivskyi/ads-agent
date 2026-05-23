@@ -37,7 +37,8 @@ class AudienceUnderperformingRule:
 
         # Only consider rows with conversions to compute CPA-based average
         eligible_for_avg = [
-            r for r in rows
+            r
+            for r in rows
             if (getattr(r, "conversions", 0.0) or 0.0) > 0
             and (getattr(r, "clicks", 0) or 0) >= _MIN_CLICKS
         ]
@@ -45,7 +46,9 @@ class AudienceUnderperformingRule:
             return []
 
         total_cost = sum(getattr(r, "cost_micros", 0) or 0 for r in eligible_for_avg)
-        total_conversions = sum(float(getattr(r, "conversions", 0.0) or 0.0) for r in eligible_for_avg)
+        total_conversions = sum(
+            float(getattr(r, "conversions", 0.0) or 0.0) for r in eligible_for_avg
+        )
         avg_cpa_micros = total_cost / total_conversions if total_conversions > 0 else None
 
         if avg_cpa_micros is None or avg_cpa_micros == 0:

@@ -335,10 +335,7 @@ def _detect_vertical_from_brief(brief: CampaignBrief) -> str | None:
 
 
 def _has_any_term(negatives_lower: list[str], terms: list[str]) -> bool:
-    return any(
-        any(t in neg for t in terms)
-        for neg in negatives_lower
-    )
+    return any(any(t in neg for t in terms) for neg in negatives_lower)
 
 
 def _rule_negatives(
@@ -370,7 +367,8 @@ def _rule_negatives(
 
     # 4c — user-specified exclusions
     missing_exclusions = [
-        excl for excl in brief.exclusions
+        excl
+        for excl in brief.exclusions
         if excl.strip() and not _has_any_term(neg_lower, [excl.lower()])
     ]
     for excl in missing_exclusions:
@@ -404,8 +402,7 @@ def _rule_ad_copy(
     for ag in proposal.ad_groups:
         if not ag.ads:
             errors.append(
-                f"Rule 5 (Ad Copy): ad group '{ag.name}' has no ads. "
-                "Add at least one RSA."
+                f"Rule 5 (Ad Copy): ad group '{ag.name}' has no ads. Add at least one RSA."
             )
             continue
 
@@ -496,9 +493,7 @@ def _rule_landing_page(
 
         if not result.reachable:
             msg = result.error_message or "unknown error"
-            errors.append(
-                f"Rule 6 (Landing Page): URL '{url}' is not reachable: {msg}"
-            )
+            errors.append(f"Rule 6 (Landing Page): URL '{url}' is not reachable: {msg}")
             continue  # skip timing / language checks if unreachable
 
         if result.load_time_seconds is not None and result.load_time_seconds > _MAX_LOAD_SECONDS:
@@ -509,7 +504,7 @@ def _rule_landing_page(
             )
 
         # Language check (case-insensitive, e.g. "en", "pl")
-        if result.language_detected is not None: # noqa: SIM102
+        if result.language_detected is not None:  # noqa: SIM102
             if result.language_detected.lower() != brief.language.lower():
                 errors.append(
                     f"Rule 6 (Landing Page): URL '{url}' appears to be in "
@@ -655,6 +650,7 @@ _GLOBAL_TERMS: frozenset[str] = frozenset(
         "oceania",
     }
 )
+
 
 # Countries that are larger than or equal to a "country" — targeting at
 # continent or "worldwide" level when the brief specifies a country is wrong.

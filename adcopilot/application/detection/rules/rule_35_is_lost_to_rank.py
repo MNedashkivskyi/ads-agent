@@ -20,7 +20,7 @@ from adcopilot.domain.recommendation import (
     RecommendationStatus,
 )
 
-_IS_RANK_THRESHOLD = 0.30   # > 30% IS lost to rank
+_IS_RANK_THRESHOLD = 0.30  # > 30% IS lost to rank
 
 
 class IsLostToRankRule:

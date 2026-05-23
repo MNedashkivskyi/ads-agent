@@ -1,4 +1,5 @@
 """Unit tests for brand campaign separation (Task 4.1)."""
+
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -62,6 +63,7 @@ def test_brand_budget_is_10_percent_of_daily():
 
 def test_brand_keywords_are_exact_match():
     from adcopilot.domain.launch.entities import MatchType
+
     brief = _make_brief(Decimal("1000"))  # MID
     proposal = build_proposal_from_template(brief)
     for kw in proposal.brand_keywords:
@@ -77,6 +79,7 @@ def test_proposal_post_init_sets_empty_brand_keywords():
         CampaignProposal,
         CampaignProposalId,
     )
+
     proposal = CampaignProposal(
         id=CampaignProposalId("p1"),
         brief_id=CampaignBriefId("b1"),

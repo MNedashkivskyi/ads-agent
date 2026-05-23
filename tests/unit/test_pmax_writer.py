@@ -68,9 +68,7 @@ def _make_writer() -> tuple[PMaxCampaignWriter, MagicMock]:
             )
         ),
         "CampaignService": MagicMock(
-            mutate_campaigns=MagicMock(
-                return_value=_make_response("customers/1/campaigns/200")
-            )
+            mutate_campaigns=MagicMock(return_value=_make_response("customers/1/campaigns/200"))
         ),
         "AssetGroupService": MagicMock(
             mutate_asset_groups=MagicMock(
@@ -80,9 +78,7 @@ def _make_writer() -> tuple[PMaxCampaignWriter, MagicMock]:
         "AssetService": MagicMock(
             mutate_assets=MagicMock(
                 return_value=MagicMock(
-                    results=[
-                        MagicMock(resource_name=f"customers/1/assets/{i}") for i in range(5)
-                    ]
+                    results=[MagicMock(resource_name=f"customers/1/assets/{i}") for i in range(5)]
                 )
             )
         ),
@@ -183,18 +179,18 @@ async def test_create_pmax_campaign_rolls_back_on_error() -> None:
     mock_adapter = MagicMock()
     mock_adapter.client = mock_client
 
-    with patch.object(writer, "_build_client", return_value=mock_adapter), pytest.raises((GoogleAdsUnavailable, RuntimeError)):
-            await writer.create_pmax_campaign(
-                customer_id="123",
-                refresh_token="tok",
-                proposal=_proposal(),
-            )
+    with (
+        patch.object(writer, "_build_client", return_value=mock_adapter),
+        pytest.raises((GoogleAdsUnavailable, RuntimeError)),
+    ):
+        await writer.create_pmax_campaign(
+            customer_id="123",
+            refresh_token="tok",
+            proposal=_proposal(),
+        )
 
     # Budget removal must have been attempted
-    remove_calls = [
-        call
-        for call in budget_service.mutate_campaign_budgets.call_args_list
-    ]
+    remove_calls = [call for call in budget_service.mutate_campaign_budgets.call_args_list]
     # First call: create, second call: rollback remove
     assert len(remove_calls) >= 1  # at minimum the create call happened
 

@@ -33,12 +33,21 @@ def upgrade() -> None:
         sa.Column("conv_value", sa.Float, nullable=False, server_default="0"),
         sa.Column("cpa_micros", sa.BigInteger, nullable=False, server_default="0"),
         sa.Column("ctr", sa.Float, nullable=False, server_default="0"),
-        sa.Column("captured_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "captured_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["recommendation_id"], ["recommendations.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_perf_baselines_rec_id", "recommendation_performance_baselines", ["recommendation_id"])
-    op.create_index("ix_perf_baselines_account_id", "recommendation_performance_baselines", ["account_id"])
+    op.create_index(
+        "ix_perf_baselines_rec_id", "recommendation_performance_baselines", ["recommendation_id"]
+    )
+    op.create_index(
+        "ix_perf_baselines_account_id", "recommendation_performance_baselines", ["account_id"]
+    )
 
     op.create_table(
         "recommendation_performance_comparisons",
@@ -55,16 +64,25 @@ def upgrade() -> None:
         sa.Column("delta_conversions_pct", sa.Float, nullable=False, server_default="0"),
         sa.Column("delta_ctr_pct", sa.Float, nullable=False, server_default="0"),
         sa.Column("verdict", sa.String(20), nullable=False),
-        sa.Column("compared_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column(
+            "compared_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
         sa.ForeignKeyConstraint(["recommendation_id"], ["recommendations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(
             ["baseline_id"], ["recommendation_performance_baselines.id"], ondelete="CASCADE"
         ),
-        sa.UniqueConstraint("recommendation_id", "comparison_window_days", name="uq_comparison_rec_window"),
+        sa.UniqueConstraint(
+            "recommendation_id", "comparison_window_days", name="uq_comparison_rec_window"
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        "ix_perf_comparisons_rec_id", "recommendation_performance_comparisons", ["recommendation_id"]
+        "ix_perf_comparisons_rec_id",
+        "recommendation_performance_comparisons",
+        ["recommendation_id"],
     )
 
 

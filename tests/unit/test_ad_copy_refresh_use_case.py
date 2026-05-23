@@ -35,11 +35,31 @@ def _make_rec(evidence: dict) -> Recommendation:
     )
 
 
-_SAMPLE_JSON = json.dumps([
-    {"headlines": ["Kup Teraz", "Najlepsza Cena", "Sprawdź Ofertę"], "descriptions": ["Szeroki wybór produktów dla Twojej firmy.", "Zamów online i oszczędź czas i pieniądze."]},
-    {"headlines": ["Zadzwoń Dziś", "Szybka Dostawa", "Bez Opłat"], "descriptions": ["Doradztwo 7 dni w tygodniu dla Ciebie.", "Bezpłatna wysyłka przy zamówieniu powyżej 200 zł."]},
-    {"headlines": ["Dowiedz Się Więcej", "Top Jakość", "Skontaktuj Się"], "descriptions": ["Produkty od sprawdzonych dostawców z UE.", "Zapytaj o rabat dla stałych klientów firmy."]},
-])
+_SAMPLE_JSON = json.dumps(
+    [
+        {
+            "headlines": ["Kup Teraz", "Najlepsza Cena", "Sprawdź Ofertę"],
+            "descriptions": [
+                "Szeroki wybór produktów dla Twojej firmy.",
+                "Zamów online i oszczędź czas i pieniądze.",
+            ],
+        },
+        {
+            "headlines": ["Zadzwoń Dziś", "Szybka Dostawa", "Bez Opłat"],
+            "descriptions": [
+                "Doradztwo 7 dni w tygodniu dla Ciebie.",
+                "Bezpłatna wysyłka przy zamówieniu powyżej 200 zł.",
+            ],
+        },
+        {
+            "headlines": ["Dowiedz Się Więcej", "Top Jakość", "Skontaktuj Się"],
+            "descriptions": [
+                "Produkty od sprawdzonych dostawców z UE.",
+                "Zapytaj o rabat dla stałych klientów firmy.",
+            ],
+        },
+    ]
+)
 
 
 def test_parse_proposals_returns_three_variants() -> None:
@@ -52,22 +72,32 @@ def test_parse_proposals_returns_three_variants() -> None:
 
 
 def test_parse_proposals_enforces_headline_length() -> None:
-    raw = json.dumps([
-        {"headlines": ["A" * 35, "Short", "Also Fine"], "descriptions": ["Desc one is acceptable length here.", "Desc two is also fine here."]},
-        {"headlines": ["H1", "H2", "H3"], "descriptions": ["D1", "D2"]},
-        {"headlines": ["H1", "H2", "H3"], "descriptions": ["D1", "D2"]},
-    ])
+    raw = json.dumps(
+        [
+            {
+                "headlines": ["A" * 35, "Short", "Also Fine"],
+                "descriptions": [
+                    "Desc one is acceptable length here.",
+                    "Desc two is also fine here.",
+                ],
+            },
+            {"headlines": ["H1", "H2", "H3"], "descriptions": ["D1", "D2"]},
+            {"headlines": ["H1", "H2", "H3"], "descriptions": ["D1", "D2"]},
+        ]
+    )
     proposals = _parse_proposals(raw, "https://x.com")
     assert len(proposals[0].headlines[0]) <= 30
 
 
 def test_parse_proposals_enforces_description_length() -> None:
     long_desc = "X" * 100
-    raw = json.dumps([
-        {"headlines": ["H1", "H2", "H3"], "descriptions": [long_desc, "Short desc."]},
-        {"headlines": ["H1", "H2", "H3"], "descriptions": ["D1", "D2"]},
-        {"headlines": ["H1", "H2", "H3"], "descriptions": ["D1", "D2"]},
-    ])
+    raw = json.dumps(
+        [
+            {"headlines": ["H1", "H2", "H3"], "descriptions": [long_desc, "Short desc."]},
+            {"headlines": ["H1", "H2", "H3"], "descriptions": ["D1", "D2"]},
+            {"headlines": ["H1", "H2", "H3"], "descriptions": ["D1", "D2"]},
+        ]
+    )
     proposals = _parse_proposals(raw, "")
     assert len(proposals[0].descriptions[0]) <= 90
 
@@ -91,14 +121,16 @@ async def test_execute_returns_three_proposals() -> None:
     prompt_repo.get_latest.return_value = pv
 
     use_case = AdCopyRefreshUseCase(llm=llm, prompt_repo=prompt_repo)
-    rec = _make_rec({
-        "campaign_name": "Sklep Sportowy",
-        "vertical": "sport",
-        "keyword_themes": "buty biegowe",
-        "headlines": ["Biegnij Szybciej"],
-        "descriptions": ["Najlepsze buty na rynku."],
-        "final_url": "https://sklep.pl",
-    })
+    rec = _make_rec(
+        {
+            "campaign_name": "Sklep Sportowy",
+            "vertical": "sport",
+            "keyword_themes": "buty biegowe",
+            "headlines": ["Biegnij Szybciej"],
+            "descriptions": ["Najlepsze buty na rynku."],
+            "final_url": "https://sklep.pl",
+        }
+    )
     proposals = await use_case.execute(rec)
     assert len(proposals) == 3
     assert proposals[0].final_url == "https://sklep.pl"
@@ -111,7 +143,9 @@ async def test_execute_wraps_missing_prompt_evidence_gracefully() -> None:
 
     prompt_repo = AsyncMock()
     pv = MagicMock()
-    pv.content = "{campaign_name} {vertical} {keyword_themes} {existing_headlines} {existing_descriptions}"
+    pv.content = (
+        "{campaign_name} {vertical} {keyword_themes} {existing_headlines} {existing_descriptions}"
+    )
     prompt_repo.get_latest.return_value = pv
 
     use_case = AdCopyRefreshUseCase(llm=llm, prompt_repo=prompt_repo)

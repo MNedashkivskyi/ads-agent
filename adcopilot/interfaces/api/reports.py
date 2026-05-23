@@ -121,11 +121,15 @@ async def generate_report(
             await session.commit()
 
             row = (
-                await session.execute(
-                    text("SELECT * FROM performance_reports WHERE id = :id"),
-                    {"id": str(report_id)},
+                (
+                    await session.execute(
+                        text("SELECT * FROM performance_reports WHERE id = :id"),
+                        {"id": str(report_id)},
+                    )
                 )
-            ).mappings().one()
+                .mappings()
+                .one()
+            )
     finally:
         await engine.dispose()
 
@@ -158,14 +162,18 @@ async def list_reports(
     try:
         async with AsyncSession(engine) as session:
             rows = (
-                await session.execute(
-                    text(
-                        "SELECT id, user_id, account_id, period_start, period_end, summary_pl, created_at "
-                        "FROM performance_reports WHERE user_id = :user_id ORDER BY created_at DESC"
-                    ),
-                    {"user_id": user_id},
+                (
+                    await session.execute(
+                        text(
+                            "SELECT id, user_id, account_id, period_start, period_end, summary_pl, created_at "
+                            "FROM performance_reports WHERE user_id = :user_id ORDER BY created_at DESC"
+                        ),
+                        {"user_id": user_id},
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
     finally:
         await engine.dispose()
 
@@ -203,14 +211,18 @@ async def get_report(
     try:
         async with AsyncSession(engine) as session:
             row = (
-                await session.execute(
-                    text(
-                        "SELECT id, user_id, account_id, period_start, period_end, summary_pl, created_at "
-                        "FROM performance_reports WHERE id = :id AND user_id = :user_id"
-                    ),
-                    {"id": report_id, "user_id": user_id},
+                (
+                    await session.execute(
+                        text(
+                            "SELECT id, user_id, account_id, period_start, period_end, summary_pl, created_at "
+                            "FROM performance_reports WHERE id = :id AND user_id = :user_id"
+                        ),
+                        {"id": report_id, "user_id": user_id},
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
     finally:
         await engine.dispose()
 
@@ -247,13 +259,17 @@ async def download_report(
     try:
         async with AsyncSession(engine) as session:
             row = (
-                await session.execute(
-                    text(
-                        "SELECT pdf_bytes FROM performance_reports WHERE id = :id AND user_id = :user_id"
-                    ),
-                    {"id": report_id, "user_id": user_id},
+                (
+                    await session.execute(
+                        text(
+                            "SELECT pdf_bytes FROM performance_reports WHERE id = :id AND user_id = :user_id"
+                        ),
+                        {"id": report_id, "user_id": user_id},
+                    )
                 )
-            ).mappings().one_or_none()
+                .mappings()
+                .one_or_none()
+            )
     finally:
         await engine.dispose()
 

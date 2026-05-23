@@ -11,7 +11,9 @@ from adcopilot.domain.conversion_audit import ConversionActionHealth, Conversion
 from adcopilot.domain.entities import AccountId
 
 
-def _make_audit_result(overall: ConversionActionHealth = ConversionActionHealth.HEALTHY) -> ConversionAuditResult:
+def _make_audit_result(
+    overall: ConversionActionHealth = ConversionActionHealth.HEALTHY,
+) -> ConversionAuditResult:
     from adcopilot.domain.conversion_audit import ConversionActionStatus
 
     return ConversionAuditResult(
@@ -33,6 +35,7 @@ def _make_audit_result(overall: ConversionActionHealth = ConversionActionHealth.
 @pytest.fixture
 def test_client() -> TestClient:
     from adcopilot.main import create_app
+
     app = create_app()
     return TestClient(app, raise_server_exceptions=False)
 
@@ -42,6 +45,7 @@ def _auth_headers(user_id: str = "user-123") -> dict:
     from jose import jwt
 
     from adcopilot.config import get_settings
+
     settings = get_settings()
     token = jwt.encode({"sub": user_id}, settings.SECRET_KEY, algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}

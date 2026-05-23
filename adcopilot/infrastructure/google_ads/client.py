@@ -118,9 +118,7 @@ class GoogleAdsClientAdapter:
                 FROM customer
                 LIMIT 1
             """
-            response = ga_service.search(
-                customer_id=customer_id.replace("-", ""), query=query
-            )
+            response = ga_service.search(customer_id=customer_id.replace("-", ""), query=query)
             for row in response:
                 return CustomerInfo(
                     descriptive_name=row.customer.descriptive_name,

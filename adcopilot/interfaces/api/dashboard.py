@@ -68,9 +68,7 @@ async def get_performance(
                     text("SUM(conversions) AS total_conversions"),
                 )
                 .where(
-                    CampaignSnapshotModel.account_id.in_(
-                        [uuid.UUID(aid) for aid in account_ids]
-                    ),
+                    CampaignSnapshotModel.account_id.in_([uuid.UUID(aid) for aid in account_ids]),
                     CampaignSnapshotModel.snapshot_date >= since,
                 )
                 .group_by(CampaignSnapshotModel.snapshot_date)
