@@ -10,7 +10,6 @@ import pytest
 
 from adcopilot.domain.notification import Notification, NotificationId, NotificationType
 
-
 # ---------------------------------------------------------------------------
 # In-memory stub implementations
 # ---------------------------------------------------------------------------

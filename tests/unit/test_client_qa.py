@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 def _jwt(user_id: str = "user-123") -> dict:
     from jose import jwt
+
     from adcopilot.config import get_settings
     token = jwt.encode({"sub": user_id}, get_settings().SECRET_KEY, algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}
@@ -88,6 +89,7 @@ def test_ask_response_schema() -> None:
 
 def test_ask_request_rejects_empty_question() -> None:
     from pydantic import ValidationError
+
     from adcopilot.interfaces.api.qa import AskRequest
     with pytest.raises(ValidationError):
         AskRequest(question="")
@@ -95,6 +97,7 @@ def test_ask_request_rejects_empty_question() -> None:
 
 def test_ask_request_rejects_too_long_question() -> None:
     from pydantic import ValidationError
+
     from adcopilot.interfaces.api.qa import AskRequest
     with pytest.raises(ValidationError):
         AskRequest(question="x" * 501)

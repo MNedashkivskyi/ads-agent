@@ -92,6 +92,7 @@ async def _fetch_current_metrics(
     session: AsyncSession,
 ) -> QSMetrics:
     from sqlalchemy import select, text
+
     from adcopilot.infrastructure.db.models import KeywordSnapshotModel
 
     if not plan.keyword_criterion_ids:
@@ -153,12 +154,13 @@ async def _generate_evaluation_summary(
 
 async def _send_notification(plan: QSImprovementPlan, session: AsyncSession) -> None:
     try:
+        import uuid
+        from datetime import UTC, datetime
+
+        from adcopilot.domain.notification import Notification, NotificationId, NotificationType
         from adcopilot.infrastructure.db.repositories.notification_repository import (
             NotificationRepository,
         )
-        from adcopilot.domain.notification import Notification, NotificationId, NotificationType
-        import uuid
-        from datetime import UTC, datetime
 
         repo = NotificationRepository(session)
         status_pl = "zakończony sukcesem" if plan.status == QSPlanStatus.COMPLETED else "nieudany"

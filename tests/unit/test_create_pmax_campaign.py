@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from adcopilot.application.ports.campaign_writer import CreatedPMaxResources
 from adcopilot.application.ports.google_ads import MerchantCenterLink
 from adcopilot.application.use_cases.create_pmax_campaign import (
     CreatePMaxCampaignInput,
     CreatePMaxCampaignUseCase,
-    _parse_assets,
     _audience_signal_names,
+    _parse_assets,
     _truncate,
 )
-from adcopilot.application.ports.campaign_writer import CreatedPMaxResources
-
 
 # ---------------------------------------------------------------------------
 # Helpers

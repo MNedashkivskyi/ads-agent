@@ -1,12 +1,12 @@
 """Unit tests for AddRlsaAudiencesUseCase."""
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from adcopilot.application.use_cases.add_rlsa_audiences import AddRlsaAudiencesUseCase
 from adcopilot.domain.snapshot import RemarketingListInfo
-
 
 _ACCOUNT_ID = "acc-1"
 _REFRESH_TOKEN = "token"

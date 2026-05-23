@@ -7,11 +7,15 @@ from typing import Any
 
 import structlog
 
-from adcopilot.application.ports.performance_baseline_repository import PerformanceBaselineRepository
-from adcopilot.application.ports.performance_comparison_repository import PerformanceComparisonRepository
+from adcopilot.application.ports.performance_baseline_repository import (
+    PerformanceBaselineRepository,
+)
+from adcopilot.application.ports.performance_comparison_repository import (
+    PerformanceComparisonRepository,
+)
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.domain.performance_tracking import PerformanceComparison
-from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+from adcopilot.domain.recommendation import RecommendationId
 
 logger = structlog.get_logger(__name__)
 

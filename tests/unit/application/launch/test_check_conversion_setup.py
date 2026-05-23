@@ -1,11 +1,11 @@
 """Unit tests for conversion tracking check logic."""
+from datetime import date
+
 from adcopilot.application.use_cases.launch.check_conversion_setup import (
     has_macro_conversion_tracking,
 )
-from adcopilot.domain.snapshot import ConversionActionSnapshot
 from adcopilot.domain.entities import AccountId
-from adcopilot.domain.snapshot import SnapshotId
-from datetime import date
+from adcopilot.domain.snapshot import ConversionActionSnapshot, SnapshotId
 
 
 def _make_ca(category: str, status: str = "ENABLED", include: bool = True) -> ConversionActionSnapshot:

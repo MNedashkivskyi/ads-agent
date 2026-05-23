@@ -8,6 +8,7 @@ Timeout: 5 seconds. If the page takes longer, validation passes with a warning.
 
 from __future__ import annotations
 
+import contextlib
 import re
 import time
 from html.parser import HTMLParser
@@ -133,10 +134,8 @@ class LandingPageChecker:
             lang = _extract_language(html)
 
             parser = _ContentExtractor()
-            try:
+            with contextlib.suppress(Exception):
                 parser.feed(html)
-            except Exception:
-                pass  # partial parse is fine
 
             return LandingPageCheckResult(
                 url=url,

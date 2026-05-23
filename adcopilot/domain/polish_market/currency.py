@@ -29,10 +29,7 @@ def format_pln(amount: float | int | Decimal) -> str:
     # Format thousands with non-breaking spaces
     whole_str = f"{whole:,}".replace(",", _NBSP)
 
-    if cents == 0:
-        formatted = f"{whole_str} zł"
-    else:
-        formatted = f"{whole_str},{cents:02d} zł"
+    formatted = f"{whole_str} zł" if cents == 0 else f"{whole_str},{cents:02d} zł"
 
     return f"-{formatted}" if negative else formatted
 

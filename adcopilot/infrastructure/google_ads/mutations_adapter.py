@@ -561,7 +561,6 @@ class GoogleAdsMutationsAdapter:
             cid = customer_id.replace("-", "")
             ga_service = client.get_service("GoogleAdsService")
             campaign_criterion_service = client.get_service("CampaignCriterionService")
-            match_type_enum = getattr(client.enums.KeywordMatchTypeEnum, match_type, None)
             query = (
                 f"SELECT campaign_criterion.resource_name FROM campaign_criterion "
                 f"WHERE campaign_criterion.campaign = 'customers/{cid}/campaigns/{campaign_id}' "

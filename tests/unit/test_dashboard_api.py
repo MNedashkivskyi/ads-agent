@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from jose import jwt
 
@@ -24,8 +24,9 @@ def _make_token(user_id: str, secret: str = _SECRET, expired: bool = False) -> s
 
 
 def test_get_current_user_valid_token() -> None:
-    from adcopilot.interfaces.api.auth_middleware import get_current_user
     from fastapi.security import HTTPAuthorizationCredentials
+
+    from adcopilot.interfaces.api.auth_middleware import get_current_user
 
     settings = MagicMock()
     settings.SECRET_KEY = _SECRET
@@ -47,8 +48,9 @@ def test_get_current_user_missing_token_raises_401() -> None:
 
 
 def test_get_current_user_expired_token_raises_401() -> None:
-    from adcopilot.interfaces.api.auth_middleware import get_current_user
     from fastapi.security import HTTPAuthorizationCredentials
+
+    from adcopilot.interfaces.api.auth_middleware import get_current_user
 
     settings = MagicMock()
     settings.SECRET_KEY = _SECRET
@@ -62,8 +64,9 @@ def test_get_current_user_expired_token_raises_401() -> None:
 
 
 def test_get_current_user_malformed_token_raises_401() -> None:
-    from adcopilot.interfaces.api.auth_middleware import get_current_user
     from fastapi.security import HTTPAuthorizationCredentials
+
+    from adcopilot.interfaces.api.auth_middleware import get_current_user
 
     settings = MagicMock()
     settings.SECRET_KEY = _SECRET
@@ -75,8 +78,9 @@ def test_get_current_user_malformed_token_raises_401() -> None:
 
 
 def test_get_current_user_wrong_secret_raises_401() -> None:
-    from adcopilot.interfaces.api.auth_middleware import get_current_user
     from fastapi.security import HTTPAuthorizationCredentials
+
+    from adcopilot.interfaces.api.auth_middleware import get_current_user
 
     settings = MagicMock()
     settings.SECRET_KEY = "different-secret"
@@ -94,10 +98,8 @@ def test_get_current_user_wrong_secret_raises_401() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _build_app() -> "FastAPI":
+def _build_app() -> FastAPI:
     """Build a minimal FastAPI app with the dashboard router for testing."""
-    from fastapi import FastAPI
-
     from adcopilot.interfaces.api.dashboard import router
 
     app = FastAPI()
@@ -113,8 +115,9 @@ def _auth_header(user_id: str, secret: str = _SECRET) -> dict[str, str]:
 def client_and_override():
     """TestClient with get_settings overridden to avoid real DB."""
     from fastapi import FastAPI
-    from adcopilot.interfaces.api.dashboard import router
+
     from adcopilot.config import get_settings
+    from adcopilot.interfaces.api.dashboard import router
 
     app = FastAPI()
     app.include_router(router)

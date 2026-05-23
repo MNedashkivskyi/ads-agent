@@ -28,10 +28,12 @@ class AdCopyRefreshExecutor:
         self._prompt_repo = prompt_repo
 
     @classmethod
-    def from_settings(cls, settings: Any) -> "AdCopyRefreshExecutor":
+    def from_settings(cls, settings: Any) -> AdCopyRefreshExecutor:
         """Create executor with fresh LLM client and a lazy prompt repo (own session per call)."""
+        from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
+            _LazyPromptRepo,
+        )
         from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
-        from adcopilot.infrastructure.db.repositories.prompt_version_repository import _LazyPromptRepo
         return cls(llm=AnthropicClient(api_key=settings.LLM_API_KEY), prompt_repo=_LazyPromptRepo(settings))  # type: ignore[arg-type]
 
     async def execute(

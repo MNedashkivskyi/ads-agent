@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from adcopilot.domain.performance_tracking import PerformanceBaseline, PerformanceBaselineId
+from adcopilot.domain.performance_tracking import PerformanceBaseline
 from adcopilot.domain.recommendation import RecommendationId
 
 

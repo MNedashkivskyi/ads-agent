@@ -45,7 +45,6 @@ async def get_ad_proposals(
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.application.use_cases.refresh_ad_copy import AdCopyRefreshUseCase
-    from adcopilot.domain.entities import AccountId
     from adcopilot.domain.recommendation import RecommendationId, RecommendationKind
     from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
         SqlPromptVersionRepository,
@@ -102,7 +101,7 @@ async def approve_ad_proposal(
     rec_id: str,
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
-    body: ApproveProposalRequest = ApproveProposalRequest(),
+    body: ApproveProposalRequest = ApproveProposalRequest(),  # noqa: B008
 ) -> ApproveProposalResponse:
     """Approve an ad copy proposal.
 

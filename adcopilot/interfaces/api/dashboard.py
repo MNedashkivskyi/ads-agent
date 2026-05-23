@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Annotated, Any
 
 import structlog
@@ -189,7 +189,7 @@ async def get_campaigns_structure(
     user_id: str,
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
-    snapshot_date: date | None = Query(default=None, description="ISO date, defaults to today"),
+    snapshot_date: date | None = Query(default=None, description="ISO date, defaults to today"),  # noqa: B008
 ) -> dict[str, Any]:
     """Return campaign → ad group → keyword tree with current status and key metrics."""
     if current_user != user_id:

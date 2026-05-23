@@ -60,7 +60,7 @@ async def test_ad_group_level_removal() -> None:
         target={"criterion_id": "999", "campaign_id": "10", "ad_group_id": "20"},
         evidence={"conflict_scope": "ad_group", "negative_keyword_text": "free", "negative_match_type": "BROAD"},
     )
-    result = await RemoveNegativeConflictExecutor().execute(rec, mutations, "token", "cid")
+    await RemoveNegativeConflictExecutor().execute(rec, mutations, "token", "cid")
 
     call = mutations.calls[0]
     assert call["method"] == "remove_ad_group_negative_keyword"

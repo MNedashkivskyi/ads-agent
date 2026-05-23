@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 def _jwt(user_id: str = "user-123") -> dict:
     from jose import jwt
+
     from adcopilot.config import get_settings
     token = jwt.encode({"sub": user_id}, get_settings().SECRET_KEY, algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}
@@ -33,8 +34,12 @@ def test_score_denies_wrong_user(client: TestClient) -> None:
 
 
 def test_score_response_schema() -> None:
-    from adcopilot.interfaces.api.landing_page import LandingPageScoreResponse, CoreWebVitalsResponse
     from datetime import UTC, datetime
+
+    from adcopilot.interfaces.api.landing_page import (
+        CoreWebVitalsResponse,
+        LandingPageScoreResponse,
+    )
 
     r = LandingPageScoreResponse(
         url="https://example.com",

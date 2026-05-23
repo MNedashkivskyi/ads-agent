@@ -9,7 +9,6 @@ import pytest
 
 from adcopilot.domain.benchmarking import AccountMetrics, VerticalBenchmarkSnapshot
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -9,11 +9,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from adcopilot.config import get_settings
 from adcopilot.domain.snapshot import CampaignSnapshot
 from adcopilot.interfaces.api.auth_middleware import get_current_user
 from adcopilot.interfaces.api.pmax import router
-from adcopilot.config import get_settings
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -89,9 +88,10 @@ def _infra_patches(account=None, creds=None):
     mock_engine = MagicMock()
     mock_engine.dispose = AsyncMock()
 
+    import sqlalchemy.ext.asyncio as sqla_async
+
     import adcopilot.infrastructure.db.repositories.google_ads_account_repository as acct_mod
     import adcopilot.infrastructure.db.repositories.oauth_credentials_repository as oauth_mod
-    import sqlalchemy.ext.asyncio as sqla_async
 
     mock_account_repo = AsyncMock()
     mock_account_repo.get = AsyncMock(return_value=account)
@@ -115,16 +115,6 @@ def _infra_patches(account=None, creds=None):
 async def test_get_campaigns_date_range_filters_by_channel_type():
     """The endpoint returns only PERFORMANCE_MAX campaigns."""
     from adcopilot.infrastructure.db.repositories.snapshot_repository import SqlSnapshotRepository
-
-    pmax_snap = _mock_pmax_snap()
-    search_snap = CampaignSnapshot(
-        id="snap-2", account_id=_ACCOUNT_UUID,
-        snapshot_date=date(2026, 5, 19), campaign_id=2,
-        name="Search", status="ENABLED", channel_type="SEARCH",
-        budget_micros=0, bidding_strategy="MANUAL_CPC",
-        impressions=100, clicks=5, cost_micros=1_000_000,
-        conversions=0.0, conv_value=0.0,
-    )
 
     session = AsyncMock()
     scalars = MagicMock()

@@ -43,7 +43,6 @@ class CampaignFragmentationRule:
             return []
 
         campaign_ids = [str(getattr(c, "campaign_id", c)) for c in low_traffic]
-        campaign_names = [getattr(c, "name", str(getattr(c, "campaign_id", ""))) for c in low_traffic]
         total_spend = sum(getattr(c, "cost_micros", 0) or 0 for c in low_traffic)
         # Estimated saving: consolidating campaigns typically lowers CPC by ~15 %
         estimated_savings = int(total_spend * 0.15)

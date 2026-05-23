@@ -12,7 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from adcopilot.application.ports.llm import LLMClient
 from adcopilot.application.ports.prompt_version_repository import PromptVersionRepository
 from adcopilot.application.use_cases.get_latest_prompt import get_latest_prompt
-from adcopilot.infrastructure.db.models import QSImprovementPlanModel, RecommendationModel, SnapshotRunModel
+from adcopilot.infrastructure.db.models import (
+    QSImprovementPlanModel,
+    RecommendationModel,
+)
 
 logger = structlog.get_logger(__name__)
 

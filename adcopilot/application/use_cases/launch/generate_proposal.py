@@ -20,15 +20,15 @@ from datetime import UTC, datetime
 
 import structlog
 
+from adcopilot.application.detection.validation import LandingPageCheckResult as DetectionLPResult
+from adcopilot.application.detection.validation import ValidationContext, validate_proposal
 from adcopilot.application.ports.launch_repositories import (
     CampaignBriefRepo,
     CampaignProposalRepo,
 )
-from adcopilot.application.detection.validation import LandingPageCheckResult as DetectionLPResult, ValidationContext
 from adcopilot.domain.exceptions import LLMError
 from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
 from adcopilot.domain.launch.entities import CampaignBrief, CampaignProposal, LaunchStatus
-from adcopilot.application.detection.validation import validate_proposal
 from adcopilot.domain.launch.templates import build_proposal_from_template
 from adcopilot.infrastructure.llm.campaign_generator import BrandCampaignResponse, CampaignGenerator
 
@@ -36,9 +36,9 @@ logger = structlog.get_logger(__name__)
 
 
 def _apply_seasonal_multiplier(
-    proposal: "CampaignProposal",
+    proposal: CampaignProposal,
     vertical: str,
-) -> "tuple[CampaignProposal, float]":
+) -> tuple[CampaignProposal, float]:
     """Adjust proposal's daily_budget_micros by the Polish market seasonal multiplier.
 
     Returns (updated_proposal, multiplier). Defaults to 1.0 on any error.
@@ -64,9 +64,9 @@ def _apply_seasonal_multiplier(
 
 
 def _run_compliance_validators(
-    proposal: "CampaignProposal",
+    proposal: CampaignProposal,
     vertical: str,
-) -> "CampaignProposal":
+) -> CampaignProposal:
     """Run Polish advertising compliance validators and attach warnings to proposal."""
     try:
         from adcopilot.domain.polish_market.compliance_validators import validate_ad_copy
@@ -89,9 +89,9 @@ def _run_compliance_validators(
 
 
 def _apply_purchasing_power(
-    proposal: "CampaignProposal",
+    proposal: CampaignProposal,
     location: str,
-) -> "CampaignProposal":
+) -> CampaignProposal:
     """Scale proposal's daily_budget_micros by the voivodeship purchasing power index."""
     try:
         from adcopilot.domain.polish_market.voivodeship_data import get_purchasing_power_for_city
@@ -327,7 +327,10 @@ class GenerateCampaignProposalUseCase:
 
     async def _build_validation_context(self, proposal: CampaignProposal) -> ValidationContext:
         """Probe landing page URLs and build a ValidationContext with the results."""
-        from adcopilot.infrastructure.landing_page.checker import LandingPageChecker, LandingPageCheckResult as InfraLPResult
+        from adcopilot.infrastructure.landing_page.checker import LandingPageChecker
+        from adcopilot.infrastructure.landing_page.checker import (
+            LandingPageCheckResult as InfraLPResult,
+        )
 
         urls: set[str] = set()
         for ag in proposal.ad_groups:

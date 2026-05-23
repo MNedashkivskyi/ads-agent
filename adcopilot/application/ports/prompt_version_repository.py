@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol
 
-from adcopilot.domain.prompt_version import PromptVersion, PromptVersionId
+from adcopilot.domain.prompt_version import PromptVersion
 
 
 class PromptVersionRepository(Protocol):

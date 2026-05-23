@@ -48,7 +48,7 @@ class PerformanceBaseline:
         conversions: float,
         conv_value: float,
         captured_at: datetime,
-    ) -> "PerformanceBaseline":
+    ) -> PerformanceBaseline:
         cpa_micros = int(cost_micros / conversions) if conversions > 0 else 0
         ctr = clicks / impressions if impressions > 0 else 0.0
         return cls(
@@ -97,7 +97,7 @@ class PerformanceComparison:
         current_impressions: int,
         current_conversions: float,
         compared_at: datetime,
-    ) -> "PerformanceComparison":
+    ) -> PerformanceComparison:
         current_cpa_micros = int(current_cost_micros / current_conversions) if current_conversions > 0 else 0
         current_ctr = current_clicks / current_impressions if current_impressions > 0 else 0.0
 

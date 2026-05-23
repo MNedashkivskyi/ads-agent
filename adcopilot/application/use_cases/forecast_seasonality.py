@@ -126,10 +126,7 @@ async def forecast_seasonality(
         current_multiplier = _MONTHLY_MULTIPLIERS.get(d.month, 1.0)
 
         # Determine next month
-        if d.month == 12:
-            next_month_num = 1
-        else:
-            next_month_num = d.month + 1
+        next_month_num = 1 if d.month == 12 else d.month + 1
         next_multiplier = _MONTHLY_MULTIPLIERS.get(next_month_num, 1.0)
 
         event_type: str | None = None

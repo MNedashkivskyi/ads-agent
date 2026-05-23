@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import date
 
-
 # Fixed-date Polish public holidays (month, day).
 # Easter Monday is computed separately — see `get_easter_monday`.
 POLISH_FIXED_HOLIDAYS: list[tuple[int, int]] = [

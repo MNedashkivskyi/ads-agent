@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 def _jwt(user_id: str = "user-123") -> dict:
     from jose import jwt
+
     from adcopilot.config import get_settings
     token = jwt.encode({"sub": user_id}, get_settings().SECRET_KEY, algorithm="HS256")
     return {"Authorization": f"Bearer {token}"}

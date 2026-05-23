@@ -32,32 +32,32 @@ def create_app() -> FastAPI:
     from slowapi.errors import RateLimitExceeded
     from slowapi.middleware import SlowAPIMiddleware
 
+    from adcopilot.interfaces.api.account_structure import router as account_structure_router
     from adcopilot.interfaces.api.accounts import router as accounts_router
+    from adcopilot.interfaces.api.ad_proposals import router as ad_proposals_router
+    from adcopilot.interfaces.api.admin import router as admin_router
+    from adcopilot.interfaces.api.audiences import router as audiences_router
     from adcopilot.interfaces.api.auth import router as auth_router
-    from adcopilot.interfaces.api.dashboard import router as dashboard_router
     from adcopilot.interfaces.api.billing import router as billing_router
+    from adcopilot.interfaces.api.conversion_tracking import router as conversion_tracking_router
+    from adcopilot.interfaces.api.dashboard import router as dashboard_router
     from adcopilot.interfaces.api.debug import router as debug_router
     from adcopilot.interfaces.api.digest import router as digest_router
-    from adcopilot.interfaces.api.ad_proposals import router as ad_proposals_router
-    from adcopilot.interfaces.api.landing_page import router as landing_page_router
-    from adcopilot.interfaces.api.qa import router as qa_router
-    from adcopilot.interfaces.api.insights import router as insights_router
-    from adcopilot.interfaces.api.admin import router as admin_router
-    from adcopilot.interfaces.api.pmax import router as pmax_router
-    from adcopilot.interfaces.api.quality_score import router as quality_score_router
-    from adcopilot.interfaces.api.audiences import router as audiences_router
-    from adcopilot.interfaces.api.conversion_tracking import router as conversion_tracking_router
     from adcopilot.interfaces.api.experiments import router as experiments_router
-    from adcopilot.interfaces.api.search_terms import router as search_terms_router
-    from adcopilot.interfaces.api.notifications import router as notifications_router
+    from adcopilot.interfaces.api.insights import router as insights_router
+    from adcopilot.interfaces.api.landing_page import router as landing_page_router
     from adcopilot.interfaces.api.launch import router as launch_router
+    from adcopilot.interfaces.api.notifications import router as notifications_router
     from adcopilot.interfaces.api.oauth import router as oauth_router
+    from adcopilot.interfaces.api.pmax import router as pmax_router
+    from adcopilot.interfaces.api.qa import router as qa_router
+    from adcopilot.interfaces.api.qs_improvement import router as qs_improvement_router
+    from adcopilot.interfaces.api.quality_score import router as quality_score_router
+    from adcopilot.interfaces.api.reports import router as reports_router
+    from adcopilot.interfaces.api.search_terms import router as search_terms_router
+    from adcopilot.interfaces.api.seasonality import router as seasonality_router
     from adcopilot.interfaces.api.snapshots import router as snapshots_router
     from adcopilot.interfaces.api.users import router as users_router
-    from adcopilot.interfaces.api.qs_improvement import router as qs_improvement_router
-    from adcopilot.interfaces.api.reports import router as reports_router
-    from adcopilot.interfaces.api.account_structure import router as account_structure_router
-    from adcopilot.interfaces.api.seasonality import router as seasonality_router
     from adcopilot.rate_limit import limiter
     from adcopilot.security import PathPrefixRateLimitMiddleware
 

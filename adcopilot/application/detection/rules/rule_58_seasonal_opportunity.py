@@ -8,7 +8,7 @@ capture elevated demand.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 
 from adcopilot.application.detection.base import DetectionContext
 from adcopilot.domain.recommendation import (

@@ -1,10 +1,8 @@
 """Unit tests for landing page relevance validation rule (Rule 6b)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-
-import pytest
 
 from adcopilot.application.detection.validation import (
     LandingPageCheckResult,
@@ -22,7 +20,7 @@ from adcopilot.domain.launch.entities import (
 )
 
 _URL = "https://example.com/"
-_NOW = datetime(2024, 1, 1, tzinfo=timezone.utc)
+_NOW = datetime(2024, 1, 1, tzinfo=UTC)
 
 
 def _make_brief() -> CampaignBrief:

@@ -19,9 +19,9 @@ import json
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from unittest.mock import AsyncMock, patch
 
 from adcopilot.application.use_cases.launch.generate_proposal import (
     GenerateCampaignProposalUseCase,

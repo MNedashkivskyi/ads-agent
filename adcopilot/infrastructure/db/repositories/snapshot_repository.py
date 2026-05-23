@@ -1169,8 +1169,9 @@ class SqlSnapshotRepository:
         self, account_id: AccountId, start_date: date, end_date: date
     ) -> list[dict]:
         """Return raw auction insights rows as dicts for competitive rules."""
-        from adcopilot.infrastructure.db.models import AuctionInsightsSnapshotModel
         from sqlalchemy import select
+
+        from adcopilot.infrastructure.db.models import AuctionInsightsSnapshotModel
 
         acct_uuid = uuid.UUID(account_id)
         res = await self._session.execute(

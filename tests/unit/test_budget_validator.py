@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-import pytest
-
 from adcopilot.domain.polish_market.budget_validator import validate_budget
 
 

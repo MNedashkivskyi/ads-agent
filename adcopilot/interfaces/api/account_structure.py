@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import Annotated
 
 import structlog
@@ -55,7 +54,6 @@ class AccountStructureResponse(BaseModel):
 
 async def _get_account_id_for_user(user_id: str, settings: Settings) -> str:
     """Return the UUID of the first Google Ads account linked to user_id."""
-    from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.domain.entities import UserId

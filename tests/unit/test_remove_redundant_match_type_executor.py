@@ -7,7 +7,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from adcopilot.application.executors.remove_redundant_match_type import RemoveRedundantMatchTypeExecutor
+from adcopilot.application.executors.remove_redundant_match_type import (
+    RemoveRedundantMatchTypeExecutor,
+)
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.recommendation import (
     Recommendation,
@@ -60,7 +62,7 @@ async def test_pauses_broad_when_phrase_exists() -> None:
         target={"ad_group_id": "50", "criterion_id": "88"},
         evidence={"keyword_text": "buty sportowe", "redundant_match_type": "BROAD", "kept_match_type": "PHRASE"},
     )
-    result = await RemoveRedundantMatchTypeExecutor().execute(rec, mutations, "token", "cid")
+    await RemoveRedundantMatchTypeExecutor().execute(rec, mutations, "token", "cid")
     assert mutations.calls[0]["method"] == "pause_keyword"
 
 

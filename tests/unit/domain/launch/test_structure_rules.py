@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
-
-import pytest
-
 from adcopilot.domain.launch.budget_tier import BudgetTier
 from adcopilot.domain.launch.structure_rules import (
     TIER_CONFIGS,
-    TierStructureConfig,
     build_structure_prompt_fragment,
     get_structure_config,
 )

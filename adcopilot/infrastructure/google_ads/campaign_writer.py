@@ -22,7 +22,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from adcopilot.domain.launch.entities import RemarketingCampaignProposal
 
 import structlog
 
@@ -33,7 +36,6 @@ from adcopilot.domain.audit_log import AuditLog, AuditLogId
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
 from adcopilot.domain.launch.audience_signals import AudienceSignal
-from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -44,6 +46,7 @@ from adcopilot.domain.launch.entities import (
     SitelinkProposal,
     StructuredSnippetProposal,
 )
+from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
 from adcopilot.domain.recommendation import RecommendationId
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
 
@@ -513,7 +516,7 @@ class CampaignWriter:
 
             # Link assets to campaign
             ca_ops: list[Any] = []
-            for asset_rn, field_type in zip(asset_rns, field_types):
+            for asset_rn, field_type in zip(asset_rns, field_types, strict=False):
                 op = client.get_type("CampaignAssetOperation")
                 ca = op.create
                 ca.campaign = campaign_resource_name
@@ -627,7 +630,7 @@ class CampaignWriter:
         self,
         customer_id: str,
         refresh_token: str,
-        proposal: "CampaignProposal",
+        proposal: CampaignProposal,
     ) -> tuple[str, str]:
         """Create a separate Brand Search campaign (MAXIMIZE_CLICKS, exact-match brand keywords).
 
@@ -800,14 +803,12 @@ class CampaignWriter:
         self,
         customer_id: str,
         refresh_token: str,
-        proposal: "RemarketingCampaignProposal",
+        proposal: RemarketingCampaignProposal,
     ) -> tuple[str, str]:
         """Create a PAUSED Display Remarketing campaign + shared budget.
 
         Returns (campaign_resource_name, budget_resource_name).
         """
-        from adcopilot.domain.launch.entities import RemarketingCampaignProposal  # noqa: F401
-
         try:
             client = self._build_client(refresh_token)
             cid = self._cid(customer_id)

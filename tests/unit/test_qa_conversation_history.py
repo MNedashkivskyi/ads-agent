@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -12,7 +12,6 @@ from adcopilot.infrastructure.db.repositories.qa_conversation_repository import 
     QaConversation,
     SqlQaConversationRepository,
 )
-
 
 # ---------------------------------------------------------------------------
 # Repository unit tests
@@ -31,7 +30,7 @@ def _make_model(
     m.question = question
     m.answer = answer
     m.context_snapshot = {"summary": {"spend": 100.0}}
-    m.created_at = datetime(2026, 5, 19, 8, 0, tzinfo=timezone.utc)
+    m.created_at = datetime(2026, 5, 19, 8, 0, tzinfo=UTC)
     return m
 
 
@@ -122,7 +121,7 @@ def _mock_qa_history_items() -> list[QaConversation]:
             question="Jak idzie?",
             answer="Dobrze.",
             context_snapshot=None,
-            created_at=datetime(2026, 5, 19, 10, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 5, 19, 10, 0, tzinfo=UTC),
         ),
         QaConversation(
             id=str(uuid.uuid4()),
@@ -131,7 +130,7 @@ def _mock_qa_history_items() -> list[QaConversation]:
             question="Ile wydałem?",
             answer="500 zł.",
             context_snapshot={"summary": {}},
-            created_at=datetime(2026, 5, 18, 9, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 5, 18, 9, 0, tzinfo=UTC),
         ),
     ]
 
@@ -141,8 +140,6 @@ async def test_qa_history_endpoint_returns_items():
     from fastapi.testclient import TestClient
 
     from adcopilot.interfaces.api.qa import router
-
-    app_mock = MagicMock()
 
     items = _mock_qa_history_items()
 
@@ -154,8 +151,9 @@ async def test_qa_history_endpoint_returns_items():
     mock_session_instance.__aexit__ = AsyncMock(return_value=False)
     mock_session_instance.begin = MagicMock(return_value=mock_session_instance)
 
-    import adcopilot.infrastructure.db.repositories.qa_conversation_repository as qa_repo_mod
     import sqlalchemy.ext.asyncio as sqla_async
+
+    import adcopilot.infrastructure.db.repositories.qa_conversation_repository as qa_repo_mod
 
     with (
         patch.object(qa_repo_mod, "SqlQaConversationRepository", return_value=mock_repo_instance),

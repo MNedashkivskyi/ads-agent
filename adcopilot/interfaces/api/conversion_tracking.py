@@ -69,7 +69,7 @@ async def _run_audit(user_id: str, settings: Settings) -> ConversionAuditRespons
     from adcopilot.application.use_cases.audit_conversion_tracking import (
         ConversionTrackingAuditUseCase,
     )
-    from adcopilot.domain.entities import AccountId
+    from adcopilot.domain.entities import AccountId, UserId
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
@@ -79,7 +79,6 @@ async def _run_audit(user_id: str, settings: Settings) -> ConversionAuditRespons
     from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
         SqlPromptVersionRepository,
     )
-    from adcopilot.domain.entities import UserId
     from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
     from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
 
@@ -164,20 +163,19 @@ async def get_platform_detection(
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+
+    from sqlalchemy import desc, select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.application.use_cases.detect_website_platform import (
         detect_platform_from_final_urls,
     )
     from adcopilot.domain.conversion_tracking.installation_guides import get_guide
-    from adcopilot.domain.entities import AccountId, UserId
+    from adcopilot.domain.entities import UserId
     from adcopilot.infrastructure.db.models import AdSnapshotModel
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
-
-    import json
-    from sqlalchemy import select, desc
 
     engine = create_async_engine(settings.DATABASE_URL)
     try:
@@ -326,13 +324,18 @@ async def get_gtm_container(
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    from sqlalchemy import select, text
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-    from adcopilot.application.use_cases.detect_website_platform import detect_platform_from_final_urls
+
+    from adcopilot.application.use_cases.detect_website_platform import (
+        detect_platform_from_final_urls,
+    )
     from adcopilot.application.use_cases.generate_gtm_container import generate_gtm_container
     from adcopilot.domain.entities import UserId
     from adcopilot.infrastructure.db.models import KeywordSnapshotModel
-    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import SqlGoogleAdsAccountRepository
-    from sqlalchemy import select, text
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
 
     engine = create_async_engine(settings.DATABASE_URL)
     try:
@@ -421,6 +424,7 @@ async def list_implementation_partners(
 
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
     from adcopilot.infrastructure.db.models import ImplementationPartnerModel
 
     engine = create_async_engine(settings.DATABASE_URL)
@@ -469,13 +473,18 @@ async def request_implementation_endpoint(
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    from sqlalchemy import select, text
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.detect_website_platform import (
+        detect_platform_from_final_urls,
+    )
     from adcopilot.application.use_cases.request_implementation import request_implementation
-    from adcopilot.application.use_cases.detect_website_platform import detect_platform_from_final_urls
     from adcopilot.domain.entities import UserId
     from adcopilot.infrastructure.db.models import KeywordSnapshotModel
-    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import SqlGoogleAdsAccountRepository
-    from sqlalchemy import select, text
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
 
     engine = create_async_engine(settings.DATABASE_URL)
     try:
@@ -504,7 +513,7 @@ async def request_implementation_endpoint(
                     partner_id=body.partner_id,
                 )
             except ValueError as e:
-                raise HTTPException(status_code=422, detail=str(e))
+                raise HTTPException(status_code=422, detail=str(e)) from e
             await session.commit()
     finally:
         await engine.dispose()
@@ -535,6 +544,7 @@ async def get_implementation_status(
 
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
     from adcopilot.infrastructure.db.models import ImplementationRequestModel
 
     engine = create_async_engine(settings.DATABASE_URL)

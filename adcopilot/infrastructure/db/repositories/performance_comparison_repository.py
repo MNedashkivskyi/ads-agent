@@ -7,7 +7,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from adcopilot.domain.performance_tracking import PerformanceBaseline, PerformanceComparison
+from adcopilot.domain.performance_tracking import PerformanceComparison
 from adcopilot.domain.recommendation import RecommendationId
 from adcopilot.infrastructure.db.models import PerformanceComparisonModel
 

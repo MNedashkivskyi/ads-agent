@@ -7,10 +7,11 @@ from typing import Any
 
 import structlog
 
-from adcopilot.application.ports.performance_comparison_repository import PerformanceComparisonRepository
+from adcopilot.application.ports.performance_comparison_repository import (
+    PerformanceComparisonRepository,
+)
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.repositories import GoogleAdsAccountRepository
-from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
 
 logger = structlog.get_logger(__name__)
 
@@ -71,7 +72,7 @@ class SendPerformanceReportUseCase:
 
                 account_name = getattr(account, "name", str(account.id))
                 await self._reporter.send_report(
-                    chat_id=int(chat_id),
+                    chat_id=int(account.telegram_chat_id),
                     account_name=account_name,
                     comparisons=pairs,
                     cumulative_savings_micros=cumulative,

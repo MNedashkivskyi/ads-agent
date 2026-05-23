@@ -12,7 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from adcopilot.infrastructure.db.models import (
     AdGroupSnapshotModel,
     CampaignSnapshotModel,
-    GoogleAdsAccountModel,
 )
 
 logger = structlog.get_logger(__name__)

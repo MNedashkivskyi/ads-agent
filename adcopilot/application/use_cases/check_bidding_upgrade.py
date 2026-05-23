@@ -18,7 +18,7 @@ campaign the rule is skipped.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
 import structlog
 
@@ -53,7 +53,6 @@ class CheckBiddingUpgradeUseCase:
 
     async def execute(self, account_id: AccountId) -> list[Recommendation]:
         """Check all ENABLED campaigns and return newly created recommendations."""
-        today = date.today()
         latest_date = await self._snapshot_repo.get_latest_snapshot_date(account_id)
         if latest_date is None:
             logger.info("no snapshot data, skipping bidding upgrade check", account_id=account_id)

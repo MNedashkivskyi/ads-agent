@@ -62,9 +62,13 @@ async def generate_report(
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-    from adcopilot.application.use_cases.generate_performance_report import generate_performance_report
+    from adcopilot.application.use_cases.generate_performance_report import (
+        generate_performance_report,
+    )
     from adcopilot.config import get_settings
-    from adcopilot.infrastructure.db.repositories.prompt_version_repository import SqlPromptVersionRepository
+    from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
+        SqlPromptVersionRepository,
+    )
     from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient as AnthropicLLMClient
     from adcopilot.infrastructure.reporting.pdf_renderer import render_performance_report_pdf
 

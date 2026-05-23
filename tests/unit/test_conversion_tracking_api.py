@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -40,6 +40,7 @@ def test_client() -> TestClient:
 def _auth_headers(user_id: str = "user-123") -> dict:
     """Generate a valid JWT for testing."""
     from jose import jwt
+
     from adcopilot.config import get_settings
     settings = get_settings()
     token = jwt.encode({"sub": user_id}, settings.SECRET_KEY, algorithm="HS256")

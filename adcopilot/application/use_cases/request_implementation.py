@@ -14,7 +14,10 @@ from adcopilot.domain.implementation_partner import (
     ImplementationRequestId,
     ImplementationRequestStatus,
 )
-from adcopilot.infrastructure.db.models import ImplementationPartnerModel, ImplementationRequestModel
+from adcopilot.infrastructure.db.models import (
+    ImplementationPartnerModel,
+    ImplementationRequestModel,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -95,6 +98,7 @@ async def _notify_partner(
 ) -> None:
     try:
         import httpx
+
         from adcopilot.config import get_settings
         settings = get_settings()
         if not getattr(settings, "SENDGRID_API_KEY", None):
@@ -131,6 +135,7 @@ async def _notify_client_telegram(
 ) -> None:
     try:
         from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
         from adcopilot.config import get_settings
         from adcopilot.infrastructure.db.models import UserModel
 

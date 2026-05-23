@@ -76,7 +76,7 @@ class CustomIntentResponse(BaseModel):
 async def upload_customer_list(
     user_id: str,
     current_user: CurrentUser,
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
     list_name: str = Form(...),
     email_column: str = Form(default="email"),
 ) -> UploadCustomerListResponse:
@@ -124,7 +124,7 @@ async def upload_customer_list(
             email_column=email_column,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     finally:
         await engine.dispose()
 
@@ -207,10 +207,10 @@ async def get_audience_strategy(
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
-    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
     from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
         SqlPromptVersionRepository,
     )
+    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -260,10 +260,10 @@ async def generate_custom_intent(
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
-    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
     from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
         SqlPromptVersionRepository,
     )
+    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)

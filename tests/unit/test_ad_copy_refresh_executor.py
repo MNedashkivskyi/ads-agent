@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from adcopilot.application.executors.refresh_ad_copy import AdCopyRefreshExecutor
-from adcopilot.domain.ad_copy_proposal import AdCopyProposal
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.recommendation import (
     Recommendation,

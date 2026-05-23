@@ -1,5 +1,4 @@
 """Unit tests for ad schedule rules (Task 4.2)."""
-import pytest
 
 from adcopilot.domain.launch.budget_tier import BudgetTier
 from adcopilot.domain.launch.schedule_rules import get_ad_schedule

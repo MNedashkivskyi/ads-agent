@@ -4,15 +4,13 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from adcopilot.application.ports.google_ads import MerchantCenterLink
-from adcopilot.interfaces.api.auth_middleware import get_current_user
-from adcopilot.interfaces.api.pmax import router, _NO_MC_INSTRUCTIONS
 from adcopilot.config import get_settings
-
+from adcopilot.interfaces.api.auth_middleware import get_current_user
+from adcopilot.interfaces.api.pmax import _NO_MC_INSTRUCTIONS, router
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -73,9 +71,10 @@ def _infra_patches(account=None, creds=None):
     mock_engine = MagicMock()
     mock_engine.dispose = AsyncMock()
 
+    import sqlalchemy.ext.asyncio as sqla_async
+
     import adcopilot.infrastructure.db.repositories.google_ads_account_repository as acct_mod
     import adcopilot.infrastructure.db.repositories.oauth_credentials_repository as oauth_mod
-    import sqlalchemy.ext.asyncio as sqla_async
 
     mock_account_repo = AsyncMock()
     mock_account_repo.get = AsyncMock(return_value=account)

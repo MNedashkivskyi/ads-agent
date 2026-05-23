@@ -1,12 +1,11 @@
 """Unit tests for LandingPageChecker."""
 from __future__ import annotations
 
-import pytest
 import httpx
+import pytest
 import respx
 
-from adcopilot.infrastructure.landing_page.checker import LandingPageChecker, LandingPageCheckResult
-
+from adcopilot.infrastructure.landing_page.checker import LandingPageChecker
 
 SAMPLE_HTML = """<!DOCTYPE html>
 <html lang="pl">

@@ -24,7 +24,6 @@ from adcopilot.application.ports.llm import LLMClient
 from adcopilot.domain.exceptions import LLMError
 from adcopilot.domain.launch.bidding_resolver import resolve_bidding_strategy
 from adcopilot.domain.launch.budget_tier import classify_budget_tier
-from adcopilot.domain.launch.structure_rules import build_structure_prompt_fragment
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -37,6 +36,7 @@ from adcopilot.domain.launch.entities import (
     SitelinkProposal,
     StructuredSnippetProposal,
 )
+from adcopilot.domain.launch.structure_rules import build_structure_prompt_fragment
 
 logger = structlog.get_logger(__name__)
 

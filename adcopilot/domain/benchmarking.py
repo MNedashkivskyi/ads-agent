@@ -50,7 +50,7 @@ class VerticalBenchmarkSnapshot:
         snapshot_week: date,
         accounts: list[AccountMetrics],
         created_at: datetime,
-    ) -> "VerticalBenchmarkSnapshot | None":
+    ) -> VerticalBenchmarkSnapshot | None:
         """Return a snapshot if cohort ≥ MIN_ACCOUNTS; None otherwise (privacy guard)."""
         if len(accounts) < _MIN_ACCOUNTS:
             return None

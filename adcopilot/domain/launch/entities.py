@@ -13,7 +13,7 @@ Design rules
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import NewType
@@ -334,8 +334,7 @@ class PMaxCampaignProposal:
         if self.audience_signals is None:
             object.__setattr__(self, "audience_signals", [])
         if self.generated_at is None:
-            from datetime import timezone
-            object.__setattr__(self, "generated_at", datetime.now(tz=timezone.utc))
+            object.__setattr__(self, "generated_at", datetime.now(tz=UTC))
 
 
 # ---------------------------------------------------------------------------
@@ -370,5 +369,4 @@ class RemarketingCampaignProposal:
 
     def __post_init__(self) -> None:
         if self.generated_at is None:
-            from datetime import timezone
-            object.__setattr__(self, "generated_at", datetime.now(tz=timezone.utc))
+            object.__setattr__(self, "generated_at", datetime.now(tz=UTC))

@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from adcopilot.application.ports.campaign_writer import (
     CreatedPMaxResources,
-    PMaxCampaignWriterPort,
 )
 from adcopilot.domain.launch.entities import (
     AssetGroupProposal,
@@ -16,6 +15,7 @@ from adcopilot.domain.launch.entities import (
     PMaxCampaignProposal,
     PMaxProposalId,
 )
+from adcopilot.infrastructure.google_ads.pmax_writer import PMaxCampaignWriter
 
 
 def _proposal(
@@ -39,10 +39,8 @@ def _proposal(
     )
 
 
-def _make_writer() -> tuple["PMaxCampaignWriter", MagicMock]:
+def _make_writer() -> tuple[PMaxCampaignWriter, MagicMock]:
     """Return (writer, mock_client_adapter) with all services pre-mocked."""
-    from adcopilot.infrastructure.google_ads.pmax_writer import PMaxCampaignWriter
-
     settings = MagicMock()
     settings.GOOGLE_ADS_DEVELOPER_TOKEN = "dev-tok"
     settings.GOOGLE_ADS_CLIENT_ID = "cid"
@@ -161,8 +159,8 @@ def test_pmax_writer_port_protocol() -> None:
 @pytest.mark.asyncio
 async def test_create_pmax_campaign_rolls_back_on_error() -> None:
     """If campaign creation fails, budget must be removed (rollback)."""
-    from adcopilot.infrastructure.google_ads.pmax_writer import PMaxCampaignWriter
     from adcopilot.domain.exceptions import GoogleAdsUnavailable
+    from adcopilot.infrastructure.google_ads.pmax_writer import PMaxCampaignWriter
 
     settings = MagicMock()
     writer = PMaxCampaignWriter(settings=settings)
@@ -185,8 +183,7 @@ async def test_create_pmax_campaign_rolls_back_on_error() -> None:
     mock_adapter = MagicMock()
     mock_adapter.client = mock_client
 
-    with patch.object(writer, "_build_client", return_value=mock_adapter):
-        with pytest.raises((GoogleAdsUnavailable, RuntimeError)):
+    with patch.object(writer, "_build_client", return_value=mock_adapter), pytest.raises((GoogleAdsUnavailable, RuntimeError)):
             await writer.create_pmax_campaign(
                 customer_id="123",
                 refresh_token="tok",

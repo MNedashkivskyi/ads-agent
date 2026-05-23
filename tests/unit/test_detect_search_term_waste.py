@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from datetime import date
 
 from adcopilot.application.use_cases.detect_search_term_waste import detect_search_term_waste

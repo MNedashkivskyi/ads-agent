@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date
 from unittest.mock import MagicMock
 
-import pytest
-
 from adcopilot.application.detection.rules.rule_49_pmax_low_roas import PMaxLowRoasRule
-from adcopilot.application.detection.rules.rule_50_pmax_asset_disapproved import PMaxAssetDisapprovedRule
+from adcopilot.application.detection.rules.rule_50_pmax_asset_disapproved import (
+    PMaxAssetDisapprovedRule,
+)
 from adcopilot.domain.recommendation import RecommendationKind, RecommendationSeverity
 from adcopilot.domain.snapshot import CampaignSnapshot
 
@@ -184,6 +184,7 @@ def test_pmax_kinds_in_non_executable():
 
 def test_pmax_rules_registered_in_registry():
     from unittest.mock import MagicMock
+
     from adcopilot.application.detection.registry import build_rule_engine
 
     mock_rec_repo = MagicMock()

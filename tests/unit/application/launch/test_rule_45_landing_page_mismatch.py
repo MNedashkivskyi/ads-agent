@@ -2,11 +2,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
-from datetime import date, UTC, datetime
+from datetime import date
 from unittest.mock import MagicMock
-
-import pytest
 
 from adcopilot.application.detection.base import DetectionContext, HistoricalStats, LandingPageData
 from adcopilot.application.detection.rules.rule_45_landing_page_keyword_mismatch import (

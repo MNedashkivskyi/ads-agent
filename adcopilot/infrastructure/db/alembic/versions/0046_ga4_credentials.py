@@ -4,8 +4,8 @@ Revision ID: 0046
 Revises: 0045
 Create Date: 2026-05-20
 """
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
 revision = "0046"

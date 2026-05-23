@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 
 def test_task_is_registered() -> None:
     import adcopilot.interfaces.worker.tasks  # noqa: F401 — ensures tasks are registered

@@ -53,10 +53,10 @@ async def get_seasonality_forecast(
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
-    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
     from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
         SqlPromptVersionRepository,
     )
+    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -105,10 +105,10 @@ async def get_upcoming_seasonal_events(
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
-    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
     from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
         SqlPromptVersionRepository,
     )
+    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)

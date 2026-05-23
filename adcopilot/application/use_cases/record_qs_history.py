@@ -6,10 +6,10 @@ import uuid
 from datetime import date
 
 import structlog
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adcopilot.infrastructure.db.models import KeywordSnapshotModel
-from sqlalchemy import select
 
 logger = structlog.get_logger(__name__)
 

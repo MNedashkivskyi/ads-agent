@@ -57,7 +57,6 @@ async def get_qs_history(
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    from collections import defaultdict
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import get_settings

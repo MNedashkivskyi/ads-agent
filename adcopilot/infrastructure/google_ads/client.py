@@ -6,7 +6,11 @@ import structlog
 
 from adcopilot.application.ports.google_ads import CustomerInfo
 from adcopilot.config import Settings
-from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsTokenNotApproved, GoogleAdsUnavailable
+from adcopilot.domain.exceptions import (
+    GoogleAdsAuthError,
+    GoogleAdsTokenNotApproved,
+    GoogleAdsUnavailable,
+)
 
 logger = structlog.get_logger(__name__)
 

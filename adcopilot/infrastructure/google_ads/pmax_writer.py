@@ -21,7 +21,6 @@ are not created here. Headlines/descriptions are TEXT_ASSET type.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 import structlog

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from adcopilot.domain.launch.audience_signals import AudienceSignal
-from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -17,6 +16,7 @@ from adcopilot.domain.launch.entities import (
     SitelinkProposal,
     StructuredSnippetProposal,
 )
+from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
 
 
 @dataclass(frozen=True)

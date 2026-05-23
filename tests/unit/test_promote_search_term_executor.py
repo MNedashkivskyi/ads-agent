@@ -47,7 +47,7 @@ async def test_executor_calls_add_keyword() -> None:
     fake = FakeGoogleAdsMutations()
     executor = PromoteSearchTermExecutor()
     rec = _rec()
-    result = await executor.execute(rec, fake, "tok", "cid-123")
+    await executor.execute(rec, fake, "tok", "cid-123")
     assert len(fake.calls) == 1
     call = fake.calls[0]
     assert call["method"] == "add_keyword"

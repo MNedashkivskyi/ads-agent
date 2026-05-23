@@ -1,6 +1,6 @@
 import pytest
 
-from adcopilot.domain.launch.audience_signals import get_audience_signals, VERTICAL_AUDIENCES
+from adcopilot.domain.launch.audience_signals import VERTICAL_AUDIENCES, get_audience_signals
 from adcopilot.domain.launch.budget_tier import BudgetTier
 
 

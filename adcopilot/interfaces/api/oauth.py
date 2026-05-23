@@ -331,9 +331,12 @@ async def oauth_ga4_callback(
     if not refresh_token:
         raise HTTPException(status_code=400, detail="No refresh token returned")
 
-    from adcopilot.infrastructure.db.models import GA4CredentialsModel
+    import base64
+    import hashlib
+
     from cryptography.fernet import Fernet
-    import base64, hashlib
+
+    from adcopilot.infrastructure.db.models import GA4CredentialsModel
     key = base64.urlsafe_b64encode(hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest())
     fernet = Fernet(key)
     enc_refresh = fernet.encrypt(refresh_token.encode()).decode()

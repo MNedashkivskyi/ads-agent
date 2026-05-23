@@ -6,7 +6,7 @@ from typing import Annotated
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
 from adcopilot.config import Settings, get_settings
 from adcopilot.interfaces.api.auth_middleware import CurrentUser

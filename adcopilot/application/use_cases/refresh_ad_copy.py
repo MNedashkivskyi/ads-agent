@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+
 import structlog
 
 from adcopilot.application.ports.llm import LLMClient

@@ -41,10 +41,7 @@ def _jaccard(a: str, b: str) -> float:
 def _is_already_keyword(search_term: str, keyword_texts: list[str]) -> bool:
     """Return True if *search_term* is too similar to any existing keyword."""
     st_lower = search_term.lower().strip()
-    for kw in keyword_texts:
-        if _jaccard(st_lower, kw.lower().strip()) >= _JACCARD_THRESHOLD:
-            return True
-    return False
+    return any(_jaccard(st_lower, kw.lower().strip()) >= _JACCARD_THRESHOLD for kw in keyword_texts)
 
 
 class PromoteSearchTermRule:

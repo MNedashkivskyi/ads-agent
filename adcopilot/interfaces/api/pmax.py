@@ -91,7 +91,7 @@ async def _get_session_and_account(
     """Returns (session, engine, account, oauth_creds) or raises HTTPException."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
-    from adcopilot.domain.entities import AccountId, UserId
+    from adcopilot.domain.entities import AccountId
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
@@ -190,14 +190,11 @@ async def create_pmax_campaign(
                 detail="Konto nie ma włączonego trybu zapisu. Skontaktuj się z pomocą techniczną.",
             )
 
-        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
-            SqlGoogleAdsAccountRepository,
-        )
+        from adcopilot.domain.entities import PlanTier, UserId
         from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
             SqlPromptVersionRepository,
         )
         from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
-        from adcopilot.domain.entities import UserId, PlanTier
 
         user_repo = SqlUserRepository(session)
         user = await user_repo.get(UserId(user_id))
@@ -221,12 +218,12 @@ async def create_pmax_campaign(
             )
 
         prompt_repo = SqlPromptVersionRepository(session)
-        from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
-        from adcopilot.infrastructure.google_ads.pmax_writer import PMaxCampaignWriter
         from adcopilot.application.use_cases.create_pmax_campaign import (
             CreatePMaxCampaignInput,
             CreatePMaxCampaignUseCase,
         )
+        from adcopilot.infrastructure.google_ads.pmax_writer import PMaxCampaignWriter
+        from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
 
         llm = AnthropicClient(api_key=settings.LLM_API_KEY)
         pmax_writer = PMaxCampaignWriter(settings)
@@ -252,7 +249,7 @@ async def create_pmax_campaign(
     except Exception as exc:
         await session.rollback()
         logger.error("pmax.create.error", user_id=user_id, error=str(exc))
-        raise HTTPException(status_code=500, detail="Błąd podczas tworzenia kampanii PMax.")
+        raise HTTPException(status_code=500, detail="Błąd podczas tworzenia kampanii PMax.") from exc
     finally:
         await session.close()
         await engine.dispose()
@@ -295,7 +292,7 @@ async def enable_pmax_campaign(
         raise
     except Exception as exc:
         logger.error("pmax.enable.error", user_id=user_id, error=str(exc))
-        raise HTTPException(status_code=500, detail="Błąd podczas aktywacji kampanii PMax.")
+        raise HTTPException(status_code=500, detail="Błąd podczas aktywacji kampanii PMax.") from exc
     finally:
         await session.rollback()
         await session.close()
@@ -322,6 +319,7 @@ async def get_pmax_status(
     session, engine, account, creds = await _get_session_and_account(user_id, account_id, settings)
     try:
         import datetime as _dt
+
         from adcopilot.domain.entities import AccountId
         from adcopilot.infrastructure.db.repositories.snapshot_repository import (
             SqlSnapshotRepository,
@@ -411,11 +409,15 @@ async def get_pmax_performance(
     session, engine, account, creds = await _get_session_and_account(user_id, account_id, settings)
     try:
         import datetime as _dt
+
+        from sqlalchemy import select
+
         from adcopilot.domain.entities import AccountId
         from adcopilot.domain.recommendation import RecommendationKind, RecommendationStatus
-        from adcopilot.infrastructure.db.repositories.snapshot_repository import SqlSnapshotRepository
         from adcopilot.infrastructure.db.models import RecommendationModel
-        from sqlalchemy import select
+        from adcopilot.infrastructure.db.repositories.snapshot_repository import (
+            SqlSnapshotRepository,
+        )
 
         end_date = _dt.date.today()
         start_date = end_date - _dt.timedelta(days=days - 1)

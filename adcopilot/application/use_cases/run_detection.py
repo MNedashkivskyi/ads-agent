@@ -284,10 +284,12 @@ async def _load_ga4_metrics(
 ) -> dict:
     """Load GA4 page metrics from DB for the detection context (best-effort)."""
     try:
+        import uuid
+
         from sqlalchemy import select
+
         from adcopilot.application.detection.base import GA4PageMetrics as GA4Metrics
         from adcopilot.infrastructure.db.models import GA4PageSnapshotModel
-        import uuid
 
         # snapshot_repo may not expose GA4 directly; use the underlying session
         session = getattr(snapshot_repo, "_session", None)
