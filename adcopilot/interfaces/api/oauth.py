@@ -137,9 +137,8 @@ async def oauth_google_callback(
         ) from exc
 
     user_repo = SqlUserRepository(session)
-    user = await user_repo.get_by_id(UserId(user_id))
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+    user = await user_repo.ensure_exists(UserId(user_id))
+    await session.commit()
 
     # Exchange authorization code for tokens (fast httpx call, has 15 s timeout).
     async with httpx.AsyncClient(timeout=15) as client:
