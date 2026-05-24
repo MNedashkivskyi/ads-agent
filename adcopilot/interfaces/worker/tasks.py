@@ -435,7 +435,10 @@ async def _generate_explanations(
     if not unexplained:
         return
 
-    llm = AnthropicClient(api_key=settings.ANTHROPIC_API_KEY)
+    if not settings.LLM_API_KEY:
+        logger.warning("LLM_API_KEY not set — skipping explanation generation")
+        return
+    llm = AnthropicClient(api_key=settings.LLM_API_KEY)
     use_case = ExplainRecommendationUseCase(llm=llm, repo=rec_repo)
 
     explained = 0

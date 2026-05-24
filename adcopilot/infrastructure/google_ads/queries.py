@@ -1181,7 +1181,7 @@ async def fetch_auction_insights(
     import asyncio
 
     def _sync() -> list[dict]:
-        client = _build_client(refresh_token, customer_id, settings)
+        client = _build_client(refresh_token, settings)
         service = client.get_service("GoogleAdsService")
         query = """
             SELECT

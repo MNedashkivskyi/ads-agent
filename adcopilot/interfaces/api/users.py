@@ -549,6 +549,41 @@ async def list_recommendations(
     ]
 
 
+@router.post("/{user_id}/recommendations/refresh")
+async def refresh_recommendations(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    """Re-run detection and generate explanations for all accounts of the user."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Cannot refresh another user's recommendations")
+
+    from adcopilot.interfaces.worker.tasks import snapshot_account_task
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+                SqlGoogleAdsAccountRepository,
+            )
+
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            accounts = await account_repo.list_for_user(UserId(user_id))
+            if not accounts:
+                return {"queued": 0}
+
+            from datetime import date as date_type
+
+            today_iso = date_type.today().isoformat()
+            for account in accounts:
+                snapshot_account_task.delay(str(account.id), today_iso)
+
+            return {"queued": len(accounts)}
+    finally:
+        await engine.dispose()
+
+
 @router.get("/{user_id}/audit-log", response_model=list[AuditLogResponse])
 async def list_audit_log(
     user_id: str,
