@@ -500,6 +500,7 @@ class ConversionActionSnapshotModel(Base):
     include_in_conversions_metric: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True
     )
+    all_conversions: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

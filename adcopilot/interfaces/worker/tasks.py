@@ -2598,7 +2598,7 @@ async def _run_auction_insights_snapshot(account_id: str, snap_date) -> dict:
     try:
         async with AsyncSession(engine) as session:
             account_repo = SqlGoogleAdsAccountRepository(session)
-            account = await account_repo.get(_uuid.UUID(account_id))
+            account = await account_repo.get(account_id)
             if account is None or not account.refresh_token:
                 return {"skipped": True, "reason": "no_account"}
 

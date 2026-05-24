@@ -2,7 +2,7 @@
 
 import json
 import uuid
-from datetime import UTC, date
+from datetime import UTC, date, timedelta
 from typing import Any
 
 import structlog
@@ -157,16 +157,21 @@ async def query_conversion_actions(
     """
     cid = customer_id.replace("-", "")
     account_id = AccountId(customer_id)
-    query = """
+    today = date.today()
+    seven_days_ago = today - timedelta(days=7)
+    date_range = f"'{seven_days_ago}' AND '{today}'"
+    query = f"""
         SELECT
             conversion_action.id,
             conversion_action.name,
             conversion_action.category,
             conversion_action.counting_type,
             conversion_action.status,
-            conversion_action.include_in_conversions_metric
+            conversion_action.include_in_conversions_metric,
+            metrics.all_conversions
         FROM conversion_action
         WHERE conversion_action.status != 'REMOVED'
+          AND segments.date BETWEEN {date_range}
     """
     try:
         client = _build_client(refresh_token, settings)
@@ -187,6 +192,7 @@ async def query_conversion_actions(
                         counting_type=ca.counting_type.name,
                         status=ca.status.name,
                         include_in_conversions_metric=ca.include_in_conversions_metric,
+                        all_conversions=float(row.metrics.all_conversions),
                     )
                 )
         return results
