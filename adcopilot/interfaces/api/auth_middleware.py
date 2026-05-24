@@ -24,24 +24,40 @@ logger = structlog.get_logger(__name__)
 
 _JWT_ALGORITHM = "HS256"
 
+# Supabase projects may use any HMAC-SHA variant depending on project
+# settings.  We accept all three so a project-level algorithm change
+# doesn't silently break auth.
+_SUPABASE_ALGORITHMS = ["HS256", "HS384", "HS512"]
+
 _bearer = HTTPBearer(auto_error=False)
 
 
 def _decode_supabase_token(token: str, secret: str) -> str | None:
     """Decode a Supabase JWT. Returns user_id (sub claim) or None on failure."""
     try:
+        # Log the token header's alg for diagnostics (unverified peek).
+        try:
+            header = jwt.get_unverified_header(token)
+            token_alg = header.get("alg", "unknown")
+        except Exception:
+            token_alg = "unreadable"
+
         payload = jwt.decode(
             token,
             secret,
-            algorithms=[_JWT_ALGORITHM],
+            algorithms=_SUPABASE_ALGORITHMS,
             options={"verify_aud": False},
         )
         user_id = payload.get("sub")
         if user_id:
-            logger.debug("supabase jwt verified", user_id=user_id)
+            logger.debug("supabase jwt verified", user_id=user_id, alg=token_alg)
         return user_id
     except JWTError as exc:
-        logger.warning("supabase jwt verification failed", error=str(exc))
+        logger.warning(
+            "supabase jwt verification failed",
+            error=str(exc),
+            token_alg=token_alg,
+        )
         return None
 
 
