@@ -21,6 +21,11 @@ def create_celery_app() -> Celery:
     app = Celery("adcopilot")
     app.config_from_object(
         {
+            # Explicitly register the tasks module so the worker process
+            # can find task functions.  Without this, task.delay() from
+            # the API enqueues by string name, but the worker rejects
+            # with "Received unregistered task".
+            "include": ["adcopilot.interfaces.worker.tasks"],
             "broker_url": settings.REDIS_URL,
             "result_backend": settings.REDIS_URL,
             "task_serializer": "json",
