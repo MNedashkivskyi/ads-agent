@@ -688,7 +688,6 @@ async def query_device_performance(
             metrics.conversions
         FROM campaign
         WHERE segments.date = '{date_str}'
-          AND segments.device != 'UNSPECIFIED'
     """
     try:
         client = _build_client(refresh_token, settings)
@@ -788,7 +787,7 @@ async def query_hour_performance(
     query = f"""
         SELECT
             campaign.id,
-            segments.hour_of_day,
+            segments.hour,
             metrics.impressions,
             metrics.clicks,
             metrics.cost_micros,
@@ -810,7 +809,7 @@ async def query_hour_performance(
                         account_id=account_id,
                         snapshot_date=snapshot_date,
                         campaign_id=row.campaign.id,
-                        hour_of_day=int(row.segments.hour_of_day),
+                        hour_of_day=int(row.segments.hour),
                         impressions=m.impressions,
                         clicks=m.clicks,
                         cost_micros=m.cost_micros,
@@ -830,34 +829,40 @@ async def query_campaign_extensions(
     snapshot_date: date,
     settings: Settings,
 ) -> list[CampaignExtensionSnapshot]:
-    """Fetch which extension types are attached to each campaign.
+    """Fetch which extension (asset) types are attached to each campaign.
 
-    Queries ``campaign_extension_setting`` for SITELINK, CALLOUT, and
-    STRUCTURED_SNIPPET extension types.  Returns one snapshot per
-    (campaign, extension_type) pair so that rules 41–43 can cheaply check
-    whether a campaign is missing a given extension.
+    Since Google Ads API v15 the legacy ``campaign_extension_setting``
+    resource was removed.  We now query ``campaign_asset`` and map the
+    ``asset.type`` enum (SITELINK, CALLOUT, STRUCTURED_SNIPPET) to the
+    same snapshot format so rules 41-43 continue to work.
     """
     cid = customer_id.replace("-", "")
     account_id = AccountId(customer_id)
     query = """
         SELECT
             campaign.id,
-            campaign_extension_setting.extension_type
-        FROM campaign_extension_setting
-        WHERE campaign_extension_setting.extension_type IN (
-            'SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET'
-        )
+            asset.type
+        FROM campaign_asset
+        WHERE asset.type IN ('SITELINK', 'CALLOUT', 'STRUCTURED_SNIPPET')
+          AND campaign_asset.status = 'ENABLED'
     """
     try:
         client = _build_client(refresh_token, settings)
         service = client.get_service("GoogleAdsService")
         results: list[CampaignExtensionSnapshot] = []
+        # Deduplicate: a campaign may have multiple sitelinks — we only need
+        # one row per (campaign, extension_type) pair.
+        seen: set[tuple[int, str]] = set()
         stream = service.search_stream(customer_id=cid, query=query)
         for batch in stream:
             for row in batch.results:
-                ext_type = row.campaign_extension_setting.extension_type.name
+                ext_type = row.asset.type_.name
                 if ext_type in ("UNSPECIFIED", "UNKNOWN"):
                     continue
+                key = (row.campaign.id, ext_type)
+                if key in seen:
+                    continue
+                seen.add(key)
                 results.append(
                     CampaignExtensionSnapshot(
                         id=_make_id(),
