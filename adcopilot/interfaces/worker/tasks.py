@@ -203,6 +203,21 @@ async def _async_link_google_ads_accounts(
         user_id=user_id,
         linked_count=len(linked_ids),
     )
+
+    # Kick off an initial snapshot for each newly linked account so the user
+    # sees data immediately instead of waiting for the 3 AM nightly run.
+    today_iso = date.today().isoformat()
+    for customer_id in linked_ids:
+        account_id = str(
+            uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}")
+        )
+        snapshot_account_task.delay(account_id, today_iso)
+        logger.info(
+            "queued initial snapshot after account linking",
+            account_id=account_id,
+            user_id=user_id,
+        )
+
     return {"success": True, "linked_count": len(linked_ids), "linked_ids": linked_ids}
 
 

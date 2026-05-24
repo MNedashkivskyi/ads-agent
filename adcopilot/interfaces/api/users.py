@@ -96,6 +96,21 @@ class UserMeResponse(BaseModel):
     trial_started_at: str | None
 
 
+class AccountSyncStatus(BaseModel):
+    account_id: str
+    customer_id: str
+    descriptive_name: str
+    connected_at: str
+    has_snapshots: bool
+    last_snapshot_date: str | None
+
+
+class SyncStatusResponse(BaseModel):
+    syncing: bool  # True if any account has no snapshots yet
+    accounts: list[AccountSyncStatus]
+    estimated_seconds_remaining: int | None  # rough ETA for first sync
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -221,6 +236,83 @@ async def list_accounts(
         )
         for a in accounts
     ]
+
+
+@router.get("/{user_id}/sync-status", response_model=SyncStatusResponse)
+async def get_sync_status(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SyncStatusResponse:
+    """Check whether initial data sync has completed for the user's accounts.
+
+    Returns per-account snapshot status and an estimated time remaining
+    so the frontend can render a progress indicator.
+    """
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    import uuid as _uuid
+
+    from sqlalchemy import func, select
+
+    from adcopilot.infrastructure.db.models import CampaignSnapshotModel, GoogleAdsAccountModel
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            acct_result = await session.execute(
+                select(GoogleAdsAccountModel).where(
+                    GoogleAdsAccountModel.user_id == _uuid.UUID(user_id)
+                )
+            )
+            accounts = acct_result.scalars().all()
+
+            if not accounts:
+                return SyncStatusResponse(
+                    syncing=False, accounts=[], estimated_seconds_remaining=None
+                )
+
+            statuses: list[AccountSyncStatus] = []
+            any_syncing = False
+
+            for acct in accounts:
+                snap_result = await session.execute(
+                    select(func.max(CampaignSnapshotModel.snapshot_date)).where(
+                        CampaignSnapshotModel.account_id == acct.id
+                    )
+                )
+                last_date = snap_result.scalar_one_or_none()
+                has_snapshots = last_date is not None
+
+                if not has_snapshots:
+                    any_syncing = True
+
+                statuses.append(
+                    AccountSyncStatus(
+                        account_id=str(acct.id),
+                        customer_id=acct.customer_id,
+                        descriptive_name=acct.descriptive_name or "",
+                        connected_at=acct.connected_at.isoformat()
+                        if acct.connected_at
+                        else "",
+                        has_snapshots=has_snapshots,
+                        last_snapshot_date=str(last_date) if last_date else None,
+                    )
+                )
+
+            # Rough ETA: initial snapshot typically takes 1-3 minutes per account.
+            # Estimate ~120s per account still syncing.
+            pending_count = sum(1 for s in statuses if not s.has_snapshots)
+            estimated = pending_count * 120 if any_syncing else None
+
+            return SyncStatusResponse(
+                syncing=any_syncing,
+                accounts=statuses,
+                estimated_seconds_remaining=estimated,
+            )
+    finally:
+        await engine.dispose()
 
 
 @router.delete("/{user_id}/accounts/{account_id}", status_code=204)
