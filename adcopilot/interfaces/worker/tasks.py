@@ -207,9 +207,19 @@ async def _async_link_google_ads_accounts(
     # Kick off an initial snapshot for each newly linked account so the user
     # sees data immediately instead of waiting for the 3 AM nightly run.
     today_iso = date.today().isoformat()
+    redis = _redis_client()
+    now_iso = datetime.now(UTC).isoformat()
     for customer_id in linked_ids:
         account_id = str(
             uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}")
+        )
+        # Mark the account as "initial sync in progress" in Redis.
+        # TTL of 10 min — if the task hangs, the marker auto-expires so the
+        # frontend doesn't show "syncing" forever.
+        redis.set(
+            f"sync:initial:{account_id}",
+            now_iso,
+            ex=600,
         )
         snapshot_account_task.delay(account_id, today_iso)
         logger.info(
@@ -283,6 +293,10 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
         }
     finally:
         redis.delete(lock_key)
+        # Clear the initial-sync marker so the frontend stops showing
+        # the progress bar.  This runs whether the snapshot succeeded or
+        # failed — either way, the sync attempt is finished.
+        redis.delete(f"sync:initial:{account_id}")
 
 
 async def _run_snapshot(settings: object, account_id: object, snap_date: date) -> SnapshotResult:

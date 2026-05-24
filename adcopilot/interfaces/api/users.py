@@ -102,11 +102,13 @@ class AccountSyncStatus(BaseModel):
     descriptive_name: str
     connected_at: str
     has_snapshots: bool
+    sync_in_progress: bool  # True while the initial snapshot task is running
     last_snapshot_date: str | None
+    started_at: str | None  # ISO timestamp when the sync task was queued
 
 
 class SyncStatusResponse(BaseModel):
-    syncing: bool  # True if any account has no snapshots yet
+    syncing: bool  # True if any account still has sync_in_progress
     accounts: list[AccountSyncStatus]
     estimated_seconds_remaining: int | None  # rough ETA for first sync
 
@@ -254,10 +256,12 @@ async def get_sync_status(
 
     import uuid as _uuid
 
+    from redis import Redis
     from sqlalchemy import func, select
 
     from adcopilot.infrastructure.db.models import CampaignSnapshotModel, GoogleAdsAccountModel
 
+    redis = Redis.from_url(settings.REDIS_URL)
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with AsyncSession(engine) as session:
@@ -275,8 +279,30 @@ async def get_sync_status(
 
             statuses: list[AccountSyncStatus] = []
             any_syncing = False
+            total_elapsed = 0.0
 
             for acct in accounts:
+                acct_id_str = str(acct.id)
+
+                # Check the Redis marker set by link_google_ads_accounts_task.
+                # This is the authoritative signal for "sync in progress".
+                redis_key = f"sync:initial:{acct_id_str}"
+                started_raw = redis.get(redis_key)
+                sync_in_progress = started_raw is not None
+                started_at_iso: str | None = None
+
+                if sync_in_progress:
+                    any_syncing = True
+                    started_at_iso = started_raw.decode() if started_raw else None
+                    # Calculate elapsed time for ETA
+                    if started_at_iso:
+                        try:
+                            started_dt = datetime.fromisoformat(started_at_iso)
+                            elapsed = (datetime.now(UTC) - started_dt).total_seconds()
+                            total_elapsed = max(total_elapsed, elapsed)
+                        except (ValueError, TypeError):
+                            pass
+
                 snap_result = await session.execute(
                     select(func.max(CampaignSnapshotModel.snapshot_date)).where(
                         CampaignSnapshotModel.account_id == acct.id
@@ -285,26 +311,28 @@ async def get_sync_status(
                 last_date = snap_result.scalar_one_or_none()
                 has_snapshots = last_date is not None
 
-                if not has_snapshots:
-                    any_syncing = True
-
                 statuses.append(
                     AccountSyncStatus(
-                        account_id=str(acct.id),
+                        account_id=acct_id_str,
                         customer_id=acct.customer_id,
                         descriptive_name=acct.descriptive_name or "",
                         connected_at=acct.connected_at.isoformat()
                         if acct.connected_at
                         else "",
                         has_snapshots=has_snapshots,
+                        sync_in_progress=sync_in_progress,
                         last_snapshot_date=str(last_date) if last_date else None,
+                        started_at=started_at_iso,
                     )
                 )
 
-            # Rough ETA: initial snapshot typically takes 1-3 minutes per account.
-            # Estimate ~120s per account still syncing.
-            pending_count = sum(1 for s in statuses if not s.has_snapshots)
-            estimated = pending_count * 120 if any_syncing else None
+            # ETA: ~120s per account, minus time already elapsed
+            pending_count = sum(1 for s in statuses if s.sync_in_progress)
+            if any_syncing:
+                raw_eta = max(0, pending_count * 120 - total_elapsed)
+                estimated = int(raw_eta) if raw_eta > 0 else 10
+            else:
+                estimated = None
 
             return SyncStatusResponse(
                 syncing=any_syncing,
