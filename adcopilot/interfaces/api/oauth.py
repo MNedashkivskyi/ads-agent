@@ -64,14 +64,51 @@ async def _get_db_session(
     await engine.dispose()
 
 
+_PLAN_ACCOUNT_LIMITS: dict[str, int] = {"starter": 1, "growth": 3, "pro": 10}
+
+
 @router.get("/google/start")
 async def oauth_google_start(
     user_id: str,
     settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(_get_db_session)],
 ) -> RedirectResponse:
-    """Redirects the browser directly to Google's OAuth consent screen."""
+    """Redirects the browser directly to Google's OAuth consent screen.
+
+    Enforces per-plan account limits *before* redirecting to Google so
+    users who have already reached their quota get an immediate error
+    redirect instead of completing the consent flow only to be rejected
+    in the callback.
+    """
     if not settings.GOOGLE_ADS_CLIENT_ID:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
+    # Server-side plan limit check — never trust the frontend's check alone.
+    user_repo = SqlUserRepository(session)
+    user = await user_repo.ensure_exists(UserId(user_id))
+    await session.commit()
+
+    acc_repo = SqlGoogleAdsAccountRepository(session)
+    existing_accounts = await acc_repo.list_for_user(UserId(user_id))
+    account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
+
+    if len(existing_accounts) >= account_limit:
+        logger.warning(
+            "oauth.start.quota_exceeded",
+            user_id=user_id,
+            plan=user.plan.value,
+            current=len(existing_accounts),
+            limit=account_limit,
+        )
+        if settings.APP_URL:
+            return RedirectResponse(
+                url=f"{settings.APP_URL.rstrip('/')}/app/google-ads-connect?error=quota_exceeded",
+                status_code=302,
+            )
+        raise HTTPException(
+            status_code=402,
+            detail=f"Account limit reached for {user.plan.value} plan ({account_limit} max). Upgrade to add more accounts.",
+        )
 
     state = issue_state_jwt(user_id, settings.SECRET_KEY)
 
@@ -169,7 +206,6 @@ async def oauth_google_callback(
     # Enforce per-plan account limits *before* queuing the task so the user
     # gets an immediate error rather than a silent no-op from the worker.
     acc_repo = SqlGoogleAdsAccountRepository(session)
-    _PLAN_ACCOUNT_LIMITS: dict[str, int] = {"starter": 1, "growth": 3, "pro": 10}
     existing_accounts = await acc_repo.list_for_user(UserId(user_id))
     account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
     if len(existing_accounts) >= account_limit:

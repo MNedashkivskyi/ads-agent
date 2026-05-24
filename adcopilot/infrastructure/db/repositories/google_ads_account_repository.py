@@ -68,6 +68,18 @@ class SqlGoogleAdsAccountRepository:
         )
         return [_model_to_domain(m) for m in result.scalars().all()]
 
+    async def delete(self, account_id: AccountId) -> bool:
+        """Delete account row. Returns True if a row was actually deleted."""
+        result = await self._session.execute(
+            select(GoogleAdsAccountModel).where(GoogleAdsAccountModel.id == uuid.UUID(account_id))
+        )
+        model = result.scalar_one_or_none()
+        if model is None:
+            return False
+        await self._session.delete(model)
+        await self._session.flush()
+        return True
+
     async def save(self, account: GoogleAdsAccount) -> GoogleAdsAccount:
         result = await self._session.execute(
             select(GoogleAdsAccountModel).where(GoogleAdsAccountModel.id == uuid.UUID(account.id))

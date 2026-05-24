@@ -27,6 +27,7 @@ class User:
     stripe_customer_id: str | None = None
     subscription_status: str = "trialing"
     trial_ends_at: datetime | None = None
+    trial_started_at: datetime | None = None
     subscription_id: str | None = None
 
 

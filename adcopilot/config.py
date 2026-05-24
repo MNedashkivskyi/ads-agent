@@ -33,7 +33,16 @@ class Settings(BaseSettings):
 
     # Supabase JWT secret — used to verify JWTs issued by Supabase auth.
     # Find it in Supabase project → Settings → API → JWT Secret.
+    # Deprecated in favour of SUPABASE_JWKS_URL (asymmetric key verification).
     SUPABASE_JWT_SECRET: str | None = None
+
+    # Supabase JWKS URL — used to verify Supabase JWTs via public-key (RS256/ES256).
+    # No shared secret needed.  Format: https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.json
+    SUPABASE_JWKS_URL: str | None = None
+
+    # Supabase issuer URL — used for JWT issuer claim validation.
+    # Format: https://<project-ref>.supabase.co/auth/v1
+    SUPABASE_ISSUER: str | None = None
 
     # Telegram Bot API token — used to send proactive reminders to users.
     # Optional; when not set, Telegram notifications are skipped.
