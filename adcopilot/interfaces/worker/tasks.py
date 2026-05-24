@@ -381,7 +381,7 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
             # from the snapshot repository to determine if any are healthy.
             snapshot_repo = SqlSnapshotRepository(session)
             conversion_actions = await snapshot_repo.get_conversion_actions(
-                AccountId(str(account_id))
+                AccountId(str(account_id)), snap_date
             )
             has_working_tracking = any(
                 a.status == "ENABLED" and a.all_conversions > 0 for a in conversion_actions
@@ -2440,8 +2440,13 @@ async def _run_conversion_reminders(settings: object) -> dict[str, object]:
                 try:
                     accounts = await account_repo.list_for_user(user.id)  # type: ignore[arg-type]
                     for account in accounts:
-                        conversion_actions = await snapshot_repo.get_conversion_actions(
+                        latest_date = await snapshot_repo.get_latest_snapshot_date(
                             AccountId(str(account.id))
+                        )
+                        if latest_date is None:
+                            continue
+                        conversion_actions = await snapshot_repo.get_conversion_actions(
+                            AccountId(str(account.id)), latest_date
                         )
                         has_working_tracking = any(
                             a.status == "ENABLED" and a.all_conversions > 0

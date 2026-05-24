@@ -877,6 +877,7 @@ class SqlSnapshotRepository:
                 counting_type=m.counting_type,
                 status=m.status,
                 include_in_conversions_metric=m.include_in_conversions_metric,
+                all_conversions=m.all_conversions,
             )
             for m in res.scalars().all()
         ]
