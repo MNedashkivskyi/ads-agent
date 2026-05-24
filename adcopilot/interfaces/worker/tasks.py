@@ -402,12 +402,56 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
                 account_repo=SqlGoogleAdsAccountRepository(session),
             )
             await use_case.execute(AccountId(str(account_id)), snap_date)
+            await _generate_explanations(session, settings, AccountId(str(account_id)))
             await _update_experiment_metrics(session, settings, AccountId(str(account_id)))
             await _notify_pmax_alerts(session, settings, AccountId(str(account_id)), snap_date)
     except Exception:
         logger.exception("detection failed (non-fatal)", account_id=str(account_id))
     finally:
         await engine.dispose()
+
+
+async def _generate_explanations(
+    session: object,
+    settings: object,
+    account_id: object,
+) -> None:
+    """Generate LLM explanations for all PENDING recs that lack one."""
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from adcopilot.application.use_cases.explain_recommendation import ExplainRecommendationUseCase
+    from adcopilot.config import Settings
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
+
+    assert isinstance(settings, Settings)
+    assert isinstance(session, AsyncSession)
+
+    rec_repo = SqlRecommendationRepository(session)
+    pending = await rec_repo.list_pending(str(account_id))
+    unexplained = [r for r in pending if not r.explanation]
+    if not unexplained:
+        return
+
+    llm = AnthropicClient(api_key=settings.ANTHROPIC_API_KEY)
+    use_case = ExplainRecommendationUseCase(llm=llm, repo=rec_repo)
+
+    explained = 0
+    for rec in unexplained:
+        try:
+            await use_case.execute(rec.id, language="pl")
+            explained += 1
+        except Exception:
+            logger.warning("explain_recommendation_failed", rec_id=str(rec.id))
+
+    logger.info(
+        "explanations generated",
+        account_id=str(account_id),
+        total=len(unexplained),
+        explained=explained,
+    )
 
 
 async def _record_qs_history(settings: object, account_id: str, snap_date: date) -> None:
