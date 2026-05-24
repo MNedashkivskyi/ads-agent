@@ -27,6 +27,7 @@ _DEV_ORIGINS: tuple[str, ...] = (
     "http://localhost:5173",
     "https://adswise.xyz",
     "https://www.adswise.xyz",
+    "https://approve-ads-bot-dev.up.railway.app",
 )
 
 _DISALLOWED_ORIGIN_VALUES: frozenset[str] = frozenset({"", "*", "null"})

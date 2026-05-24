@@ -24,6 +24,7 @@ def _model_to_domain(model: UserModel) -> User:
         stripe_customer_id=model.stripe_customer_id,
         subscription_status=model.subscription_status,
         trial_ends_at=model.trial_ends_at,
+        trial_started_at=model.trial_started_at,
         subscription_id=model.subscription_id,
     )
 
@@ -41,6 +42,7 @@ def _domain_to_model(user: User, existing: UserModel | None = None) -> UserModel
     model.stripe_customer_id = user.stripe_customer_id
     model.subscription_status = user.subscription_status
     model.trial_ends_at = user.trial_ends_at
+    model.trial_started_at = user.trial_started_at
     model.subscription_id = user.subscription_id
     return model
 

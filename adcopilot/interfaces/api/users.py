@@ -3,20 +3,36 @@
 from __future__ import annotations
 
 import dataclasses
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
+import httpx
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import Settings, get_settings
-from adcopilot.domain.entities import UserId
+from adcopilot.domain.entities import AccountId, PlanTier, UserId
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
+
+# ---------------------------------------------------------------------------
+# Plan → max-accounts mapping (single source of truth)
+# ---------------------------------------------------------------------------
+
+PLAN_MAX_ACCOUNTS: dict[str, int] = {
+    PlanTier.STARTER.value: 1,
+    PlanTier.GROWTH.value: 3,
+    PlanTier.PRO.value: 10,
+}
+
+
+def _max_accounts_for_plan(plan: str) -> int:
+    return PLAN_MAX_ACCOUNTS.get(plan, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +90,10 @@ class UserMeResponse(BaseModel):
     email: str
     telegram_chat_id: int | None
     role: str  # "admin" | "client"
+    plan: str  # "starter" | "growth" | "pro"
+    max_accounts: int
+    subscription_status: str  # "trialing" | "active" | "canceled" | ...
+    trial_started_at: str | None
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +107,13 @@ async def get_user_me(
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> UserMeResponse:
-    """Return basic user info including Telegram connection status."""
+    """Return basic user info including Telegram connection status.
+
+    On first call for a brand-new user (no existing record), a minimal row
+    is auto-created with plan=starter, subscription_status=trialing, and
+    trial_started_at set to now.  This powers the "Start free trial" CTA —
+    the trial begins the moment the frontend calls /me after signup.
+    """
     from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
 
     engine = create_async_engine(settings.DATABASE_URL)
@@ -95,7 +121,15 @@ async def get_user_me(
         async with AsyncSession(engine) as session:
             repo = SqlUserRepository(session)
             user = await repo.ensure_exists(UserId(user_id))
+
+            # Auto-start trial: if subscription_status is trialing and
+            # trial_started_at hasn't been set yet, stamp it now.
+            if user.subscription_status == "trialing" and user.trial_started_at is None:
+                user = dataclasses.replace(user, trial_started_at=datetime.now(UTC))
+                await repo.save(user)
+
             await session.commit()
+
             admin_ids = {uid.strip() for uid in settings.ADMIN_USER_IDS.split(",") if uid.strip()}
             role = "admin" if user_id in admin_ids else "client"
             return UserMeResponse(
@@ -103,14 +137,61 @@ async def get_user_me(
                 email=user.email,
                 telegram_chat_id=user.telegram_chat_id,
                 role=role,
+                plan=user.plan.value,
+                max_accounts=_max_accounts_for_plan(user.plan.value),
+                subscription_status=user.subscription_status,
+                trial_started_at=user.trial_started_at.isoformat()
+                if user.trial_started_at
+                else None,
             )
     finally:
         await engine.dispose()
 
 
+@router.post("/{user_id}/start-trial")
+async def start_trial(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, str]:
+    """Explicitly start the free trial (idempotent).
+
+    If the user already has trial_started_at set, this is a no-op.
+    """
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            repo = SqlUserRepository(session)
+            user = await repo.get_by_id(UserId(user_id))
+            if user is None:
+                raise HTTPException(status_code=404, detail="User not found")
+
+            if user.trial_started_at is not None:
+                return {"status": "already_started"}
+
+            user = dataclasses.replace(
+                user,
+                trial_started_at=datetime.now(UTC),
+                subscription_status="trialing",
+            )
+            await repo.save(user)
+            await session.commit()
+    finally:
+        await engine.dispose()
+
+    logger.info("trial.started", user_id=user_id)
+    return {"status": "trial_started"}
+
+
 @router.get("/{user_id}/accounts", response_model=list[AccountResponse])
 async def list_accounts(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[AccountResponse]:
     """List Google Ads accounts connected by the user."""
@@ -140,6 +221,98 @@ async def list_accounts(
         )
         for a in accounts
     ]
+
+
+@router.delete("/{user_id}/accounts/{account_id}", status_code=204)
+async def delete_account(
+    user_id: str,
+    account_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> None:
+    """Delete the link between user and Google Ads account.
+
+    Also revokes the OAuth refresh token at Google so the user's grant is
+    fully cleaned up.  Returns 204 on success.
+    """
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    import base64
+    import hashlib
+    import uuid as uuid_mod
+
+    from cryptography.fernet import Fernet
+    from sqlalchemy import select
+
+    from adcopilot.infrastructure.db.models import GoogleAdsAccountModel, OAuthCredentialsModel
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    refresh_token: str | None = None
+    try:
+        async with AsyncSession(engine) as session:
+            # Verify account belongs to the requesting user.
+            result = await session.execute(
+                select(GoogleAdsAccountModel).where(
+                    GoogleAdsAccountModel.id == uuid_mod.UUID(account_id),
+                    GoogleAdsAccountModel.user_id == uuid_mod.UUID(user_id),
+                )
+            )
+            account_model = result.scalar_one_or_none()
+            if account_model is None:
+                raise HTTPException(status_code=404, detail="Account not found")
+
+            # Retrieve and decrypt the refresh token for revocation.
+            cred_result = await session.execute(
+                select(OAuthCredentialsModel).where(
+                    OAuthCredentialsModel.account_id == uuid_mod.UUID(account_id)
+                )
+            )
+            cred_model = cred_result.scalar_one_or_none()
+            if cred_model and cred_model.refresh_token_encrypted:
+                try:
+                    fernet_key = base64.urlsafe_b64encode(
+                        hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest()
+                    )
+                    fernet = Fernet(fernet_key)
+                    refresh_token = fernet.decrypt(
+                        cred_model.refresh_token_encrypted.encode()
+                    ).decode()
+                except Exception:
+                    logger.warning(
+                        "failed to decrypt refresh token for revocation",
+                        account_id=account_id,
+                    )
+
+            # Delete OAuth credentials first (FK-like dependency).
+            if cred_model:
+                await session.delete(cred_model)
+
+            # Delete the account row.
+            await session.delete(account_model)
+            await session.commit()
+    finally:
+        await engine.dispose()
+
+    # Best-effort revoke the refresh token at Google (fire-and-forget).
+    if refresh_token:
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                await client.post(
+                    "https://oauth2.googleapis.com/revoke",
+                    params={"token": refresh_token},
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+            logger.info("google token revoked", account_id=account_id)
+        except Exception:
+            # Revocation is best-effort — don't fail the DELETE if Google is
+            # unreachable.  The token will expire on its own.
+            logger.warning("google token revocation failed", account_id=account_id)
+
+    logger.info("account.deleted", user_id=user_id, account_id=account_id)
 
 
 @router.get("/{user_id}/stats", response_model=StatsResponse)
@@ -254,7 +427,7 @@ async def list_audit_log(
 ) -> list[AuditLogResponse]:
     """List audit log entries for the user's accounts (last 90 days)."""
     import uuid as uuid_mod
-    from datetime import UTC, datetime, timedelta
+    from datetime import timedelta
 
     from adcopilot.infrastructure.db.models import AuditLogModel
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
