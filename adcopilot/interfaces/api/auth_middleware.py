@@ -36,8 +36,12 @@ def _decode_supabase_token(token: str, secret: str) -> str | None:
             algorithms=[_JWT_ALGORITHM],
             options={"verify_aud": False},
         )
-        return payload.get("sub")
-    except JWTError:
+        user_id = payload.get("sub")
+        if user_id:
+            logger.debug("supabase jwt verified", user_id=user_id)
+        return user_id
+    except JWTError as exc:
+        logger.warning("supabase jwt verification failed", error=str(exc))
         return None
 
 
@@ -62,6 +66,11 @@ def get_current_user(
     # Try Supabase JWT first when secret is configured
     if settings.SUPABASE_JWT_SECRET:
         user_id = _decode_supabase_token(token, settings.SUPABASE_JWT_SECRET)
+    else:
+        logger.warning(
+            "SUPABASE_JWT_SECRET is not configured — Supabase tokens will not be verified. "
+            "Set this env var in Railway to the JWT secret from Supabase → Settings → API."
+        )
 
     # Fall back to internal JWT secret
     if not user_id:
@@ -69,9 +78,17 @@ def get_current_user(
             payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[_JWT_ALGORITHM])
             user_id = payload.get("sub")
         except JWTError as exc:
+            # If Supabase secret was configured but decode failed, the token is
+            # likely a Supabase token with a wrong/rotated secret.  Surface that
+            # in the error so operators can diagnose faster.
+            if settings.SUPABASE_JWT_SECRET:
+                logger.error(
+                    "jwt verification failed with both Supabase and internal secrets — "
+                    "check that SUPABASE_JWT_SECRET matches your Supabase project",
+                )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"Invalid or expired token: {exc}",
+                detail="Invalid or expired token",
                 headers={"WWW-Authenticate": "Bearer"},
             ) from exc
 
