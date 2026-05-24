@@ -36,9 +36,9 @@ class RuleEngine:
             except Exception:
                 logger.exception("rule raised unexpectedly", rule=type(rule).__name__)
 
-        # 2. Load existing PENDING for dedup
-        existing = await self._repo.list_pending(ctx.account.id)
-        existing_keys = {(r.kind, r.target_hash) for r in existing}
+        # 2. Load existing recs (all non-expired) for dedup — prevents re-creating
+        #    recommendations the user has already acted on.
+        existing_keys = await self._repo.list_active_dedup_keys(ctx.account.id)
 
         # 3. Load active snooze keys (kind_value, target_hash)
         snoozed_keys: set[tuple[str, str]] = set()

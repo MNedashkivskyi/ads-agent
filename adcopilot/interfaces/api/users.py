@@ -69,6 +69,7 @@ class RecommendationResponse(BaseModel):
     explanation: str | None
     created_at: str
     evidence: dict[str, object] | None = None
+    is_executable: bool = True
 
 
 class AuditLogResponse(BaseModel):
@@ -535,6 +536,9 @@ async def list_recommendations(
     finally:
         await engine.dispose()
 
+    from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS, RecommendationKind
+
+    non_exec_values = {k.value for k in NON_EXECUTABLE_KINDS}
     return [
         RecommendationResponse(
             id=str(r.id),
@@ -546,6 +550,7 @@ async def list_recommendations(
             explanation=r.explanation,
             created_at=r.created_at.isoformat(),
             evidence=dict(r.evidence) if r.evidence else None,
+            is_executable=r.kind not in non_exec_values,
         )
         for r in recs
     ]
@@ -649,7 +654,12 @@ async def approve_recommendation(
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+    from adcopilot.domain.recommendation import (
+        NON_EXECUTABLE_KINDS,
+        RecommendationId,
+        RecommendationKind,
+        RecommendationStatus,
+    )
     from adcopilot.infrastructure.db.repositories.recommendation_repository import (
         SqlRecommendationRepository,
     )
@@ -661,10 +671,15 @@ async def approve_recommendation(
             rec = await repo.get(RecommendationId(rec_id))
             if rec is None:
                 raise HTTPException(status_code=404, detail="Recommendation not found")
-            if rec.status != RecommendationStatus.PENDING:
+            if rec.status not in (RecommendationStatus.PENDING, RecommendationStatus.FAILED):
                 raise HTTPException(
                     status_code=409,
                     detail=f"Recommendation is already {rec.status.value}",
+                )
+            if rec.kind in NON_EXECUTABLE_KINDS:
+                raise HTTPException(
+                    status_code=422,
+                    detail="This recommendation is informational and cannot be auto-executed",
                 )
             await repo.update_status(RecommendationId(rec_id), RecommendationStatus.APPROVED)
     finally:
@@ -701,7 +716,7 @@ async def decline_recommendation(
             rec = await repo.get(RecommendationId(rec_id))
             if rec is None:
                 raise HTTPException(status_code=404, detail="Recommendation not found")
-            if rec.status != RecommendationStatus.PENDING:
+            if rec.status not in (RecommendationStatus.PENDING, RecommendationStatus.FAILED):
                 raise HTTPException(
                     status_code=409,
                     detail=f"Recommendation is already {rec.status.value}",

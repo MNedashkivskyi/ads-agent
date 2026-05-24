@@ -56,6 +56,30 @@ class SqlRecommendationRepository:
         )
         return [_model_to_domain(m) for m in result.scalars().all()]
 
+    async def list_active_dedup_keys(
+        self, account_id: AccountId
+    ) -> set[tuple[RecommendationKind, str]]:
+        """Return (kind, target_hash) for all recs that should block new duplicates.
+
+        Includes PENDING, APPROVED, EXECUTED, DECLINED, FAILED — everything
+        except EXPIRED. This prevents the engine from re-creating a rec that
+        the user has already acted on or that is still being processed.
+        """
+        active_statuses = [
+            RecommendationStatus.PENDING.value,
+            RecommendationStatus.APPROVED.value,
+            RecommendationStatus.EXECUTED.value,
+            RecommendationStatus.DECLINED.value,
+            RecommendationStatus.FAILED.value,
+        ]
+        result = await self._session.execute(
+            select(RecommendationModel.kind, RecommendationModel.target_hash).where(
+                RecommendationModel.account_id == uuid.UUID(account_id),
+                RecommendationModel.status.in_(active_statuses),
+            )
+        )
+        return {(RecommendationKind(row.kind), row.target_hash) for row in result.all()}
+
     async def save(self, rec: Recommendation) -> None:
         m = RecommendationModel()
         m.id = uuid.UUID(rec.id)
