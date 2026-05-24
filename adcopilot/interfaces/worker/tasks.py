@@ -267,12 +267,20 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
         # needs_reauth=True on the account.  Notify the user so they know to
         # reconnect their Google Ads account.
         if not result.success and "GoogleAdsAuthError" in (result.error_message or ""):
-            # TODO(phase-1): send reauth notification via new notifier
             logger.warning(
                 "snapshot auth failure — user needs to reconnect Google Ads",
                 account_id=account_id,
             )
+        if not result.success:
+            # Store the error so the sync-status endpoint can report it.
+            redis.set(
+                f"sync:error:{account_id}",
+                result.error_message or "Unknown error",
+                ex=3600,  # 1 hour TTL
+            )
         if result.success:
+            # Clear any stale error from a previous failed attempt.
+            redis.delete(f"sync:error:{account_id}")
             # Run detection asynchronously after a successful snapshot
             asyncio.run(_run_detection(settings, AccountId(account_id), snap_date))
             # Record QS history for trend tracking
@@ -291,6 +299,14 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
             "duration_seconds": result.duration_seconds,
             "success": result.success,
         }
+    except Exception as exc:
+        # Unexpected crash (e.g. all 14 queries failed) — save error for frontend.
+        redis.set(
+            f"sync:error:{account_id}",
+            str(exc)[:500],
+            ex=3600,
+        )
+        raise
     finally:
         redis.delete(lock_key)
         # Clear the initial-sync marker so the frontend stops showing
@@ -1693,6 +1709,8 @@ async def _run_anomaly_detection_all_accounts(settings: object) -> dict[str, obj
 
         metrics_adapter = GoogleAdsHourlyMetricsAdapter(settings)
 
+        from adcopilot.domain.exceptions import GoogleAdsAuthError
+
         for acct, customer_id, refresh_token in account_creds:
             try:
                 async with AsyncSession(engine) as session, session.begin():
@@ -1715,6 +1733,19 @@ async def _run_anomaly_detection_all_accounts(settings: object) -> dict[str, obj
                     alerts_created=result.alerts_created,
                     alerts_suppressed=result.alerts_suppressed,
                 )
+            except GoogleAdsAuthError:
+                # Mark the account for re-authentication and move on.
+                logger.warning(
+                    "anomaly_detection.auth_error — marking needs_reauth",
+                    account_id=str(acct.id),
+                )
+                async with AsyncSession(engine) as session, session.begin():
+                    _acct_repo = SqlGoogleAdsAccountRepository(session)
+                    import dataclasses
+
+                    updated = dataclasses.replace(acct, needs_reauth=True)
+                    await _acct_repo.save(updated)
+                accounts_errored += 1
             except Exception:
                 logger.exception("anomaly_detection.failed", account_id=str(acct.id))
                 accounts_errored += 1

@@ -114,50 +114,31 @@ class AnomalyDetectionUseCase:
             alerts_created += 1
             log.warning("alert created", kind=kind.value, message=message)
 
-        # ── Check 1: Spend spike ────────────────────────────────────────────
-        checks_run += 1
-        try:
-            await self._check_spend_spike(
-                account_id, customer_id, refresh_token, now, _maybe_create
-            )
-        except Exception:
-            log.exception("spend_spike check failed (non-fatal)")
+        from adcopilot.domain.exceptions import GoogleAdsAuthError
 
-        # ── Check 2: Conversion drought ─────────────────────────────────────
-        checks_run += 1
-        try:
-            await self._check_conversion_drought(
-                account_id, customer_id, refresh_token, now, _maybe_create
-            )
-        except Exception:
-            log.exception("conversion_drought check failed (non-fatal)")
-
-        # ── Check 3: Budget burning fast ─────────────────────────────────────
-        checks_run += 1
-        try:
-            await self._check_budget_burning_fast(
-                account_id, customer_id, refresh_token, now, _maybe_create
-            )
-        except Exception:
-            log.exception("budget_burning_fast check failed (non-fatal)")
-
-        # ── Check 4: Conversion tracking errors ─────────────────────────────
-        checks_run += 1
-        try:
-            await self._check_tracking_errors(
-                account_id, customer_id, refresh_token, now, _maybe_create
-            )
-        except Exception:
-            log.exception("tracking_errors check failed (non-fatal)")
-
-        # ── Check 5: Impression share drop ───────────────────────────────────
-        checks_run += 1
-        try:
-            await self._check_impression_share_drop(
-                account_id, customer_id, refresh_token, now, _maybe_create
-            )
-        except Exception:
-            log.exception("impression_share_drop check failed (non-fatal)")
+        checks = [
+            ("spend_spike", self._check_spend_spike),
+            ("conversion_drought", self._check_conversion_drought),
+            ("budget_burning_fast", self._check_budget_burning_fast),
+            ("tracking_errors", self._check_tracking_errors),
+            ("impression_share_drop", self._check_impression_share_drop),
+        ]
+        for check_name, check_fn in checks:
+            checks_run += 1
+            try:
+                await check_fn(
+                    account_id, customer_id, refresh_token, now, _maybe_create
+                )
+            except GoogleAdsAuthError:
+                # Token is revoked/expired — no point running remaining checks.
+                # Caller (task) should mark needs_reauth on the account.
+                log.warning(
+                    "auth error during anomaly check — skipping remaining checks",
+                    check=check_name,
+                )
+                raise
+            except Exception:
+                log.exception(f"{check_name} check failed (non-fatal)")
 
         return AnomalyDetectionResult(
             account_id=str(account_id),

@@ -105,10 +105,12 @@ class AccountSyncStatus(BaseModel):
     sync_in_progress: bool  # True while the initial snapshot task is running
     last_snapshot_date: str | None
     started_at: str | None  # ISO timestamp when the sync task was queued
+    error: str | None  # Error message if the sync failed
 
 
 class SyncStatusResponse(BaseModel):
     syncing: bool  # True if any account still has sync_in_progress
+    has_errors: bool  # True if any account had a sync error
     accounts: list[AccountSyncStatus]
     estimated_seconds_remaining: int | None  # rough ETA for first sync
 
@@ -303,6 +305,10 @@ async def get_sync_status(
                         except (ValueError, TypeError):
                             pass
 
+                # Check for sync error
+                error_raw = redis.get(f"sync:error:{acct_id_str}")
+                error_msg: str | None = error_raw.decode() if error_raw else None
+
                 snap_result = await session.execute(
                     select(func.max(CampaignSnapshotModel.snapshot_date)).where(
                         CampaignSnapshotModel.account_id == acct.id
@@ -323,11 +329,13 @@ async def get_sync_status(
                         sync_in_progress=sync_in_progress,
                         last_snapshot_date=str(last_date) if last_date else None,
                         started_at=started_at_iso,
+                        error=error_msg,
                     )
                 )
 
             # ETA: ~120s per account, minus time already elapsed
             pending_count = sum(1 for s in statuses if s.sync_in_progress)
+            has_errors = any(s.error is not None for s in statuses)
             if any_syncing:
                 raw_eta = max(0, pending_count * 120 - total_elapsed)
                 estimated = int(raw_eta) if raw_eta > 0 else 10
@@ -336,6 +344,7 @@ async def get_sync_status(
 
             return SyncStatusResponse(
                 syncing=any_syncing,
+                has_errors=has_errors,
                 accounts=statuses,
                 estimated_seconds_remaining=estimated,
             )
