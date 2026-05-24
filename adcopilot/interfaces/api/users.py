@@ -68,6 +68,7 @@ class RecommendationResponse(BaseModel):
     estimated_monthly_savings_micros: int
     explanation: str | None
     created_at: str
+    evidence: dict[str, object] | None = None
 
 
 class AuditLogResponse(BaseModel):
@@ -544,6 +545,7 @@ async def list_recommendations(
             estimated_monthly_savings_micros=r.estimated_monthly_savings_micros,
             explanation=r.explanation,
             created_at=r.created_at.isoformat(),
+            evidence=dict(r.evidence) if r.evidence else None,
         )
         for r in recs
     ]

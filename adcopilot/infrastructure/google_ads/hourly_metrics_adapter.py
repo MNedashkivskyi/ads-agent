@@ -111,7 +111,7 @@ class GoogleAdsHourlyMetricsAdapter:
                 metrics.impressions,
                 metrics.search_impression_share
             FROM campaign
-            WHERE segments.date IN ('{yesterday}', '{today}')
+            WHERE segments.date BETWEEN '{yesterday}' AND '{today}'
               AND campaign.status = 'ENABLED'
             ORDER BY segments.date, segments.hour
         """
@@ -183,7 +183,9 @@ class GoogleAdsHourlyMetricsAdapter:
         if not target_dates:
             return None
 
-        date_list = ", ".join(f"'{d}'" for d in target_dates)
+        target_date_set = set(target_dates)
+        date_min = min(target_dates)
+        date_max = max(target_dates)
         query = f"""
             SELECT
                 segments.date,
@@ -193,7 +195,7 @@ class GoogleAdsHourlyMetricsAdapter:
                 metrics.impressions,
                 metrics.search_impression_share
             FROM campaign
-            WHERE segments.date IN ({date_list})
+            WHERE segments.date BETWEEN '{date_min}' AND '{date_max}'
               AND segments.hour = {hour_of_day}
               AND campaign.status = 'ENABLED'
         """
@@ -208,6 +210,9 @@ class GoogleAdsHourlyMetricsAdapter:
             "rows": 0,
         }
         for row in response:
+            row_date = str(row.segments.date)
+            if row_date not in target_date_set:
+                continue
             totals["spend"] += row.metrics.cost_micros
             totals["conversions"] += row.metrics.conversions
             totals["impressions"] += row.metrics.impressions
