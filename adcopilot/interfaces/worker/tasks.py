@@ -462,7 +462,7 @@ async def _update_experiment_metrics(
     credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
     exp_repo = AdExperimentRepository(session)
 
-    accounts = await account_repo.get_by_id(acct_id)
+    accounts = await account_repo.get(acct_id)
     if accounts is None:
         return
     credentials = await credentials_repo.get(acct_id)
@@ -2578,18 +2578,19 @@ def snapshot_auction_insights_task(account_id: str, snapshot_date_iso: str) -> d
 
 
 async def _run_auction_insights_snapshot(account_id: str, snap_date) -> dict:
-    import base64
-    import hashlib
     import uuid as _uuid
 
-    from cryptography.fernet import Fernet
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import get_settings
+    from adcopilot.domain.entities import AccountId
     from adcopilot.infrastructure.db.models import AuctionInsightsSnapshotModel
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
     )
     from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
 
@@ -2598,15 +2599,15 @@ async def _run_auction_insights_snapshot(account_id: str, snap_date) -> dict:
     try:
         async with AsyncSession(engine) as session:
             account_repo = SqlGoogleAdsAccountRepository(session)
+            credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
             account = await account_repo.get(account_id)
-            if account is None or not account.refresh_token:
+            if account is None:
                 return {"skipped": True, "reason": "no_account"}
+            credentials = await credentials_repo.get(AccountId(account_id))
+            if credentials is None:
+                return {"skipped": True, "reason": "no_credentials"}
 
-            key = base64.urlsafe_b64encode(
-                hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest()
-            )
-            fernet = Fernet(key)
-            refresh_token = fernet.decrypt(account.refresh_token.encode()).decode()
+            refresh_token = credentials.refresh_token
             customer_id = account.customer_id
 
         adapter = GoogleAdsQueriesAdapter(settings)
