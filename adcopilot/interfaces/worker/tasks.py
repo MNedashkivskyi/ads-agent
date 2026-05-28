@@ -990,19 +990,22 @@ async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
 def generate_campaign_task(
     brief_id: str,
     revision_text: str | None = None,
+    template_id: str | None = None,
 ) -> dict[str, object]:
     """Generate a campaign proposal (log-only; notification wired in Phase 1).
 
     Dispatched when the user submits a campaign brief or revision.
+    template_id: when set, uses hybrid path (template structure + LLM copy).
     """
     import asyncio
 
-    return asyncio.run(_run_generate_campaign(brief_id, revision_text))
+    return asyncio.run(_run_generate_campaign(brief_id, revision_text, template_id))
 
 
 async def _run_generate_campaign(
     brief_id: str,
     revision_text: str | None,
+    template_id: str | None = None,
 ) -> dict[str, object]:
     """Run the proposal-generation pipeline (log-only; notification wired in Phase 1)."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -1045,14 +1048,27 @@ async def _run_generate_campaign(
                 await proposal_repo.save(proposal)
                 await brief_repo.update_status(brief.id, LaunchStatus.PROPOSED)
             else:
+                from adcopilot.application.services.template_proposal_assembler import (
+                    TemplateProposalAssembler,
+                )
+                from adcopilot.infrastructure.vertical_templates.yaml_adapter import (
+                    YamlVerticalTemplateAdapter,
+                )
+
                 llm = AnthropicClient(api_key=settings.LLM_API_KEY)
                 generator = CampaignGenerator(llm)
                 use_case = GenerateCampaignProposalUseCase(
                     brief_repo=brief_repo,
                     proposal_repo=proposal_repo,
                     generator=generator,
+                    template_repo=YamlVerticalTemplateAdapter(),
+                    assembler=TemplateProposalAssembler(),
                 )
-                proposal = await use_case.execute(brief, revision_feedback=revision_text)
+                proposal = await use_case.execute(
+                    brief,
+                    revision_feedback=revision_text,
+                    template_id=template_id,
+                )
 
             proposal_id = str(proposal.id)
 

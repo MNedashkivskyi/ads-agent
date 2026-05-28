@@ -12,14 +12,17 @@ session cookie check) should be added when the full web app is wired up.
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
+from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import get_settings
 from adcopilot.infrastructure.vertical_templates.yaml_adapter import YamlVerticalTemplateAdapter
+from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
 
@@ -72,6 +75,27 @@ class VerticalResponse(BaseModel):
     emoji: str
     description: str
     common_services: list[str]
+
+
+class GenerateProposalRequest(BaseModel):
+    template_id: str | None = None
+    category_label: str
+    selected_services: list[str] = []
+    website_url: str | None = None
+    location: str
+    monthly_budget_pln: float
+    primary_action: str = "phone_call"
+    account_id: str
+
+
+class GenerateProposalResponse(BaseModel):
+    brief_id: str
+    status: str  # "generating"
+
+
+class ProposalStatusResponse(BaseModel):
+    status: str  # "generating" | "ready" | "failed"
+    proposal_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -167,3 +191,120 @@ async def get_proposal_preview(proposal_id: str) -> ProposalPreviewResponse:
         estimated_cpc_max_pln=proposal.estimated_cpc_range[1] / _MICROS_PER_PLN,
         generated_at=proposal.generated_at.isoformat(),
     )
+
+
+@api_router.post(
+    "/proposals/generate",
+    response_model=GenerateProposalResponse,
+    status_code=202,
+)
+async def generate_proposal(
+    body: GenerateProposalRequest,
+    user_id: CurrentUser,
+) -> GenerateProposalResponse:
+    """Create a CampaignBrief and dispatch a Celery generation task.
+
+    Returns the brief_id immediately so the client can poll for status.
+    The brief status starts at GENERATING; transitions to PROPOSED on success.
+    """
+    from datetime import UTC, datetime
+
+    from adcopilot.domain.entities import AccountId, UserId
+    from adcopilot.domain.launch.entities import (
+        CampaignBrief,
+        CampaignBriefId,
+        LaunchStatus,
+    )
+    from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
+        SqlCampaignBriefRepository,
+    )
+    from adcopilot.interfaces.worker.tasks import generate_campaign_task
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    brief_id = str(uuid.uuid4())
+
+    description_parts = [body.category_label]
+    if body.selected_services:
+        description_parts.append(", ".join(body.selected_services[:5]))
+
+    brief = CampaignBrief(
+        id=CampaignBriefId(brief_id),
+        user_id=UserId(user_id),
+        account_id=AccountId(body.account_id),
+        business_description=" — ".join(description_parts),
+        location=body.location,
+        typical_customer_value=Decimal("200"),
+        primary_action=body.primary_action,
+        monthly_budget_pln=Decimal(str(body.monthly_budget_pln)),
+        exclusions=[],
+        language="pl",
+        created_at=datetime.now(UTC),
+        status=LaunchStatus.GENERATING,
+    )
+
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            repo = SqlCampaignBriefRepository(session)
+            await repo.save(brief)
+    finally:
+        await engine.dispose()
+
+    generate_campaign_task.delay(brief_id, template_id=body.template_id)
+
+    logger.info("generate_proposal submitted", brief_id=brief_id, user_id=user_id)
+    return GenerateProposalResponse(brief_id=brief_id, status="generating")
+
+
+@api_router.get(
+    "/proposals/{brief_id}/status",
+    response_model=ProposalStatusResponse,
+)
+async def get_proposal_status(
+    brief_id: str,
+    user_id: CurrentUser,
+) -> ProposalStatusResponse:
+    """Poll for campaign proposal generation status.
+
+    Returns `generating`, `ready`, or `failed`.
+    When ready, includes the `proposal_id` for the full preview.
+    """
+    try:
+        uuid.UUID(brief_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid brief ID format") from None
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+
+    try:
+        async with AsyncSession(engine) as session:
+            from adcopilot.domain.launch.entities import (
+                CampaignBriefId,
+                LaunchStatus,
+            )
+            from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
+                SqlCampaignBriefRepository,
+            )
+            from adcopilot.infrastructure.db.repositories.launch_proposal_repository import (
+                SqlCampaignProposalRepository,
+            )
+
+            brief_repo = SqlCampaignBriefRepository(session)
+            brief = await brief_repo.get(CampaignBriefId(brief_id))
+
+            if brief is None or brief.user_id != user_id:
+                raise HTTPException(status_code=404, detail="Brief not found")
+
+            if brief.status == LaunchStatus.PROPOSED:
+                proposal_repo = SqlCampaignProposalRepository(session)
+                proposal = await proposal_repo.get_by_brief(CampaignBriefId(brief_id))
+                proposal_id = str(proposal.id) if proposal else None
+                return ProposalStatusResponse(status="ready", proposal_id=proposal_id)
+
+            if brief.status == LaunchStatus.GENERATING:
+                return ProposalStatusResponse(status="generating")
+
+            return ProposalStatusResponse(status="failed")
+    finally:
+        await engine.dispose()
