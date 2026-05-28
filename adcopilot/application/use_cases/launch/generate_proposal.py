@@ -26,11 +26,26 @@ from adcopilot.application.ports.launch_repositories import (
     CampaignBriefRepo,
     CampaignProposalRepo,
 )
+from adcopilot.application.ports.vertical_template_repository import VerticalTemplateRepository
+from adcopilot.application.services.template_proposal_assembler import TemplateProposalAssembler
 from adcopilot.domain.exceptions import LLMError
 from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
-from adcopilot.domain.launch.entities import CampaignBrief, CampaignProposal, LaunchStatus
+from adcopilot.domain.launch.entities import (
+    AdGroupProposal,
+    AdProposal,
+    CampaignBrief,
+    CampaignProposal,
+    LaunchStatus,
+)
 from adcopilot.domain.launch.templates import build_proposal_from_template
-from adcopilot.infrastructure.llm.campaign_generator import BrandCampaignResponse, CampaignGenerator
+from adcopilot.infrastructure.llm.campaign_generator import (
+    AdGroupCopyResponse,
+    AdGroupItem,
+    BrandCampaignResponse,
+    CampaignGenerator,
+    KeywordItem,
+    VerticalClassification,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -123,6 +138,12 @@ class GenerateCampaignProposalUseCase:
     website_url
         Optional URL of the advertiser's website (from the Google Ads account).
         Passed to vertical detection for richer classification.
+    template_repo
+        Optional :class:`VerticalTemplateRepository` for the hybrid path.
+        Required when callers pass ``template_id`` to :meth:`execute`.
+    assembler
+        Optional :class:`TemplateProposalAssembler` for the hybrid path.
+        Defaults to a new instance when not provided.
     """
 
     def __init__(
@@ -131,21 +152,27 @@ class GenerateCampaignProposalUseCase:
         proposal_repo: CampaignProposalRepo,
         generator: CampaignGenerator,
         website_url: str | None = None,
+        template_repo: VerticalTemplateRepository | None = None,
+        assembler: TemplateProposalAssembler | None = None,
     ) -> None:
         self._brief_repo = brief_repo
         self._proposal_repo = proposal_repo
         self._generator = generator
         self._website_url = website_url
+        self._template_repo = template_repo
+        self._assembler = assembler or TemplateProposalAssembler()
 
     async def execute(
         self,
         brief: CampaignBrief,
         revision_feedback: str | None = None,
+        template_id: str | None = None,
     ) -> CampaignProposal:
         """Generate, persist, and return a ``CampaignProposal`` for *brief*.
 
         Status transitions:
           COLLECTING → GENERATING → PROPOSED   (success path)
+          COLLECTING → GENERATING → PROPOSED   (hybrid template path)
           COLLECTING → GENERATING → PROPOSED   (template fallback path)
 
         Parameters
@@ -157,6 +184,14 @@ class GenerateCampaignProposalUseCase:
             previously generated proposal.  When provided it is passed as LLM
             feedback to the structure and ad-copy stages so the model adjusts
             the output accordingly.
+        template_id
+            Optional vertical template ID (e.g. ``'beauty_salon'``).  When
+            provided *and* the template exists in ``template_repo``, the use
+            case skips LLM stages 1 and 2 (vertical detection + campaign
+            structure) and uses :class:`TemplateProposalAssembler` instead.
+            LLM stages 3 (ad copy) and 4 (negatives) still run.
+            Falls back to the full LLM pipeline when ``template_id`` is
+            ``None`` or the template is not found.
 
         Raises
         ------
@@ -173,16 +208,40 @@ class GenerateCampaignProposalUseCase:
             "proposal_generation_started",
             brief_id=brief.id,
             revision=bool(revision_feedback),
+            template_id=template_id,
         )
 
+        # Resolve template for the hybrid path
+        resolved_template = None
+        if template_id and self._template_repo:
+            resolved_template = self._template_repo.get_template(template_id)
+            if resolved_template is None:
+                logger.warning(
+                    "template_not_found_falling_back_to_llm",
+                    brief_id=brief.id,
+                    template_id=template_id,
+                )
+
         try:
-            proposal = await self._run_pipeline(brief, revision_feedback=revision_feedback)
-            logger.info(
-                "proposal_generation_succeeded",
-                brief_id=brief.id,
-                proposal_id=proposal.id,
-                via="llm",
-            )
+            if resolved_template is not None:
+                proposal = await self._run_hybrid_pipeline(
+                    brief, resolved_template, revision_feedback=revision_feedback
+                )
+                logger.info(
+                    "proposal_generation_succeeded",
+                    brief_id=brief.id,
+                    proposal_id=proposal.id,
+                    via="hybrid",
+                    template_id=template_id,
+                )
+            else:
+                proposal = await self._run_pipeline(brief, revision_feedback=revision_feedback)
+                logger.info(
+                    "proposal_generation_succeeded",
+                    brief_id=brief.id,
+                    proposal_id=proposal.id,
+                    via="llm",
+                )
         except LLMError as exc:
             logger.warning(
                 "proposal_generation_failed_using_template",
@@ -199,6 +258,94 @@ class GenerateCampaignProposalUseCase:
 
         await self._proposal_repo.save(proposal)
         await self._brief_repo.update_status(brief.id, LaunchStatus.PROPOSED)
+        return proposal
+
+    # ------------------------------------------------------------------
+    # Hybrid pipeline (template structure + LLM ad copy)
+    # ------------------------------------------------------------------
+
+    async def _run_hybrid_pipeline(
+        self,
+        brief: CampaignBrief,
+        template,  # VerticalTemplate — imported lazily to avoid circular deps
+        revision_feedback: str | None = None,
+    ) -> CampaignProposal:
+        """Build proposal from template structure, then personalise ad copy with LLM.
+
+        Stages 1 (vertical detection) and 2 (campaign structure) are replaced by
+        the template assembler.  Stages 3 (ad copy) and 4 (negatives) still run.
+        """
+        import dataclasses as _dc
+
+        # Build template-based proposal (stages 1+2 replaced)
+        base_proposal = self._assembler.assemble(template, brief)
+
+        # Synthetic VerticalClassification for stage 4
+        vertical = VerticalClassification(
+            vertical=template.vertical_id,
+            competitive_level=template.competitive_level.value,
+            language_hint=template.language,
+        )
+
+        # Stage 3 — LLM ad copy for each ad group
+        ad_groups_with_llm_copy: list[AdGroupProposal] = []
+        for ag in base_proposal.ad_groups:
+            # Build a lightweight AdGroupItem for the LLM prompt
+            ag_item = AdGroupItem(
+                name=ag.name,
+                theme=ag.name,
+                keywords=[
+                    KeywordItem(text=kw.text, match_type=kw.match_type.value)
+                    for kw in ag.keywords[:10]
+                ],
+            )
+            try:
+                copy_resp: AdGroupCopyResponse = await self._generator.generate_ad_copy(
+                    ag_item, brief, feedback=revision_feedback
+                )
+                ads: list[AdProposal] = [
+                    AdProposal(
+                        headlines=v.headlines,
+                        descriptions=v.descriptions,
+                        final_url=ag.ads[0].final_url if ag.ads else "https://example.com",
+                        path_segments=(v.path1[:15], v.path2[:15]),
+                    )
+                    for v in copy_resp.variants
+                ]
+            except LLMError:
+                logger.warning(
+                    "hybrid_ad_copy_failed_keeping_placeholder",
+                    ad_group=ag.name,
+                    brief_id=brief.id,
+                )
+                ads = ag.ads  # keep assembler placeholders
+
+            ad_groups_with_llm_copy.append(
+                AdGroupProposal(name=ag.name, keywords=ag.keywords, ads=ads)
+            )
+
+        # Stage 4 — LLM negatives (merged with template negatives)
+        try:
+            neg_resp = await self._generator.generate_negatives(brief, vertical)
+            extra_negatives = [
+                n for n in neg_resp.keywords
+                if n not in base_proposal.negative_keywords
+            ]
+        except LLMError:
+            logger.warning("hybrid_negatives_failed_using_template_only", brief_id=brief.id)
+            extra_negatives = []
+
+        proposal = _dc.replace(
+            base_proposal,
+            ad_groups=ad_groups_with_llm_copy,
+            negative_keywords=base_proposal.negative_keywords + extra_negatives,
+        )
+
+        # Apply post-processing (seasonal + purchasing power + compliance)
+        proposal, _ = _apply_seasonal_multiplier(proposal, template.vertical_id)
+        proposal = _apply_purchasing_power(proposal, brief.location)
+        proposal = _run_compliance_validators(proposal, template.vertical_id)
+
         return proposal
 
     # ------------------------------------------------------------------
