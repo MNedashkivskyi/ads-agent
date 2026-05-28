@@ -19,10 +19,14 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import get_settings
+from adcopilot.infrastructure.vertical_templates.yaml_adapter import YamlVerticalTemplateAdapter
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/app/launch", tags=["launch"])
+api_router = APIRouter(prefix="/api", tags=["launch"])
+
+_template_adapter = YamlVerticalTemplateAdapter()
 
 
 # ---------------------------------------------------------------------------
@@ -62,11 +66,42 @@ class ProposalPreviewResponse(BaseModel):
     generated_at: str
 
 
+class VerticalResponse(BaseModel):
+    id: str
+    display_name: str
+    emoji: str
+    description: str
+    common_services: list[str]
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
 _MICROS_PER_PLN = 1_000_000
+
+
+@api_router.get("/verticals", response_model=list[VerticalResponse])
+async def list_verticals() -> list[VerticalResponse]:
+    """Return all available vertical templates for the campaign creation wizard."""
+    summaries = _template_adapter.list_verticals()
+    result: list[VerticalResponse] = []
+    for summary in summaries:
+        tmpl = _template_adapter.get_template(summary.vertical_id)
+        if tmpl is None:
+            continue
+        services_preview = tmpl.common_services[:3]
+        description = ", ".join(services_preview) if services_preview else tmpl.display_name
+        result.append(
+            VerticalResponse(
+                id=tmpl.vertical_id,
+                display_name=tmpl.display_name,
+                emoji=tmpl.display_emoji,
+                description=description,
+                common_services=tmpl.common_services,
+            )
+        )
+    return result
 
 
 @router.get("/preview/{proposal_id}", response_model=ProposalPreviewResponse)
