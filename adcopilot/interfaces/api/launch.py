@@ -97,6 +97,13 @@ class ProposalStatusResponse(BaseModel):
     proposal_id: str | None = None
 
 
+class ConversionTrackingStatusResponse(BaseModel):
+    customer_id: str
+    has_conversion_tracking: bool
+    conversion_action_count: int
+    active_action_names: list[str]
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -189,6 +196,59 @@ async def get_proposal_preview(proposal_id: str) -> ProposalPreviewResponse:
         estimated_cpc_min_pln=proposal.estimated_cpc_range[0] / _MICROS_PER_PLN,
         estimated_cpc_max_pln=proposal.estimated_cpc_range[1] / _MICROS_PER_PLN,
         generated_at=proposal.generated_at.isoformat(),
+    )
+
+
+@api_router.get(
+    "/accounts/{account_id}/conversion-tracking",
+    response_model=ConversionTrackingStatusResponse,
+)
+async def check_conversion_tracking(
+    account_id: str,
+    user_id: CurrentUser,
+) -> ConversionTrackingStatusResponse:
+    """Check whether a Google Ads account has active macro-conversion tracking.
+
+    Used by the wizard to decide whether to show the conversion setup gate step.
+    Returns has_conversion_tracking=false on any API error (fail-open).
+    """
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.infrastructure.adapters.google_ads_conversion_adapter import (
+        GoogleAdsConversionAdapter,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
+    )
+    from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+
+    try:
+        async with AsyncSession(engine) as session:
+            creds_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
+            creds = await creds_repo.get(AccountId(account_id))
+            if creds is None:
+                raise HTTPException(status_code=404, detail="No OAuth credentials found for account")
+            refresh_token = creds.refresh_token
+    finally:
+        await engine.dispose()
+
+    google_ads_client = GoogleAdsQueriesAdapter(settings)
+    adapter = GoogleAdsConversionAdapter(google_ads_client)
+    status = await adapter.check(refresh_token, account_id)
+
+    logger.info(
+        "conversion_tracking_check",
+        account_id=account_id,
+        user_id=user_id,
+        has_tracking=status.has_conversion_tracking,
+    )
+    return ConversionTrackingStatusResponse(
+        customer_id=status.customer_id,
+        has_conversion_tracking=status.has_conversion_tracking,
+        conversion_action_count=status.conversion_action_count,
+        active_action_names=status.active_action_names,
     )
 
 
