@@ -1,0 +1,106 @@
+vertical_id: generic
+display_name: Inna branża
+display_emoji: "✏️"
+language: pl
+competitive_level: medium
+
+ad_groups:
+  - name_template: "Usługi {city}"
+    keyword_bank:
+      - text: "usługi {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "profesjonalne usługi"
+        match_type: PHRASE
+        priority: core
+      - text: "lokalne usługi {city}"
+        match_type: BROAD
+        priority: core
+      - text: "wycena usług"
+        match_type: PHRASE
+        priority: core
+      - text: "firma usługowa"
+        match_type: BROAD
+        priority: core
+      - text: "najlepsza firma {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "oferta usług {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "kontakt z firmą"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+  - name_template: "Kontakt i wycena"
+    keyword_bank:
+      - text: "bezpłatna wycena"
+        match_type: PHRASE
+        priority: core
+      - text: "zamów usługę"
+        match_type: PHRASE
+        priority: core
+      - text: "umów wizytę"
+        match_type: PHRASE
+        priority: core
+      - text: "skontaktuj się"
+        match_type: BROAD
+        priority: core
+      - text: "szybka obsługa"
+        match_type: PHRASE
+        priority: core
+      - text: "dobra cena usługi"
+        match_type: PHRASE
+        priority: extended
+      - text: "sprawdzona firma"
+        match_type: PHRASE
+        priority: extended
+      - text: "fachowa pomoc"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - kurs
+    - szkolenie
+    - jak zrobić
+    - youtube
+    - tiktok
+  vertical_specific: []
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 3.0
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 8.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 15.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "O nas"
+      path: "o-nas"
+    - text: "Kontakt"
+      path: "kontakt"
+    - text: "Cennik"
+      path: "cennik"
+  callouts:
+    - "Doświadczony zespół"
+    - "Szybka realizacja"
+    - "Konkurencyjne ceny"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Usługi podstawowe
+  - Konsultacje
+  - Obsługa klienta
