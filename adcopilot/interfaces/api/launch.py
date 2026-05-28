@@ -13,10 +13,9 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
