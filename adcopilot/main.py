@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.landing_page import router as landing_page_router
     from adcopilot.interfaces.api.launch import api_router as launch_api_router
     from adcopilot.interfaces.api.launch import router as launch_router
+    from adcopilot.interfaces.api.website import router as website_router
     from adcopilot.interfaces.api.notifications import router as notifications_router
     from adcopilot.interfaces.api.oauth import router as oauth_router
     from adcopilot.interfaces.api.pmax import router as pmax_router
@@ -110,6 +111,7 @@ def create_app() -> FastAPI:
     application.include_router(debug_router)
     application.include_router(launch_router)
     application.include_router(launch_api_router)
+    application.include_router(website_router)
     application.include_router(dashboard_router)
     application.include_router(notifications_router)
     application.include_router(conversion_tracking_router)
