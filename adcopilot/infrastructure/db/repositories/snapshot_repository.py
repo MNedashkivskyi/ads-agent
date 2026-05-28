@@ -839,6 +839,7 @@ class SqlSnapshotRepository:
                 "counting_type": s.counting_type,
                 "status": s.status,
                 "include_in_conversions_metric": s.include_in_conversions_metric,
+                "all_conversions": s.all_conversions,
             }
             for s in snapshots
         ]
@@ -851,6 +852,7 @@ class SqlSnapshotRepository:
                 "counting_type": stmt.excluded.counting_type,
                 "status": stmt.excluded.status,
                 "include_in_conversions_metric": stmt.excluded.include_in_conversions_metric,
+                "all_conversions": stmt.excluded.all_conversions,
                 "updated_at": text("now()"),
             },
         )
@@ -877,6 +879,7 @@ class SqlSnapshotRepository:
                 counting_type=m.counting_type,
                 status=m.status,
                 include_in_conversions_metric=m.include_in_conversions_metric,
+                all_conversions=m.all_conversions,
             )
             for m in res.scalars().all()
         ]

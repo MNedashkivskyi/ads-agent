@@ -80,9 +80,10 @@ async def forecast_seasonality(
     # -------------------------------------------------------------------------
     # 1. Pull monthly aggregated performance from CampaignSnapshotModel
     # -------------------------------------------------------------------------
+    month_expr = func.to_char(CampaignSnapshotModel.snapshot_date, "YYYY-MM")
     stmt = (
         select(
-            func.to_char(CampaignSnapshotModel.snapshot_date, "YYYY-MM").label("month"),
+            month_expr.label("month"),
             func.sum(CampaignSnapshotModel.cost_micros).label("spend_micros"),
             func.sum(CampaignSnapshotModel.clicks).label("clicks"),
             func.sum(CampaignSnapshotModel.conversions).label("conversions"),
@@ -92,8 +93,8 @@ async def forecast_seasonality(
             CampaignSnapshotModel.account_id == acct_uuid,
             CampaignSnapshotModel.snapshot_date >= cutoff,
         )
-        .group_by(func.to_char(CampaignSnapshotModel.snapshot_date, "YYYY-MM"))
-        .order_by(func.to_char(CampaignSnapshotModel.snapshot_date, "YYYY-MM"))
+        .group_by(month_expr)
+        .order_by(month_expr)
     )
     rows = (await session.execute(stmt)).all()
 

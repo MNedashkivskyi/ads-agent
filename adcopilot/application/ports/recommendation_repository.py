@@ -6,13 +6,22 @@ from datetime import date
 from typing import Protocol
 
 from adcopilot.domain.entities import AccountId
-from adcopilot.domain.recommendation import Recommendation, RecommendationId, RecommendationStatus
+from adcopilot.domain.recommendation import (
+    Recommendation,
+    RecommendationId,
+    RecommendationKind,
+    RecommendationStatus,
+)
 
 
 class RecommendationRepository(Protocol):
     async def get(self, rec_id: RecommendationId) -> Recommendation | None: ...
 
     async def list_pending(self, account_id: AccountId) -> list[Recommendation]: ...
+
+    async def list_active_dedup_keys(
+        self, account_id: AccountId
+    ) -> set[tuple[RecommendationKind, str]]: ...
 
     async def save(self, rec: Recommendation) -> None: ...
 

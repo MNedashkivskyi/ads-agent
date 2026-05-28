@@ -68,6 +68,8 @@ class RecommendationResponse(BaseModel):
     estimated_monthly_savings_micros: int
     explanation: str | None
     created_at: str
+    evidence: dict[str, object] | None = None
+    is_executable: bool = True
 
 
 class AuditLogResponse(BaseModel):
@@ -94,6 +96,25 @@ class UserMeResponse(BaseModel):
     max_accounts: int
     subscription_status: str  # "trialing" | "active" | "canceled" | ...
     trial_started_at: str | None
+
+
+class AccountSyncStatus(BaseModel):
+    account_id: str
+    customer_id: str
+    descriptive_name: str
+    connected_at: str
+    has_snapshots: bool
+    sync_in_progress: bool  # True while the initial snapshot task is running
+    last_snapshot_date: str | None
+    started_at: str | None  # ISO timestamp when the sync task was queued
+    error: str | None  # Error message if the sync failed
+
+
+class SyncStatusResponse(BaseModel):
+    syncing: bool  # True if any account still has sync_in_progress
+    has_errors: bool  # True if any account had a sync error
+    accounts: list[AccountSyncStatus]
+    estimated_seconds_remaining: int | None  # rough ETA for first sync
 
 
 # ---------------------------------------------------------------------------
@@ -221,6 +242,116 @@ async def list_accounts(
         )
         for a in accounts
     ]
+
+
+@router.get("/{user_id}/sync-status", response_model=SyncStatusResponse)
+async def get_sync_status(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SyncStatusResponse:
+    """Check whether initial data sync has completed for the user's accounts.
+
+    Returns per-account snapshot status and an estimated time remaining
+    so the frontend can render a progress indicator.
+    """
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    import uuid as _uuid
+
+    from redis import Redis
+    from sqlalchemy import func, select
+
+    from adcopilot.infrastructure.db.models import CampaignSnapshotModel, GoogleAdsAccountModel
+
+    redis = Redis.from_url(settings.REDIS_URL)
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            acct_result = await session.execute(
+                select(GoogleAdsAccountModel).where(
+                    GoogleAdsAccountModel.user_id == _uuid.UUID(user_id)
+                )
+            )
+            accounts = acct_result.scalars().all()
+
+            if not accounts:
+                return SyncStatusResponse(
+                    syncing=False, accounts=[], estimated_seconds_remaining=None
+                )
+
+            statuses: list[AccountSyncStatus] = []
+            any_syncing = False
+            total_elapsed = 0.0
+
+            for acct in accounts:
+                acct_id_str = str(acct.id)
+
+                # Check the Redis marker set by link_google_ads_accounts_task.
+                # This is the authoritative signal for "sync in progress".
+                redis_key = f"sync:initial:{acct_id_str}"
+                started_raw = redis.get(redis_key)
+                sync_in_progress = started_raw is not None
+                started_at_iso: str | None = None
+
+                if sync_in_progress:
+                    any_syncing = True
+                    started_at_iso = started_raw.decode() if started_raw else None
+                    # Calculate elapsed time for ETA
+                    if started_at_iso:
+                        try:
+                            started_dt = datetime.fromisoformat(started_at_iso)
+                            elapsed = (datetime.now(UTC) - started_dt).total_seconds()
+                            total_elapsed = max(total_elapsed, elapsed)
+                        except (ValueError, TypeError):
+                            pass
+
+                # Check for sync error
+                error_raw = redis.get(f"sync:error:{acct_id_str}")
+                error_msg: str | None = error_raw.decode() if error_raw else None
+
+                snap_result = await session.execute(
+                    select(func.max(CampaignSnapshotModel.snapshot_date)).where(
+                        CampaignSnapshotModel.account_id == acct.id
+                    )
+                )
+                last_date = snap_result.scalar_one_or_none()
+                has_snapshots = last_date is not None
+
+                statuses.append(
+                    AccountSyncStatus(
+                        account_id=acct_id_str,
+                        customer_id=acct.customer_id,
+                        descriptive_name=acct.descriptive_name or "",
+                        connected_at=acct.connected_at.isoformat()
+                        if acct.connected_at
+                        else "",
+                        has_snapshots=has_snapshots,
+                        sync_in_progress=sync_in_progress,
+                        last_snapshot_date=str(last_date) if last_date else None,
+                        started_at=started_at_iso,
+                        error=error_msg,
+                    )
+                )
+
+            # ETA: ~120s per account, minus time already elapsed
+            pending_count = sum(1 for s in statuses if s.sync_in_progress)
+            has_errors = any(s.error is not None for s in statuses)
+            if any_syncing:
+                raw_eta = max(0, pending_count * 120 - total_elapsed)
+                estimated = int(raw_eta) if raw_eta > 0 else 10
+            else:
+                estimated = None
+
+            return SyncStatusResponse(
+                syncing=any_syncing,
+                has_errors=has_errors,
+                accounts=statuses,
+                estimated_seconds_remaining=estimated,
+            )
+    finally:
+        await engine.dispose()
 
 
 @router.delete("/{user_id}/accounts/{account_id}", status_code=204)
@@ -405,6 +536,9 @@ async def list_recommendations(
     finally:
         await engine.dispose()
 
+    from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS, RecommendationKind
+
+    non_exec_values = {k.value for k in NON_EXECUTABLE_KINDS}
     return [
         RecommendationResponse(
             id=str(r.id),
@@ -415,9 +549,46 @@ async def list_recommendations(
             estimated_monthly_savings_micros=r.estimated_monthly_savings_micros,
             explanation=r.explanation,
             created_at=r.created_at.isoformat(),
+            evidence=dict(r.evidence) if r.evidence else None,
+            is_executable=r.kind not in non_exec_values,
         )
         for r in recs
     ]
+
+
+@router.post("/{user_id}/recommendations/refresh")
+async def refresh_recommendations(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, Any]:
+    """Re-run detection and generate explanations for all accounts of the user."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Cannot refresh another user's recommendations")
+
+    from adcopilot.interfaces.worker.tasks import snapshot_account_task
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+                SqlGoogleAdsAccountRepository,
+            )
+
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            accounts = await account_repo.list_for_user(UserId(user_id))
+            if not accounts:
+                return {"queued": 0}
+
+            from datetime import date as date_type
+
+            today_iso = date_type.today().isoformat()
+            for account in accounts:
+                snapshot_account_task.delay(str(account.id), today_iso)
+
+            return {"queued": len(accounts)}
+    finally:
+        await engine.dispose()
 
 
 @router.get("/{user_id}/audit-log", response_model=list[AuditLogResponse])
@@ -483,7 +654,12 @@ async def approve_recommendation(
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+    from adcopilot.domain.recommendation import (
+        NON_EXECUTABLE_KINDS,
+        RecommendationId,
+        RecommendationKind,
+        RecommendationStatus,
+    )
     from adcopilot.infrastructure.db.repositories.recommendation_repository import (
         SqlRecommendationRepository,
     )
@@ -495,10 +671,15 @@ async def approve_recommendation(
             rec = await repo.get(RecommendationId(rec_id))
             if rec is None:
                 raise HTTPException(status_code=404, detail="Recommendation not found")
-            if rec.status != RecommendationStatus.PENDING:
+            if rec.status not in (RecommendationStatus.PENDING, RecommendationStatus.FAILED):
                 raise HTTPException(
                     status_code=409,
                     detail=f"Recommendation is already {rec.status.value}",
+                )
+            if rec.kind in NON_EXECUTABLE_KINDS:
+                raise HTTPException(
+                    status_code=422,
+                    detail="This recommendation is informational and cannot be auto-executed",
                 )
             await repo.update_status(RecommendationId(rec_id), RecommendationStatus.APPROVED)
     finally:
@@ -535,7 +716,7 @@ async def decline_recommendation(
             rec = await repo.get(RecommendationId(rec_id))
             if rec is None:
                 raise HTTPException(status_code=404, detail="Recommendation not found")
-            if rec.status != RecommendationStatus.PENDING:
+            if rec.status not in (RecommendationStatus.PENDING, RecommendationStatus.FAILED):
                 raise HTTPException(
                     status_code=409,
                     detail=f"Recommendation is already {rec.status.value}",

@@ -8,7 +8,7 @@ from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import Settings, get_settings
@@ -62,10 +62,10 @@ async def get_performance(
             rows = await session.execute(
                 select(
                     CampaignSnapshotModel.snapshot_date,
-                    text("SUM(cost_micros) AS total_cost_micros"),
-                    text("SUM(clicks) AS total_clicks"),
-                    text("SUM(impressions) AS total_impressions"),
-                    text("SUM(conversions) AS total_conversions"),
+                    func.sum(CampaignSnapshotModel.cost_micros).label("total_cost_micros"),
+                    func.sum(CampaignSnapshotModel.clicks).label("total_clicks"),
+                    func.sum(CampaignSnapshotModel.impressions).label("total_impressions"),
+                    func.sum(CampaignSnapshotModel.conversions).label("total_conversions"),
                 )
                 .where(
                     CampaignSnapshotModel.account_id.in_([uuid.UUID(aid) for aid in account_ids]),

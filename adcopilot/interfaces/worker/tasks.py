@@ -203,6 +203,31 @@ async def _async_link_google_ads_accounts(
         user_id=user_id,
         linked_count=len(linked_ids),
     )
+
+    # Kick off an initial snapshot for each newly linked account so the user
+    # sees data immediately instead of waiting for the 3 AM nightly run.
+    today_iso = date.today().isoformat()
+    redis = _redis_client()
+    now_iso = datetime.now(UTC).isoformat()
+    for customer_id in linked_ids:
+        account_id = str(
+            uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}")
+        )
+        # Mark the account as "initial sync in progress" in Redis.
+        # TTL of 10 min — if the task hangs, the marker auto-expires so the
+        # frontend doesn't show "syncing" forever.
+        redis.set(
+            f"sync:initial:{account_id}",
+            now_iso,
+            ex=600,
+        )
+        snapshot_account_task.delay(account_id, today_iso)
+        logger.info(
+            "queued initial snapshot after account linking",
+            account_id=account_id,
+            user_id=user_id,
+        )
+
     return {"success": True, "linked_count": len(linked_ids), "linked_ids": linked_ids}
 
 
@@ -242,12 +267,20 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
         # needs_reauth=True on the account.  Notify the user so they know to
         # reconnect their Google Ads account.
         if not result.success and "GoogleAdsAuthError" in (result.error_message or ""):
-            # TODO(phase-1): send reauth notification via new notifier
             logger.warning(
                 "snapshot auth failure — user needs to reconnect Google Ads",
                 account_id=account_id,
             )
+        if not result.success:
+            # Store the error so the sync-status endpoint can report it.
+            redis.set(
+                f"sync:error:{account_id}",
+                result.error_message or "Unknown error",
+                ex=3600,  # 1 hour TTL
+            )
         if result.success:
+            # Clear any stale error from a previous failed attempt.
+            redis.delete(f"sync:error:{account_id}")
             # Run detection asynchronously after a successful snapshot
             asyncio.run(_run_detection(settings, AccountId(account_id), snap_date))
             # Record QS history for trend tracking
@@ -266,8 +299,20 @@ def snapshot_account_task(account_id: str, snapshot_date_iso: str) -> dict[str, 
             "duration_seconds": result.duration_seconds,
             "success": result.success,
         }
+    except Exception as exc:
+        # Unexpected crash (e.g. all 14 queries failed) — save error for frontend.
+        redis.set(
+            f"sync:error:{account_id}",
+            str(exc)[:500],
+            ex=3600,
+        )
+        raise
     finally:
         redis.delete(lock_key)
+        # Clear the initial-sync marker so the frontend stops showing
+        # the progress bar.  This runs whether the snapshot succeeded or
+        # failed — either way, the sync attempt is finished.
+        redis.delete(f"sync:initial:{account_id}")
 
 
 async def _run_snapshot(settings: object, account_id: object, snap_date: date) -> SnapshotResult:
@@ -336,7 +381,7 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
             # from the snapshot repository to determine if any are healthy.
             snapshot_repo = SqlSnapshotRepository(session)
             conversion_actions = await snapshot_repo.get_conversion_actions(
-                AccountId(str(account_id))
+                AccountId(str(account_id)), snap_date
             )
             has_working_tracking = any(
                 a.status == "ENABLED" and a.all_conversions > 0 for a in conversion_actions
@@ -357,12 +402,59 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
                 account_repo=SqlGoogleAdsAccountRepository(session),
             )
             await use_case.execute(AccountId(str(account_id)), snap_date)
+            await _generate_explanations(session, settings, AccountId(str(account_id)))
             await _update_experiment_metrics(session, settings, AccountId(str(account_id)))
             await _notify_pmax_alerts(session, settings, AccountId(str(account_id)), snap_date)
     except Exception:
         logger.exception("detection failed (non-fatal)", account_id=str(account_id))
     finally:
         await engine.dispose()
+
+
+async def _generate_explanations(
+    session: object,
+    settings: object,
+    account_id: object,
+) -> None:
+    """Generate LLM explanations for all PENDING recs that lack one."""
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from adcopilot.application.use_cases.explain_recommendation import ExplainRecommendationUseCase
+    from adcopilot.config import Settings
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
+
+    assert isinstance(settings, Settings)
+    assert isinstance(session, AsyncSession)
+
+    rec_repo = SqlRecommendationRepository(session)
+    pending = await rec_repo.list_pending(str(account_id))
+    unexplained = [r for r in pending if not r.explanation]
+    if not unexplained:
+        return
+
+    if not settings.LLM_API_KEY:
+        logger.warning("LLM_API_KEY not set — skipping explanation generation")
+        return
+    llm = AnthropicClient(api_key=settings.LLM_API_KEY)
+    use_case = ExplainRecommendationUseCase(llm=llm, repo=rec_repo)
+
+    explained = 0
+    for rec in unexplained:
+        try:
+            await use_case.execute(rec.id, language="pl")
+            explained += 1
+        except Exception:
+            logger.warning("explain_recommendation_failed", rec_id=str(rec.id))
+
+    logger.info(
+        "explanations generated",
+        account_id=str(account_id),
+        total=len(unexplained),
+        explained=explained,
+    )
 
 
 async def _record_qs_history(settings: object, account_id: str, snap_date: date) -> None:
@@ -417,7 +509,7 @@ async def _update_experiment_metrics(
     credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
     exp_repo = AdExperimentRepository(session)
 
-    accounts = await account_repo.get_by_id(acct_id)
+    accounts = await account_repo.get(acct_id)
     if accounts is None:
         return
     credentials = await credentials_repo.get(acct_id)
@@ -1664,6 +1756,8 @@ async def _run_anomaly_detection_all_accounts(settings: object) -> dict[str, obj
 
         metrics_adapter = GoogleAdsHourlyMetricsAdapter(settings)
 
+        from adcopilot.domain.exceptions import GoogleAdsAuthError
+
         for acct, customer_id, refresh_token in account_creds:
             try:
                 async with AsyncSession(engine) as session, session.begin():
@@ -1686,6 +1780,19 @@ async def _run_anomaly_detection_all_accounts(settings: object) -> dict[str, obj
                     alerts_created=result.alerts_created,
                     alerts_suppressed=result.alerts_suppressed,
                 )
+            except GoogleAdsAuthError:
+                # Mark the account for re-authentication and move on.
+                logger.warning(
+                    "anomaly_detection.auth_error — marking needs_reauth",
+                    account_id=str(acct.id),
+                )
+                async with AsyncSession(engine) as session, session.begin():
+                    _acct_repo = SqlGoogleAdsAccountRepository(session)
+                    import dataclasses
+
+                    updated = dataclasses.replace(acct, needs_reauth=True)
+                    await _acct_repo.save(updated)
+                accounts_errored += 1
             except Exception:
                 logger.exception("anomaly_detection.failed", account_id=str(acct.id))
                 accounts_errored += 1
@@ -2380,8 +2487,13 @@ async def _run_conversion_reminders(settings: object) -> dict[str, object]:
                 try:
                     accounts = await account_repo.list_for_user(user.id)  # type: ignore[arg-type]
                     for account in accounts:
-                        conversion_actions = await snapshot_repo.get_conversion_actions(
+                        latest_date = await snapshot_repo.get_latest_snapshot_date(
                             AccountId(str(account.id))
+                        )
+                        if latest_date is None:
+                            continue
+                        conversion_actions = await snapshot_repo.get_conversion_actions(
+                            AccountId(str(account.id)), latest_date
                         )
                         has_working_tracking = any(
                             a.status == "ENABLED" and a.all_conversions > 0
@@ -2513,18 +2625,19 @@ def snapshot_auction_insights_task(account_id: str, snapshot_date_iso: str) -> d
 
 
 async def _run_auction_insights_snapshot(account_id: str, snap_date) -> dict:
-    import base64
-    import hashlib
     import uuid as _uuid
 
-    from cryptography.fernet import Fernet
     from sqlalchemy.dialects.postgresql import insert as pg_insert
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import get_settings
+    from adcopilot.domain.entities import AccountId
     from adcopilot.infrastructure.db.models import AuctionInsightsSnapshotModel
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
     )
     from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
 
@@ -2533,15 +2646,15 @@ async def _run_auction_insights_snapshot(account_id: str, snap_date) -> dict:
     try:
         async with AsyncSession(engine) as session:
             account_repo = SqlGoogleAdsAccountRepository(session)
-            account = await account_repo.get(_uuid.UUID(account_id))
-            if account is None or not account.refresh_token:
+            credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
+            account = await account_repo.get(account_id)
+            if account is None:
                 return {"skipped": True, "reason": "no_account"}
+            credentials = await credentials_repo.get(AccountId(account_id))
+            if credentials is None:
+                return {"skipped": True, "reason": "no_credentials"}
 
-            key = base64.urlsafe_b64encode(
-                hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest()
-            )
-            fernet = Fernet(key)
-            refresh_token = fernet.decrypt(account.refresh_token.encode()).decode()
+            refresh_token = credentials.refresh_token
             customer_id = account.customer_id
 
         adapter = GoogleAdsQueriesAdapter(settings)

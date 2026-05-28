@@ -60,7 +60,7 @@ async def get_qs_history(
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import get_settings
-    from adcopilot.infrastructure.db.repositories.account_repository import AccountRepository
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import SqlGoogleAdsAccountRepository as AccountRepository
     from adcopilot.infrastructure.db.repositories.keyword_qs_history_repository import (
         KeywordQSHistoryRepository,
     )
@@ -119,7 +119,7 @@ async def get_qs_diagnosis(
 
     from adcopilot.application.use_cases.diagnose_quality_score import diagnose_quality_score
     from adcopilot.config import get_settings
-    from adcopilot.infrastructure.db.repositories.account_repository import AccountRepository
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import SqlGoogleAdsAccountRepository as AccountRepository
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
