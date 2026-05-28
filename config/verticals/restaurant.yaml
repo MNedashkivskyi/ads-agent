@@ -1,0 +1,173 @@
+vertical_id: restaurant
+display_name: Restauracja
+display_emoji: "🍽️"
+language: pl
+competitive_level: medium
+
+ad_groups:
+  - name_template: "Restauracja i rezerwacja {city}"
+    keyword_bank:
+      - text: "restauracja {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "dobra restauracja {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "rezerwacja stolika {city}"
+        match_type: EXACT
+        priority: core
+      - text: "restauracja na obiad {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "restauracja na kolację {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "restauracja rodzinna {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "obiad na mieście {city}"
+        match_type: BROAD
+        priority: core
+      - text: "gdzie zjeść {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "restauracja romantyczna {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "lunch zestaw {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+  - name_template: "Catering i imprezy {city}"
+    keyword_bank:
+      - text: "catering {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "catering na imprezę {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "catering firmowy {city}"
+        match_type: EXACT
+        priority: core
+      - text: "sala na przyjęcie {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "organizacja przyjęcia {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "wesele catering {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "urodziny sala {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "bankiet {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "catering dietetyczny {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "komunia sala restauracja {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.05
+
+  - name_template: "Dostawa jedzenia {city}"
+    keyword_bank:
+      - text: "dostawa jedzenia {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "jedzenie na dowóz {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "zamów jedzenie {city}"
+        match_type: EXACT
+        priority: core
+      - text: "pizza {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "lunch box {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "obiad do domu {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sushi na dowóz {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "burger dostawa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "azjatyckie jedzenie dostawa {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "dieta pudełkowa {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - kurs
+    - szkolenie
+    - jak zrobić
+    - youtube
+    - tiktok
+  vertical_specific:
+    - przepis
+    - jak ugotować
+    - praca kucharz
+    - praca kelner
+    - szkoła kulinarna
+    - kurs gotowania
+    - wyposażenie kuchni
+    - sprzęt gastronomiczny
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 2.0
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 5.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 10.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Menu"
+      description1: "Sprawdź naszą kartę dań"
+      path: "menu"
+    - text: "Rezerwacja"
+      description1: "Zarezerwuj stolik online"
+      path: "rezerwacja"
+    - text: "Catering"
+      description1: "Catering na każdą okazję"
+      path: "catering"
+    - text: "Kontakt"
+      description1: "Zadzwoń lub napisz"
+      path: "kontakt"
+  callouts:
+    - "Świeże składniki"
+    - "Kuchnia domowa"
+    - "Rezerwacja online"
+    - "Sala na imprezy"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Lunch / obiad
+  - Kolacja
+  - Catering firmowy
+  - Catering weselny
+  - Sala na przyjęcia
+  - Dostawa do domu
+  - Śniadania
+  - Menu sezonowe

@@ -1,0 +1,173 @@
+vertical_id: cleaning_service
+display_name: Firma sprzątająca
+display_emoji: "🧹"
+language: pl
+competitive_level: low
+
+ad_groups:
+  - name_template: "Sprzątanie domów i mieszkań {city}"
+    keyword_bank:
+      - text: "sprzątanie mieszkania {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "firma sprzątająca {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sprzątanie domu {city}"
+        match_type: EXACT
+        priority: core
+      - text: "usługi sprzątania {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sprzątaczka {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "pomoc domowa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "pranie dywanów {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "mycie okien {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "regularne sprzątanie mieszkania {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "sprzątanie po przeprowadzce {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+  - name_template: "Sprzątanie biur {city}"
+    keyword_bank:
+      - text: "sprzątanie biura {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "serwis sprzątający {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sprzątanie pomieszczeń biurowych {city}"
+        match_type: EXACT
+        priority: core
+      - text: "cleaning firma {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sprzątanie hal i magazynów {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "serwis utrzymania czystości {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "dezynfekcja pomieszczeń {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "odkażanie biura {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sprzątanie galerii handlowej {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "serwis sprzątający hotel {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.05
+
+  - name_template: "Sprzątanie poremontowe {city}"
+    keyword_bank:
+      - text: "sprzątanie poremontowe {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sprzątanie po remoncie {city}"
+        match_type: EXACT
+        priority: core
+      - text: "generalne sprzątanie {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "mycie po budowie {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "usuwanie brudu budowlanego {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "czyszczenie glazury {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "mycie elewacji {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "pranie tapicerki {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "czyszczenie kanapy {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "pranie materaców {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - kurs
+    - szkolenie
+    - jak zrobić
+    - youtube
+    - tiktok
+  vertical_specific:
+    - praca sprzątaczka
+    - praca sprzątanie
+    - środki czystości
+    - sklep z chemią
+    - odkurzacz kupię
+    - mop kupię
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 1.5
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 4.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 8.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Cennik"
+      description1: "Sprawdź nasze ceny"
+      path: "cennik"
+    - text: "Zamów sprzątanie"
+      description1: "Łatwa rezerwacja online"
+      path: "zamow"
+    - text: "Sprzątanie biur"
+      description1: "Profesjonalny serwis B2B"
+      path: "biura"
+    - text: "Kontakt"
+      description1: "Zadzwoń lub napisz"
+      path: "kontakt"
+  callouts:
+    - "Profesjonalny sprzęt"
+    - "Ekologiczne środki"
+    - "Terminowość"
+    - "Ubezpieczeni pracownicy"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Sprzątanie mieszkań
+  - Sprzątanie domów
+  - Sprzątanie biur
+  - Sprzątanie poremontowe
+  - Generalne sprzątanie
+  - Mycie okien
+  - Pranie dywanów
+  - Pranie tapicerki
+  - Dezynfekcja pomieszczeń
+  - Mycie elewacji
