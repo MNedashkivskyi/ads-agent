@@ -1,0 +1,174 @@
+vertical_id: law_firm
+display_name: Kancelaria prawna
+display_emoji: "⚖️"
+language: pl
+competitive_level: high
+
+ad_groups:
+  - name_template: "Adwokat i radca prawny {city}"
+    keyword_bank:
+      - text: "adwokat {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "radca prawny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "kancelaria prawna {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "prawnik {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "porada prawna {city}"
+        match_type: EXACT
+        priority: core
+      - text: "konsultacja prawna {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "pomoc prawna {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "prawnik online {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "tania porada prawna {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "pierwsza bezpłatna konsultacja prawna"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+  - name_template: "Prawo rodzinne i rozwody {city}"
+    keyword_bank:
+      - text: "rozwód {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "adwokat rozwodowy {city}"
+        match_type: EXACT
+        priority: core
+      - text: "prawo rodzinne {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "alimenty prawnik {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "podział majątku po rozwodzie {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "władza rodzicielska prawnik {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sprawa o dzieci prawnik"
+        match_type: PHRASE
+        priority: core
+      - text: "intercyza prawnik {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "adopcja prawnik {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "kontakty z dzieckiem adwokat"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.1
+
+  - name_template: "Prawo gospodarcze i nieruchomości {city}"
+    keyword_bank:
+      - text: "prawo gospodarcze {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "umowa spółki prawnik {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "zakładanie spółki prawnik"
+        match_type: PHRASE
+        priority: core
+      - text: "prawo nieruchomości {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "umowa kupna-sprzedaży nieruchomości"
+        match_type: PHRASE
+        priority: core
+      - text: "notariusz {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "eksmisja lokator prawnik"
+        match_type: PHRASE
+        priority: core
+      - text: "ochrona własności intelektualnej"
+        match_type: PHRASE
+        priority: core
+      - text: "prawo pracy adwokat {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "prawa konsumenta prawnik"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.05
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - kurs
+    - szkolenie
+    - jak zrobić
+    - youtube
+    - tiktok
+  vertical_specific:
+    - studia prawnicze
+    - aplikacja adwokacka
+    - jak napisać umowę
+    - wzory pism
+    - wzorzec umowy
+    - darmowe wzory
+    - praca prawnik
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 8.0
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 20.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 40.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Bezpłatna konsultacja"
+      description1: "Pierwsza porada gratis"
+      path: "konsultacja"
+    - text: "Obszary prawa"
+      description1: "Sprawdź nasze specjalizacje"
+      path: "specjalizacje"
+    - text: "O kancelarii"
+      description1: "Doświadczeni prawnicy"
+      path: "o-nas"
+    - text: "Kontakt"
+      description1: "Skontaktuj się z nami"
+      path: "kontakt"
+  callouts:
+    - "Pierwsza konsultacja free"
+    - "Wieloletnie doświadczenie"
+    - "Pełna dyskrecja"
+    - "Reprezentacja w sądzie"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Prawo rodzinne (rozwody, alimenty)
+  - Podział majątku
+  - Prawo gospodarcze
+  - Zakładanie i obsługa spółek
+  - Prawo nieruchomości
+  - Sprawy karne
+  - Prawo pracy
+  - Ochrona własności intelektualnej
+  - Porady prawne online
+  - Umowy i dokumenty
