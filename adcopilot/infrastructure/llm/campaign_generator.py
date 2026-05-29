@@ -565,8 +565,10 @@ class CampaignGenerator:
             for variant in copy_resp.variants:
                 ads.append(
                     AdProposal(
-                        headlines=variant.headlines,
-                        descriptions=variant.descriptions,
+                        # Clamp to Google Ads hard limits so off-by-one LLM
+                        # outputs never reach Rule 5 validation as errors.
+                        headlines=[h[:30] for h in variant.headlines],
+                        descriptions=[d[:90] for d in variant.descriptions],
                         final_url=_extract_url(brief),
                         path_segments=(variant.path1[:15], variant.path2[:15]),
                     )

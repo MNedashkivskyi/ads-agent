@@ -305,8 +305,9 @@ class GenerateCampaignProposalUseCase:
                 )
                 ads: list[AdProposal] = [
                     AdProposal(
-                        headlines=v.headlines,
-                        descriptions=v.descriptions,
+                        # Clamp to Google Ads hard limits (same as assemble_proposal)
+                        headlines=[h[:30] for h in v.headlines],
+                        descriptions=[d[:90] for d in v.descriptions],
                         final_url=ag.ads[0].final_url if ag.ads else "https://example.com",
                         path_segments=(v.path1[:15], v.path2[:15]),
                     )
