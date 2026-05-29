@@ -44,6 +44,9 @@ class LaunchStatus(StrEnum):
     PROPOSED = "proposed"
     """A ``CampaignProposal`` has been generated and is awaiting review."""
 
+    FAILED = "failed"
+    """Proposal generation failed (timeout, LLM error, or unrecoverable exception)."""
+
     APPROVED = "approved"
     """The user has approved the proposal; awaiting creation in Google Ads."""
 
