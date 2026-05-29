@@ -69,6 +69,16 @@ def _wrap_exc(operation: str, exc: Exception) -> Exception:
     return GoogleAdsUnavailable(f"{operation} failed: {exc}")
 
 
+# Google Ads rejects budget amounts that are not a multiple of the minimum
+# billable unit (10,000 micros = 0.01 of the account currency).
+_BUDGET_MIN_UNIT_MICROS = 10_000
+
+
+def _round_to_budget_unit(micros: int) -> int:
+    """Round a micros amount to the nearest Google Ads minimum billable unit."""
+    return round(micros / _BUDGET_MIN_UNIT_MICROS) * _BUDGET_MIN_UNIT_MICROS
+
+
 class CampaignWriter:
     """Implements ``CampaignWriterPort`` against the real Google Ads API v24+."""
 
@@ -125,7 +135,7 @@ class CampaignWriter:
             budget_op = client.get_type("CampaignBudgetOperation")
             budget = budget_op.create
             budget.name = f"{proposal.campaign_name} Budget"
-            budget.amount_micros = proposal.daily_budget_micros
+            budget.amount_micros = _round_to_budget_unit(proposal.daily_budget_micros)
             budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
 
             budget_response = budget_service.mutate_campaign_budgets(
@@ -634,7 +644,7 @@ class CampaignWriter:
             budget_op = client.get_type("CampaignBudgetOperation")
             budget = budget_op.create
             budget.name = f"{proposal.brand_campaign_name} Budget"
-            budget.amount_micros = proposal.brand_daily_budget_micros
+            budget.amount_micros = _round_to_budget_unit(proposal.brand_daily_budget_micros)
             budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
             budget_response = budget_service.mutate_campaign_budgets(
                 customer_id=cid, operations=[budget_op]
@@ -803,7 +813,7 @@ class CampaignWriter:
             budget_op = client.get_type("CampaignBudgetOperation")
             budget = budget_op.create
             budget.name = f"{proposal.campaign_name} Budget"
-            budget.amount_micros = proposal.daily_budget_micros
+            budget.amount_micros = _round_to_budget_unit(proposal.daily_budget_micros)
             budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
 
             budget_resp = budget_service.mutate_campaign_budgets(

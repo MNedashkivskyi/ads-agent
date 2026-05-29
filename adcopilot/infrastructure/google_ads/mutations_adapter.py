@@ -154,7 +154,8 @@ class GoogleAdsMutationsAdapter:
             operation = client.get_type("CampaignBudgetOperation")
             budget = operation.update
             budget.resource_name = budget_resource_name
-            budget.amount_micros = new_budget_micros
+            # Google Ads rejects amounts that aren't a multiple of 10,000 micros.
+            budget.amount_micros = round(new_budget_micros / 10_000) * 10_000
             from google.protobuf import field_mask_pb2
 
             client.copy_from(
