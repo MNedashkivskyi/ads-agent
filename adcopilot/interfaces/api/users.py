@@ -324,9 +324,7 @@ async def get_sync_status(
                         account_id=acct_id_str,
                         customer_id=acct.customer_id,
                         descriptive_name=acct.descriptive_name or "",
-                        connected_at=acct.connected_at.isoformat()
-                        if acct.connected_at
-                        else "",
+                        connected_at=acct.connected_at.isoformat() if acct.connected_at else "",
                         has_snapshots=has_snapshots,
                         sync_in_progress=sync_in_progress,
                         last_snapshot_date=str(last_date) if last_date else None,

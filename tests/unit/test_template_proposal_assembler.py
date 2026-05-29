@@ -37,8 +37,8 @@ VERTICAL_IDS = [
 ]
 
 BUDGET_TIERS = [
-    ("micro", Decimal("400")),    # MICRO: < 500
-    ("mid", Decimal("1200")),     # MID: 500-2999
+    ("micro", Decimal("400")),  # MICRO: < 500
+    ("mid", Decimal("1200")),  # MID: 500-2999
     ("growth", Decimal("5000")),  # GROWTH: >= 3000
 ]
 
@@ -73,6 +73,7 @@ def _make_brief(monthly_budget: Decimal, city: str = "Warszawa") -> CampaignBrie
 # ---------------------------------------------------------------------------
 # Core acceptance tests
 # ---------------------------------------------------------------------------
+
 
 class TestBeautySalonMidBudget:
     """Task 1.4 acceptance criteria: beauty_salon + Warszawa + 1200 PLN → MID."""
@@ -126,6 +127,7 @@ class TestBeautySalonMidBudget:
 # ---------------------------------------------------------------------------
 # 21-combination validation matrix (7 templates × 3 budget tiers)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.parametrize("vertical_id", VERTICAL_IDS)
 @pytest.mark.parametrize("tier_name,budget", BUDGET_TIERS)
@@ -200,10 +202,9 @@ class TestAllCombinationsPassValidation:
                 for seg in ad.path_segments:
                     assert len(seg) <= 15, f"Path segment too long: '{seg}'"
 
-    def test_standard_negatives_included(
-        self, vertical_id, tier_name, budget, adapter, assembler
-    ):
+    def test_standard_negatives_included(self, vertical_id, tier_name, budget, adapter, assembler):
         from adcopilot.domain.polish_market.negative_keywords import POLISH_STANDARD_NEGATIVES
+
         template = (
             adapter.get_default_template()
             if vertical_id == "generic"

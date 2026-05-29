@@ -66,9 +66,7 @@ class CheckInAggregator:
             if not snapshots:
                 return self._empty()
 
-            campaign_snaps = [
-                s for s in snapshots if s.resource_name == campaign_resource_name
-            ]
+            campaign_snaps = [s for s in snapshots if s.resource_name == campaign_resource_name]
             if not campaign_snaps:
                 return self._empty()
 

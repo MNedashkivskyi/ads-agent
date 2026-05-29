@@ -147,9 +147,7 @@ class VerticalTemplate(BaseModel):
     def _all_tiers_have_keywords(self) -> VerticalTemplate:
         for ag in self.ad_groups:
             if len(ag.keyword_bank) < 1:
-                raise ValueError(
-                    f"Ad group '{ag.name_template}' must have at least one keyword"
-                )
+                raise ValueError(f"Ad group '{ag.name_template}' must have at least one keyword")
         return self
 
     def to_summary(self) -> VerticalSummary:

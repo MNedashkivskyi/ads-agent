@@ -74,7 +74,6 @@ def test_client(tmp_path):
             "ENV": "test",
         },
     ):
-
         from fastapi.testclient import TestClient
 
         from adcopilot.main import create_app

@@ -118,8 +118,7 @@ _GUIDES: dict[str, dict] = {
                 "step": 1,
                 "title": "Przejdź do ustawień zewnętrznych usług",
                 "description": (
-                    "W panelu Squarespace kliknij Ustawienia → "
-                    "Zewnętrzne usługi → Google Ads."
+                    "W panelu Squarespace kliknij Ustawienia → Zewnętrzne usługi → Google Ads."
                 ),
             },
             {

@@ -122,6 +122,7 @@ async def patch_budget(
 
             new_daily_micros = _monthly_to_daily_micros(body.monthly_budget_pln)
             from dataclasses import replace as dc_replace
+
             updated = dc_replace(proposal, daily_budget_micros=new_daily_micros)
             await repo.save(updated)
     finally:
@@ -154,6 +155,7 @@ async def patch_targeting(
         async with AsyncSession(engine) as session, session.begin():
             proposal, repo = await _load_proposal(session, proposal_id, user_id)
             from dataclasses import replace as dc_replace
+
             updated = dc_replace(proposal, location_targeting=body.location_targeting.strip())
             await repo.save(updated)
     finally:
@@ -201,6 +203,7 @@ async def patch_keywords(
             ]
 
             from dataclasses import replace as dc_replace
+
             groups = list(proposal.ad_groups)
             old_group = groups[body.ad_group_index]
             groups[body.ad_group_index] = dc_replace(old_group, keywords=new_keywords)
@@ -261,6 +264,7 @@ async def patch_ads(
                 path_segments=old_ad.path_segments,
             )
             from dataclasses import replace as dc_replace
+
             new_ads = [new_ad] + list(old_group.ads[1:])
             groups[body.ad_group_index] = dc_replace(old_group, ads=new_ads)
             updated = dc_replace(proposal, ad_groups=groups)
