@@ -97,6 +97,11 @@ class ProposalStatusResponse(BaseModel):
     proposal_id: str | None = None
 
 
+class LaunchProposalResponse(BaseModel):
+    status: str  # "launching"
+    brief_id: str
+
+
 class ConversionTrackingStatusResponse(BaseModel):
     customer_id: str
     has_conversion_tracking: bool
@@ -372,3 +377,69 @@ async def get_proposal_status(
             return ProposalStatusResponse(status="failed")
     finally:
         await engine.dispose()
+
+
+@api_router.post(
+    "/proposals/{proposal_id}/launch",
+    response_model=LaunchProposalResponse,
+    status_code=202,
+)
+async def launch_proposal(
+    proposal_id: str,
+    user_id: CurrentUser,
+) -> LaunchProposalResponse:
+    """Approve a proposal and enqueue campaign creation — no setup fee.
+
+    This is the free-launch path: it performs the same work the Stripe
+    webhook used to do after a successful setup-fee payment (transition the
+    brief to APPROVED and dispatch ``create_campaign_task``), but skips the
+    payment step entirely.
+    """
+    import dataclasses
+
+    try:
+        uuid.UUID(proposal_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid proposal ID format") from None
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        from adcopilot.domain.launch.entities import (
+            CampaignBriefId,
+            CampaignProposalId,
+            LaunchStatus,
+        )
+        from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
+            SqlCampaignBriefRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.launch_proposal_repository import (
+            SqlCampaignProposalRepository,
+        )
+
+        async with AsyncSession(engine) as session, session.begin():
+            proposal_repo = SqlCampaignProposalRepository(session)
+            proposal = await proposal_repo.get(CampaignProposalId(proposal_id))
+            if proposal is None:
+                raise HTTPException(status_code=404, detail="Proposal not found")
+
+            brief_id = str(proposal.brief_id)
+            brief_repo = SqlCampaignBriefRepository(session)
+            brief = await brief_repo.get(CampaignBriefId(brief_id))
+            if brief is None or brief.user_id != user_id:
+                raise HTTPException(status_code=404, detail="Brief not found")
+            if brief.status not in (LaunchStatus.PROPOSED, LaunchStatus.APPROVED):
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Brief is in status '{brief.status}', expected 'proposed'",
+                )
+            updated = dataclasses.replace(brief, status=LaunchStatus.APPROVED)
+            await brief_repo.save(updated)
+    finally:
+        await engine.dispose()
+
+    from adcopilot.interfaces.worker.tasks import create_campaign_task
+
+    create_campaign_task.delay(brief_id)
+    logger.info("proposal launched without setup fee", proposal_id=proposal_id, brief_id=brief_id)
+    return LaunchProposalResponse(status="launching", brief_id=brief_id)
