@@ -3036,7 +3036,6 @@ async def _run_post_launch_checkins() -> dict[str, object]:
 
     from adcopilot.application.services.checkin_aggregator import (
         CheckInAggregator,
-        render_checkin_message,
     )
     from adcopilot.application.services.post_launch_notifier import PostLaunchNotifier
     from adcopilot.config import get_settings
@@ -3082,13 +3081,15 @@ async def _run_post_launch_checkins() -> dict[str, object]:
 
                 class _SnapshotRepoAdapter:
                     """Wraps SqlSnapshotRepository to provide list_by_account()."""
-                    def __init__(self, inner, account_id_str):
+
+                    def __init__(self, inner):
                         self._inner = inner
-                        self._account_id = account_id_str
 
                     async def list_by_account(self, account_id, limit=7):
-                        from adcopilot.domain.entities import AccountId
                         from datetime import date, timedelta
+
+                        from adcopilot.domain.entities import AccountId
+
                         snaps = []
                         for delta in range(limit):
                             d = date.today() - timedelta(days=delta)
@@ -3101,7 +3102,7 @@ async def _run_post_launch_checkins() -> dict[str, object]:
                                 pass
                         return snaps
 
-                snap_repo = _SnapshotRepoAdapter(SqlSnapshotRepository(session), account_id)
+                snap_repo = _SnapshotRepoAdapter(SqlSnapshotRepository(session))
                 aggregator = CheckInAggregator(snap_repo)
 
                 for brief in briefs:

@@ -110,10 +110,12 @@ async def recover_proposal(
                 and (datetime.now(UTC) - brief.created_at)
                 > timedelta(minutes=_STALE_GENERATING_MINUTES)
             )
-            if brief.status not in (LaunchStatus.GENERATING, LaunchStatus.PROPOSED) and not is_stale_generating:
-                if brief.status != LaunchStatus.PROPOSED:
-                    # Already in a retryable state — just re-queue
-                    pass
+            if (
+                brief.status not in (LaunchStatus.GENERATING, LaunchStatus.PROPOSED)
+                and not is_stale_generating
+                and brief.status != LaunchStatus.PROPOSED
+            ):
+                pass  # Already in a retryable state — just re-queue
 
             # Reset to GENERATING and re-queue
             updated = _replace_brief_status(brief, LaunchStatus.GENERATING)

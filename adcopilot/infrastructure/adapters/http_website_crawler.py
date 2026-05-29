@@ -81,10 +81,10 @@ class _PageParser(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag == "script":
             if "application/ld+json" in self._script_type and not self.schema_org:
-                try:
+                import contextlib
+
+                with contextlib.suppress(json.JSONDecodeError, ValueError):
                     self.schema_org = json.loads(self._script_buffer)
-                except (json.JSONDecodeError, ValueError):
-                    pass
             self._in_script = False
             self._script_type = ""
         elif tag == "style":

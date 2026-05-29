@@ -98,7 +98,7 @@ class _OneRecRule:
 async def test_engine_empty_rules_returns_empty() -> None:
     """Engine with no rules produces no recommendations."""
     repo = MagicMock()
-    repo.list_pending = AsyncMock(return_value=[])
+    repo.list_active_dedup_keys = AsyncMock(return_value=set())
     repo.save = AsyncMock()
 
     engine = RuleEngine(rules=[], rec_repo=repo)
@@ -112,7 +112,7 @@ async def test_engine_empty_rules_returns_empty() -> None:
 async def test_engine_empty_rule_does_not_save() -> None:
     """A rule that returns empty list causes no saves."""
     repo = MagicMock()
-    repo.list_pending = AsyncMock(return_value=[])
+    repo.list_active_dedup_keys = AsyncMock(return_value=set())
     repo.save = AsyncMock()
 
     engine = RuleEngine(rules=[_EmptyRule()], rec_repo=repo)
@@ -127,7 +127,7 @@ async def test_engine_one_rec_rule_saves_and_returns() -> None:
     """A rule returning one recommendation causes one save."""
     rec = _make_rec()
     repo = MagicMock()
-    repo.list_pending = AsyncMock(return_value=[])
+    repo.list_active_dedup_keys = AsyncMock(return_value=set())
     repo.save = AsyncMock()
 
     engine = RuleEngine(rules=[_OneRecRule(rec)], rec_repo=repo)
@@ -139,10 +139,11 @@ async def test_engine_one_rec_rule_saves_and_returns() -> None:
 
 @pytest.mark.asyncio
 async def test_engine_dedup_skips_existing_pending() -> None:
-    """If (kind, target_hash) already PENDING, engine skips the new rec."""
+    """If (kind, target_hash) already exists, engine skips the new rec."""
     rec = _make_rec()
     repo = MagicMock()
-    repo.list_pending = AsyncMock(return_value=[rec])  # already pending
+    # Return the rec's dedup key as already present
+    repo.list_active_dedup_keys = AsyncMock(return_value={(rec.kind, rec.target_hash)})
     repo.save = AsyncMock()
 
     engine = RuleEngine(rules=[_OneRecRule(rec)], rec_repo=repo)
@@ -170,7 +171,7 @@ async def test_engine_dedup_same_batch_skips_second_duplicate() -> None:
         status=RecommendationStatus.PENDING,
     )
     repo = MagicMock()
-    repo.list_pending = AsyncMock(return_value=[])
+    repo.list_active_dedup_keys = AsyncMock(return_value=set())
     repo.save = AsyncMock()
 
     engine = RuleEngine(rules=[_OneRecRule(rec), _OneRecRule(rec2)], rec_repo=repo)
@@ -192,7 +193,7 @@ async def test_engine_rule_raising_exception_is_skipped() -> None:
 
     good_rec = _make_rec()
     repo = MagicMock()
-    repo.list_pending = AsyncMock(return_value=[])
+    repo.list_active_dedup_keys = AsyncMock(return_value=set())
     repo.save = AsyncMock()
 
     engine = RuleEngine(rules=[_BrokenRule(), _OneRecRule(good_rec)], rec_repo=repo)

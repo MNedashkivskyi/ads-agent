@@ -8,6 +8,7 @@ from adcopilot.domain.launch.vertical_template import (
     CompetitiveLevel,
     KeywordEntry,
     KeywordPriority,
+    SitelinkTemplate,
     TemplateAdGroup,
     TemplateBiddingDefaults,
     TemplateExtensionDefaults,
@@ -15,7 +16,6 @@ from adcopilot.domain.launch.vertical_template import (
     TemplateNegativeList,
     VerticalSummary,
     VerticalTemplate,
-    SitelinkTemplate,
 )
 
 

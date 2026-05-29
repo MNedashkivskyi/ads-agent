@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import structlog
 
-from adcopilot.application.ports.conversion_tracking_checker import ConversionTrackingChecker
 from adcopilot.domain.launch.conversion_tracking_status import ConversionTrackingStatus
 
 logger = structlog.get_logger(__name__)

@@ -14,13 +14,12 @@ from adcopilot.application.detection.validation import (
     validate_proposal,
 )
 from adcopilot.application.services.template_proposal_assembler import TemplateProposalAssembler
-from adcopilot.domain.launch.budget_tier import BudgetTier
+from adcopilot.domain.entities import AccountId, UserId
 from adcopilot.domain.launch.entities import (
     CampaignBrief,
     CampaignBriefId,
     LaunchStatus,
 )
-from adcopilot.domain.entities import AccountId, UserId
 from adcopilot.infrastructure.vertical_templates.yaml_adapter import YamlVerticalTemplateAdapter
 
 # ---------------------------------------------------------------------------

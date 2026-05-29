@@ -105,7 +105,9 @@ async def list_qs_improvement_plans(
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import get_settings
-    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import SqlGoogleAdsAccountRepository as AccountRepository
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository as AccountRepository,
+    )
     from adcopilot.infrastructure.db.repositories.qs_improvement_plan_repository import (
         QSImprovementPlanRepository,
     )
@@ -140,7 +142,9 @@ async def create_qs_improvement_plan(
         create_qs_improvement_plan as uc,
     )
     from adcopilot.config import get_settings
-    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import SqlGoogleAdsAccountRepository as AccountRepository
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository as AccountRepository,
+    )
     from adcopilot.infrastructure.db.repositories.qs_improvement_plan_repository import (
         QSImprovementPlanRepository,
     )
