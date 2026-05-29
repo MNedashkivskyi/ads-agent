@@ -467,6 +467,11 @@ def _rule_ad_copy(
 
 _MAX_LOAD_SECONDS: float = 5.0
 
+# Placeholder domains used when the user hasn't supplied a website URL.
+# Skipped in both Rule 6 and Rule 6b — there is nothing meaningful to
+# validate against an example domain.
+_PLACEHOLDER_HOSTS: frozenset[str] = frozenset({"example.com"})
+
 
 def _rule_landing_page(
     proposal: CampaignProposal,
@@ -487,14 +492,9 @@ def _rule_landing_page(
         errors.append("Rule 6 (Landing Page): no final_url found in any ad.")
         return errors
 
-    # Well-known placeholder domains generated when the user didn't supply a
-    # website URL.  Validating them against language/reachability is pointless
-    # and produces false positives that trigger the template fallback.
-    _PLACEHOLDER_HOSTS = frozenset({"example.com", "www.example.com"})
-
     for url in sorted(urls):
         try:
-            from urllib.parse import urlparse as _urlparse
+            from urllib.parse import urlparse as _urlparse  # noqa: PLC0415
 
             _host = _urlparse(url).netloc.lower().removeprefix("www.")
         except Exception:
@@ -592,6 +592,16 @@ def _rule_landing_page_relevance(
                 urls.add(ad.final_url)
 
     for url in sorted(urls):
+        # Skip well-known placeholder domains (same guard as Rule 6)
+        try:
+            from urllib.parse import urlparse as _urlparse  # noqa: PLC0415
+
+            _host = _urlparse(url).netloc.lower().removeprefix("www.")
+        except Exception:
+            _host = ""
+        if _host in _PLACEHOLDER_HOSTS:
+            continue
+
         result = ctx.landing_page_results.get(url)
         if result is None:
             continue  # already warned in _rule_landing_page
