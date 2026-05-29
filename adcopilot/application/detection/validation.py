@@ -487,7 +487,21 @@ def _rule_landing_page(
         errors.append("Rule 6 (Landing Page): no final_url found in any ad.")
         return errors
 
+    # Well-known placeholder domains generated when the user didn't supply a
+    # website URL.  Validating them against language/reachability is pointless
+    # and produces false positives that trigger the template fallback.
+    _PLACEHOLDER_HOSTS = frozenset({"example.com", "www.example.com"})
+
     for url in sorted(urls):
+        try:
+            from urllib.parse import urlparse as _urlparse
+
+            _host = _urlparse(url).netloc.lower().removeprefix("www.")
+        except Exception:
+            _host = ""
+        if _host in _PLACEHOLDER_HOSTS:
+            continue  # skip validation for placeholder URLs
+
         result = ctx.landing_page_results.get(url)
 
         if result is None:
