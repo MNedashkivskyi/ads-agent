@@ -1,0 +1,132 @@
+vertical_id: private_clinic
+display_name: Prywatna klinika / Lekarz
+display_emoji: "🩺"
+language: pl
+competitive_level: high
+
+ad_groups:
+  - name_template: "Lekarz prywatnie {city}"
+    keyword_bank:
+      - text: "lekarz prywatnie {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "wizyta prywatna {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "prywatna przychodnia {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "wizyta bez kolejki {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "przychodnia prywatna {city}"
+        match_type: EXACT
+        priority: core
+      - text: "lekarz tego samego dnia {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.1
+
+  - name_template: "Specjaliści {city}"
+    keyword_bank:
+      - text: "kardiolog {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "dermatolog {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "endokrynolog {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "ortopeda {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "ginekolog {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "neurolog {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.15
+
+  - name_template: "Badania i diagnostyka {city}"
+    keyword_bank:
+      - text: "USG {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "badania krwi prywatnie {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "rezonans magnetyczny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "tomografia komputerowa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "pakiet badań {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.05
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - studia
+    - kurs
+    - youtube
+    - allegro
+    - olx
+  vertical_specific:
+    - nfz
+    - refundacja
+    - praca lekarz
+    - studia medyczne
+    - opinie lekarzy
+    - znanylekarz opinie
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 4.0
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 10.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 20.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Specjaliści"
+      description1: "Nasi lekarze"
+      path: "lekarze"
+    - text: "Rezerwacja wizyty"
+      description1: "Umów się online"
+      path: "rezerwacja"
+    - text: "Cennik"
+      description1: "Sprawdź ceny wizyt"
+      path: "cennik"
+    - text: "Kontakt"
+      description1: "Zadzwoń lub napisz"
+      path: "kontakt"
+  callouts:
+    - "Krótkie terminy"
+    - "Doświadczeni specjaliści"
+    - "Nowoczesny sprzęt"
+    - "Wizyty domowe"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Wizyta lekarska prywatna
+  - Konsultacja online
+  - USG
+  - Badania laboratoryjne
+  - Wizyta domowa
+  - Pakiety profilaktyczne
+  - Medycyna pracy
+  - Recepty online

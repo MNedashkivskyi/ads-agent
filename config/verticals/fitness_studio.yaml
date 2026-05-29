@@ -1,0 +1,140 @@
+vertical_id: fitness_studio
+display_name: Siłownia / Studio fitness
+display_emoji: "🏋️"
+language: pl
+competitive_level: medium
+
+ad_groups:
+  - name_template: "Siłownia {city}"
+    keyword_bank:
+      - text: "siłownia {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "klub fitness {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "karnet na siłownię {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "siłownia 24h {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "tania siłownia {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "siłownia damska {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+  - name_template: "Trener personalny {city}"
+    keyword_bank:
+      - text: "trener personalny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "trening personalny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "trener online"
+        match_type: PHRASE
+        priority: core
+      - text: "plan treningowy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "trening 1 na 1 {city}"
+        match_type: EXACT
+        priority: core
+      - text: "trener kobiet {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.1
+
+  - name_template: "Zajęcia grupowe {city}"
+    keyword_bank:
+      - text: "zajęcia fitness {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "joga {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "pilates {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "crossfit {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "zumba {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "stretching {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "TRX {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - kurs trenera
+    - youtube
+    - tiktok
+    - allegro
+    - olx
+  vertical_specific:
+    - sprzęt fitness sklep
+    - kurs instruktora
+    - dieta przepis
+    - praca trener
+    - używana hantla
+    - bieżnia używana
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 2.0
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 5.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 10.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Cennik karnetów"
+      description1: "Sprawdź ceny karnetów"
+      path: "cennik"
+    - text: "Grafik zajęć"
+      description1: "Aktualny harmonogram"
+      path: "grafik"
+    - text: "Trenerzy"
+      description1: "Poznaj nasz zespół"
+      path: "trenerzy"
+    - text: "Kontakt"
+      description1: "Zadzwoń lub napisz"
+      path: "kontakt"
+  callouts:
+    - "Nowoczesny sprzęt"
+    - "Doświadczeni trenerzy"
+    - "Otwarte 7 dni"
+    - "Klimatyzacja"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Karnet open
+  - Karnet 1 wejście
+  - Trening personalny
+  - Plan treningowy
+  - Zajęcia grupowe
+  - Joga
+  - Pilates
+  - Crossfit
+  - Zumba
+  - Konsultacja dietetyczna
