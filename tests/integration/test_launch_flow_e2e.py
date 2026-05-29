@@ -58,7 +58,6 @@ class _FakeAnthropicClient:
 @pytest.fixture()
 def test_client(tmp_path):
     """Create a FastAPI TestClient with in-process SQLite DB."""
-    import os
     from unittest.mock import patch
 
     db_path = tmp_path / "test.db"
@@ -75,11 +74,9 @@ def test_client(tmp_path):
             "ENV": "test",
         },
     ):
-        from unittest.mock import MagicMock
 
         from fastapi.testclient import TestClient
 
-        from adcopilot.config import get_settings
         from adcopilot.main import create_app
 
         # Create a fresh app

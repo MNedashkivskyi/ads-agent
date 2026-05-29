@@ -47,7 +47,7 @@ def _rec_repo(rec: Recommendation | None) -> MagicMock:
     repo = MagicMock()
     repo.get = AsyncMock(return_value=rec)
     repo.update_status = AsyncMock()
-    repo.list_pending = AsyncMock(return_value=[])
+    repo.list_active_dedup_keys = AsyncMock(return_value=set())
     repo.save = AsyncMock()
     return repo
 

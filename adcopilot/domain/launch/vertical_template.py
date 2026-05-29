@@ -51,7 +51,7 @@ class TemplateAdGroup(BaseModel):
     default_bid_modifier: float = 1.0
 
     @model_validator(mode="after")
-    def _at_least_one_keyword(self) -> "TemplateAdGroup":
+    def _at_least_one_keyword(self) -> TemplateAdGroup:
         if not self.keyword_bank:
             raise ValueError("keyword_bank must not be empty")
         return self
@@ -144,7 +144,7 @@ class VerticalTemplate(BaseModel):
     common_services: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _all_tiers_have_keywords(self) -> "VerticalTemplate":
+    def _all_tiers_have_keywords(self) -> VerticalTemplate:
         for ag in self.ad_groups:
             if len(ag.keyword_bank) < 1:
                 raise ValueError(

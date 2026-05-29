@@ -5,8 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -15,7 +14,6 @@ from adcopilot.domain.entities import AccountId, UserId
 from adcopilot.domain.launch.entities import (
     CampaignBrief,
     CampaignBriefId,
-    CampaignProposalId,
     LaunchStatus,
 )
 from adcopilot.infrastructure.llm.campaign_generator import (
@@ -24,7 +22,6 @@ from adcopilot.infrastructure.llm.campaign_generator import (
     RSAVariantItem,
 )
 from adcopilot.infrastructure.vertical_templates.yaml_adapter import YamlVerticalTemplateAdapter
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -175,14 +172,13 @@ class TestFullLLMPathWhenTemplateIdIsNone:
         """When template_id=None, existing LLM pipeline should run unchanged."""
         # Mock the full pipeline
         from adcopilot.infrastructure.llm.campaign_generator import (
-            CampaignStructureResponse,
             AdGroupItem,
-            KeywordItem,
-            VerticalClassification,
+            CampaignStructureResponse,
             ExtensionsResponse,
+            KeywordItem,
             SitelinkItem,
+            VerticalClassification,
         )
-        from adcopilot.domain.launch.entities import CampaignProposal
 
         mock_vertical = VerticalClassification(vertical="salon")
         mock_generator.detect_vertical.return_value = mock_vertical
@@ -216,8 +212,12 @@ class TestFullLLMPathWhenTemplateIdIsNone:
         mock_generator.generate_brand_campaign = AsyncMock(side_effect=Exception("skip"))
 
         # Assemble a minimal valid proposal
-        from adcopilot.application.services.template_proposal_assembler import TemplateProposalAssembler
-        from adcopilot.infrastructure.vertical_templates.yaml_adapter import YamlVerticalTemplateAdapter
+        from adcopilot.application.services.template_proposal_assembler import (
+            TemplateProposalAssembler,
+        )
+        from adcopilot.infrastructure.vertical_templates.yaml_adapter import (
+            YamlVerticalTemplateAdapter,
+        )
         _adapter = YamlVerticalTemplateAdapter()
         _tmpl = _adapter.get_default_template()
         _assembler = TemplateProposalAssembler()
@@ -249,10 +249,10 @@ class TestFallbackWhenTemplateNotFound:
         mock_generator.detect_vertical.return_value = VerticalClassification(vertical="generic")
 
         from adcopilot.infrastructure.llm.campaign_generator import (
-            CampaignStructureResponse,
             AdGroupItem,
-            KeywordItem,
+            CampaignStructureResponse,
             ExtensionsResponse,
+            KeywordItem,
             SitelinkItem,
         )
         mock_generator.build_structure.return_value = CampaignStructureResponse(
@@ -278,7 +278,9 @@ class TestFallbackWhenTemplateNotFound:
         )
         mock_generator.generate_brand_campaign = AsyncMock(side_effect=Exception("skip"))
 
-        from adcopilot.application.services.template_proposal_assembler import TemplateProposalAssembler
+        from adcopilot.application.services.template_proposal_assembler import (
+            TemplateProposalAssembler,
+        )
         _base = TemplateProposalAssembler().assemble(adapter.get_default_template(), brief)
         mock_generator.assemble_proposal = MagicMock(return_value=_base)
 

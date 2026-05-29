@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+import httpx
 import pytest
 import respx
-import httpx
 
 from adcopilot.domain.launch.website_intelligence import CrawlStatus
 from adcopilot.infrastructure.adapters.http_website_crawler import HttpWebsiteCrawlerAdapter
-
 
 SCHEMA_ORG_HTML = """<!DOCTYPE html>
 <html>

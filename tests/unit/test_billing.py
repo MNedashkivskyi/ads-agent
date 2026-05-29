@@ -128,12 +128,13 @@ async def test_oauth_callback_enforces_starter_account_limit() -> None:
     existing_account = MagicMock()
 
     mock_user_repo = MagicMock()
-    mock_user_repo.get_by_id = AsyncMock(return_value=starter_user)
+    mock_user_repo.ensure_exists = AsyncMock(return_value=starter_user)
 
     mock_acc_repo = MagicMock()
     mock_acc_repo.list_for_user = AsyncMock(return_value=[existing_account])
 
     mock_session = AsyncMock()
+    mock_session.commit = AsyncMock()
 
     mock_http_client = AsyncMock()
     mock_response = MagicMock()
@@ -145,9 +146,6 @@ async def test_oauth_callback_enforces_starter_account_limit() -> None:
     }
     mock_http_client.post = AsyncMock(return_value=mock_response)
 
-    mock_ads_client = MagicMock()
-    mock_ads_client.list_accessible_customers = AsyncMock(return_value=["123-456-7890"])
-
     with (
         patch(
             "adcopilot.interfaces.api.oauth.consume_state_jwt",
@@ -158,12 +156,7 @@ async def test_oauth_callback_enforces_starter_account_limit() -> None:
             "adcopilot.interfaces.api.oauth.SqlGoogleAdsAccountRepository",
             return_value=mock_acc_repo,
         ),
-        patch("adcopilot.interfaces.api.oauth.SqlOAuthCredentialsRepository", MagicMock()),
         patch("adcopilot.interfaces.api.oauth.httpx.AsyncClient") as mock_http_cls,
-        patch(
-            "adcopilot.infrastructure.google_ads.client.GoogleAdsClientAdapter",
-            return_value=mock_ads_client,
-        ),
     ):
         http_ctx = AsyncMock()
         http_ctx.__aenter__ = AsyncMock(return_value=mock_http_client)
@@ -199,14 +192,10 @@ async def test_oauth_callback_allows_growth_second_account() -> None:
     existing_account = MagicMock()
 
     mock_user_repo = MagicMock()
-    mock_user_repo.get_by_id = AsyncMock(return_value=growth_user)
+    mock_user_repo.ensure_exists = AsyncMock(return_value=growth_user)
 
     mock_acc_repo = MagicMock()
     mock_acc_repo.list_for_user = AsyncMock(return_value=[existing_account])  # 1 of 3 limit
-    mock_acc_repo.save = AsyncMock()
-
-    mock_creds_repo = MagicMock()
-    mock_creds_repo.save = AsyncMock()
 
     mock_session = AsyncMock()
     mock_session.commit = AsyncMock()
@@ -221,8 +210,7 @@ async def test_oauth_callback_allows_growth_second_account() -> None:
     }
     mock_http_client.post = AsyncMock(return_value=mock_response)
 
-    mock_ads_client = MagicMock()
-    mock_ads_client.list_accessible_customers = AsyncMock(return_value=["123-456-7890"])
+    mock_link_task = MagicMock()
 
     with (
         patch(
@@ -234,14 +222,10 @@ async def test_oauth_callback_allows_growth_second_account() -> None:
             "adcopilot.interfaces.api.oauth.SqlGoogleAdsAccountRepository",
             return_value=mock_acc_repo,
         ),
-        patch(
-            "adcopilot.interfaces.api.oauth.SqlOAuthCredentialsRepository",
-            return_value=mock_creds_repo,
-        ),
         patch("adcopilot.interfaces.api.oauth.httpx.AsyncClient") as mock_http_cls,
         patch(
-            "adcopilot.infrastructure.google_ads.client.GoogleAdsClientAdapter",
-            return_value=mock_ads_client,
+            "adcopilot.interfaces.worker.tasks.link_google_ads_accounts_task",
+            mock_link_task,
         ),
     ):
         http_ctx = AsyncMock()
@@ -256,6 +240,7 @@ async def test_oauth_callback_allows_growth_second_account() -> None:
             GOOGLE_ADS_CLIENT_ID="cid",
             GOOGLE_ADS_CLIENT_SECRET="csec",
             GOOGLE_ADS_DEVELOPER_TOKEN="dev_token",
+            TOKEN_ENCRYPTION_KEY="test-key-32-bytes-long-padding!!",
         )
 
         result = await oauth_google_callback(
@@ -266,7 +251,9 @@ async def test_oauth_callback_allows_growth_second_account() -> None:
             redis_client=MagicMock(),
         )
 
-    assert "linked_customer_ids" in result
+    # After the refactor, the callback queues a Celery task and returns status=pending
+    assert result["status"] == "pending"
+    mock_link_task.delay.assert_called_once_with(str(_USER_ID))
 
 
 # ---------------------------------------------------------------------------
@@ -320,8 +307,8 @@ async def test_trial_reminders_returns_skipped_count() -> None:
 async def test_create_setup_fee_checkout_returns_url() -> None:
     """Endpoint returns Stripe checkout URL for PROPOSED brief."""
     from adcopilot.config import Settings
-    from adcopilot.domain.launch.entities import CampaignBrief, CampaignBriefId, LaunchStatus
-    from adcopilot.interfaces.api.billing import create_setup_fee_checkout, SetupFeeCheckoutRequest
+    from adcopilot.domain.launch.entities import LaunchStatus
+    from adcopilot.interfaces.api.billing import SetupFeeCheckoutRequest, create_setup_fee_checkout
 
     brief_id = str(uuid.uuid4())
     mock_brief = MagicMock()
@@ -379,7 +366,7 @@ async def test_create_setup_fee_checkout_rejects_invalid_uuid() -> None:
     from fastapi import HTTPException
 
     from adcopilot.config import Settings
-    from adcopilot.interfaces.api.billing import create_setup_fee_checkout, SetupFeeCheckoutRequest
+    from adcopilot.interfaces.api.billing import SetupFeeCheckoutRequest, create_setup_fee_checkout
 
     settings = Settings(
         DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
@@ -404,7 +391,7 @@ async def test_create_setup_fee_checkout_returns_503_when_not_configured() -> No
     from fastapi import HTTPException
 
     from adcopilot.config import Settings
-    from adcopilot.interfaces.api.billing import create_setup_fee_checkout, SetupFeeCheckoutRequest
+    from adcopilot.interfaces.api.billing import SetupFeeCheckoutRequest, create_setup_fee_checkout
 
     settings = Settings(
         DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
@@ -431,7 +418,7 @@ async def test_create_setup_fee_checkout_returns_409_when_not_proposed() -> None
 
     from adcopilot.config import Settings
     from adcopilot.domain.launch.entities import LaunchStatus
-    from adcopilot.interfaces.api.billing import create_setup_fee_checkout, SetupFeeCheckoutRequest
+    from adcopilot.interfaces.api.billing import SetupFeeCheckoutRequest, create_setup_fee_checkout
 
     brief_id = str(uuid.uuid4())
     mock_brief = MagicMock()
@@ -484,9 +471,8 @@ async def test_create_setup_fee_checkout_returns_409_when_not_proposed() -> None
 @pytest.mark.asyncio
 async def test_checkout_session_completed_queues_create_campaign() -> None:
     """Webhook handler approves brief and enqueues create_campaign_task."""
-    import dataclasses
-    from decimal import Decimal
     from datetime import UTC, datetime
+    from decimal import Decimal
 
     from adcopilot.config import Settings
     from adcopilot.domain.entities import AccountId, UserId

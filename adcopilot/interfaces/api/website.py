@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import structlog
 from fastapi import APIRouter
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
 
 from adcopilot.infrastructure.adapters.http_website_crawler import HttpWebsiteCrawlerAdapter
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
@@ -41,10 +41,10 @@ async def analyze_website(
     This endpoint runs synchronously (no Celery). A homepage crawl + LLM extraction
     completes within 8 seconds for typical sites.
     """
-    from adcopilot.config import get_settings
     from adcopilot.application.services.website_intelligence_extractor import (
         WebsiteIntelligenceExtractor,
     )
+    from adcopilot.config import get_settings
     from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
 
     intelligence = await _crawler.crawl(body.url)

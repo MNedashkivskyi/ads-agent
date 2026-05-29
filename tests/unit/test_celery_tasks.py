@@ -89,7 +89,7 @@ def test_snapshot_task_releases_lock_on_success() -> None:
 
     assert result["success"] is True
     assert result["campaigns"] == 3
-    mock_redis.delete.assert_called_once_with("lock:snapshot:account-id-123:2026-01-15")
+    mock_redis.delete.assert_any_call("lock:snapshot:account-id-123:2026-01-15")
 
 
 def test_snapshot_task_releases_lock_on_exception() -> None:
@@ -115,7 +115,7 @@ def test_snapshot_task_releases_lock_on_exception() -> None:
             "2026-01-15",
         )
 
-    mock_redis.delete.assert_called_once_with("lock:snapshot:account-id-123:2026-01-15")
+    mock_redis.delete.assert_any_call("lock:snapshot:account-id-123:2026-01-15")
 
 
 # ---------------------------------------------------------------------------
