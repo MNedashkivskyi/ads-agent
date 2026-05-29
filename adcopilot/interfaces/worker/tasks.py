@@ -979,11 +979,10 @@ async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
-    max_retries=2,
-    default_retry_delay=30,
-    autoretry_for=(Exception,),
-    retry_backoff=True,
+    max_retries=0,
     name="adcopilot.interfaces.worker.tasks.generate_campaign_task",
+    soft_time_limit=110,
+    time_limit=120,
 )
 def generate_campaign_task(
     brief_id: str,
@@ -1104,6 +1103,17 @@ async def _run_generate_campaign(
     except Exception as exc:
         logger.exception("generate_campaign_task failed", brief_id=brief_id)
         error_text = str(exc)[:200]
+        try:
+            async with AsyncSession(engine) as session, session.begin():
+                brief_repo_f = SqlCampaignBriefRepository(session)
+                await brief_repo_f.update_status(
+                    CampaignBriefId(brief_id), LaunchStatus.FAILED
+                )
+        except Exception:
+            logger.exception(
+                "generate_campaign_task: failed to mark brief as FAILED",
+                brief_id=brief_id,
+            )
     finally:
         await engine.dispose()
 

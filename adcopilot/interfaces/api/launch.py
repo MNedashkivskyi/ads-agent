@@ -366,6 +366,9 @@ async def get_proposal_status(
             if brief.status == LaunchStatus.GENERATING:
                 return ProposalStatusResponse(status="generating")
 
+            if brief.status == LaunchStatus.FAILED:
+                return ProposalStatusResponse(status="failed")
+
             return ProposalStatusResponse(status="failed")
     finally:
         await engine.dispose()
