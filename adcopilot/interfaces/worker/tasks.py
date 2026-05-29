@@ -208,7 +208,9 @@ async def _async_link_google_ads_accounts(
     redis = _redis_client()
     now_iso = datetime.now(UTC).isoformat()
     for customer_id in linked_ids:
-        account_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}"))
+        account_id = str(
+            uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}")
+        )
         # Mark the account as "initial sync in progress" in Redis.
         # TTL of 10 min — if the task hangs, the marker auto-expires so the
         # frontend doesn't show "syncing" forever.

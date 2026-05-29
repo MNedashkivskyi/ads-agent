@@ -8,7 +8,9 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from adcopilot.domain.entities import PlanTier, User, UserId
+import pytest
+
+from adcopilot.domain.entities import GoogleAdsAccount, PlanTier, User, UserId
 from adcopilot.interfaces.api.users import (
     PLAN_MAX_ACCOUNTS,
     UserMeResponse,

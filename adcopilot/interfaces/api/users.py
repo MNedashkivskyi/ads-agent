@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import Settings, get_settings
-from adcopilot.domain.entities import PlanTier, UserId
+from adcopilot.domain.entities import AccountId, PlanTier, UserId
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
@@ -324,7 +324,9 @@ async def get_sync_status(
                         account_id=acct_id_str,
                         customer_id=acct.customer_id,
                         descriptive_name=acct.descriptive_name or "",
-                        connected_at=acct.connected_at.isoformat() if acct.connected_at else "",
+                        connected_at=acct.connected_at.isoformat()
+                        if acct.connected_at
+                        else "",
                         has_snapshots=has_snapshots,
                         sync_in_progress=sync_in_progress,
                         last_snapshot_date=str(last_date) if last_date else None,
@@ -375,6 +377,9 @@ async def delete_account(
     from sqlalchemy import select
 
     from adcopilot.infrastructure.db.models import GoogleAdsAccountModel, OAuthCredentialsModel
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
 
     engine = create_async_engine(settings.DATABASE_URL)
     refresh_token: str | None = None
@@ -531,7 +536,7 @@ async def list_recommendations(
     finally:
         await engine.dispose()
 
-    from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS
+    from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS, RecommendationKind
 
     non_exec_values = {k.value for k in NON_EXECUTABLE_KINDS}
     return [
@@ -652,6 +657,7 @@ async def approve_recommendation(
     from adcopilot.domain.recommendation import (
         NON_EXECUTABLE_KINDS,
         RecommendationId,
+        RecommendationKind,
         RecommendationStatus,
     )
     from adcopilot.infrastructure.db.repositories.recommendation_repository import (
