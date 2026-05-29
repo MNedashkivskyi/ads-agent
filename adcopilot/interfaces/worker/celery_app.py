@@ -110,6 +110,18 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.monthly_performance_reports_task",
                     "schedule": crontab(hour=8, minute=0, day_of_month="1"),
                 },
+                "post-launch-checkins": {
+                    # Daily 9:30 AM UTC — send check-in notifications for campaigns
+                    # launched exactly 3, 7, 14, or 30 days ago.
+                    "task": "adcopilot.interfaces.worker.tasks.post_launch_checkins_task",
+                    "schedule": crontab(hour=9, minute=30),
+                },
+                "weekly-conversion-tracking-reminders": {
+                    # Sundays 10:00 AM UTC — remind users with active campaigns
+                    # but no conversion tracking configured.
+                    "task": "adcopilot.interfaces.worker.tasks.weekly_conversion_tracking_reminders_task",
+                    "schedule": crontab(hour=10, minute=0, day_of_week="sunday"),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},
