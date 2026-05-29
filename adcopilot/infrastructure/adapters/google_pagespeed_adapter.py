@@ -67,6 +67,7 @@ class GooglePageSpeedAdapter:
             if display_value:
                 # Parse "2.3 s" or "340 ms"
                 import re
+
                 m = re.search(r"([\d.]+)\s*(s|ms)", display_value)
                 if m:
                     val = float(m.group(1))

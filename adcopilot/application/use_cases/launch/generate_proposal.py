@@ -328,8 +328,7 @@ class GenerateCampaignProposalUseCase:
         try:
             neg_resp = await self._generator.generate_negatives(brief, vertical)
             extra_negatives = [
-                n for n in neg_resp.keywords
-                if n not in base_proposal.negative_keywords
+                n for n in neg_resp.keywords if n not in base_proposal.negative_keywords
             ]
         except LLMError:
             logger.warning("hybrid_negatives_failed_using_template_only", brief_id=brief.id)

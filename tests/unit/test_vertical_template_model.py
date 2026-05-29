@@ -32,9 +32,21 @@ def _make_ad_group(name: str = "Test Group") -> TemplateAdGroup:
     return TemplateAdGroup(
         name_template=name,
         keyword_bank=[
-            KeywordEntry(text="manicure {city}", match_type=TemplateMatchType.PHRASE, priority=KeywordPriority.CORE),
-            KeywordEntry(text="paznokcie {city}", match_type=TemplateMatchType.EXACT, priority=KeywordPriority.CORE),
-            KeywordEntry(text="salon urody", match_type=TemplateMatchType.BROAD, priority=KeywordPriority.EXTENDED),
+            KeywordEntry(
+                text="manicure {city}",
+                match_type=TemplateMatchType.PHRASE,
+                priority=KeywordPriority.CORE,
+            ),
+            KeywordEntry(
+                text="paznokcie {city}",
+                match_type=TemplateMatchType.EXACT,
+                priority=KeywordPriority.CORE,
+            ),
+            KeywordEntry(
+                text="salon urody",
+                match_type=TemplateMatchType.BROAD,
+                priority=KeywordPriority.EXTENDED,
+            ),
         ],
     )
 

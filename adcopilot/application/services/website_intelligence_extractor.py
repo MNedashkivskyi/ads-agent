@@ -53,7 +53,9 @@ class WebsiteIntelligenceExtractor:
         if crawler_result.og_title:
             content_parts.append(f"OG title: {crawler_result.og_title}")
         if crawler_result.services_detected:
-            content_parts.append(f"Services detected: {', '.join(crawler_result.services_detected)}")
+            content_parts.append(
+                f"Services detected: {', '.join(crawler_result.services_detected)}"
+            )
         if crawler_result.location_text:
             content_parts.append(f"Location: {crawler_result.location_text}")
         content = "\n".join(content_parts)[:_MAX_CONTENT_CHARS]
@@ -61,7 +63,9 @@ class WebsiteIntelligenceExtractor:
         try:
             llm_data = await self._extract_via_llm(content, vertical)
         except Exception as exc:
-            logger.warning("website_intelligence_extractor: LLM failed, using raw data", error=str(exc))
+            logger.warning(
+                "website_intelligence_extractor: LLM failed, using raw data", error=str(exc)
+            )
             return crawler_result
 
         return self._merge(crawler_result, llm_data)

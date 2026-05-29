@@ -105,11 +105,9 @@ async def recover_proposal(
                 )
 
             # Check if GENERATING for too long (stale)
-            is_stale_generating = (
-                brief.status == LaunchStatus.GENERATING
-                and (datetime.now(UTC) - brief.created_at)
-                > timedelta(minutes=_STALE_GENERATING_MINUTES)
-            )
+            is_stale_generating = brief.status == LaunchStatus.GENERATING and (
+                datetime.now(UTC) - brief.created_at
+            ) > timedelta(minutes=_STALE_GENERATING_MINUTES)
             if (
                 brief.status not in (LaunchStatus.GENERATING, LaunchStatus.PROPOSED)
                 and not is_stale_generating

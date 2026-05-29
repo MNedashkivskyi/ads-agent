@@ -126,9 +126,7 @@ class AnomalyDetectionUseCase:
         for check_name, check_fn in checks:
             checks_run += 1
             try:
-                await check_fn(
-                    account_id, customer_id, refresh_token, now, _maybe_create
-                )
+                await check_fn(account_id, customer_id, refresh_token, now, _maybe_create)
             except GoogleAdsAuthError:
                 # Token is revoked/expired — no point running remaining checks.
                 # Caller (task) should mark needs_reauth on the account.

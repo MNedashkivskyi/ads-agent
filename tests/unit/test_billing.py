@@ -326,7 +326,9 @@ async def test_create_setup_fee_checkout_returns_url() -> None:
     mock_engine.dispose = AsyncMock()
 
     mock_stripe = MagicMock()
-    mock_stripe.checkout.Session.create.return_value = {"url": "https://checkout.stripe.com/pay/cs_test"}
+    mock_stripe.checkout.Session.create.return_value = {
+        "url": "https://checkout.stripe.com/pay/cs_test"
+    }
 
     settings = Settings(
         DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",

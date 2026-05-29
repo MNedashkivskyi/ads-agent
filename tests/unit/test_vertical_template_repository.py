@@ -34,9 +34,21 @@ def tmp_verticals(tmp_path: Path) -> Path:
             "vertical_specific": [],
         },
         "bidding_defaults": {
-            "micro": {"bidding_strategy": "MAXIMIZE_CLICKS", "max_cpc_limit_pln": 3.0, "daily_budget_ratio": 0.9},
-            "mid": {"bidding_strategy": "MAXIMIZE_CONVERSIONS", "max_cpc_limit_pln": 8.0, "daily_budget_ratio": 0.9},
-            "growth": {"bidding_strategy": "TARGET_CPA", "max_cpc_limit_pln": 15.0, "daily_budget_ratio": 0.9},
+            "micro": {
+                "bidding_strategy": "MAXIMIZE_CLICKS",
+                "max_cpc_limit_pln": 3.0,
+                "daily_budget_ratio": 0.9,
+            },
+            "mid": {
+                "bidding_strategy": "MAXIMIZE_CONVERSIONS",
+                "max_cpc_limit_pln": 8.0,
+                "daily_budget_ratio": 0.9,
+            },
+            "growth": {
+                "bidding_strategy": "TARGET_CPA",
+                "max_cpc_limit_pln": 15.0,
+                "daily_budget_ratio": 0.9,
+            },
         },
         "extensions": {"sitelinks": [], "callouts": [], "structured_snippet_category": ""},
         "common_services": ["Usługi podstawowe"],
@@ -61,9 +73,21 @@ def tmp_verticals(tmp_path: Path) -> Path:
             "vertical_specific": ["szkolenie fryzjerskie"],
         },
         "bidding_defaults": {
-            "micro": {"bidding_strategy": "MAXIMIZE_CLICKS", "max_cpc_limit_pln": 2.0, "daily_budget_ratio": 0.9},
-            "mid": {"bidding_strategy": "MAXIMIZE_CONVERSIONS", "max_cpc_limit_pln": 5.0, "daily_budget_ratio": 0.9},
-            "growth": {"bidding_strategy": "TARGET_CPA", "max_cpc_limit_pln": 10.0, "daily_budget_ratio": 0.9},
+            "micro": {
+                "bidding_strategy": "MAXIMIZE_CLICKS",
+                "max_cpc_limit_pln": 2.0,
+                "daily_budget_ratio": 0.9,
+            },
+            "mid": {
+                "bidding_strategy": "MAXIMIZE_CONVERSIONS",
+                "max_cpc_limit_pln": 5.0,
+                "daily_budget_ratio": 0.9,
+            },
+            "growth": {
+                "bidding_strategy": "TARGET_CPA",
+                "max_cpc_limit_pln": 10.0,
+                "daily_budget_ratio": 0.9,
+            },
         },
         "extensions": {
             "sitelinks": [{"text": "Cennik", "path": "cennik"}],
@@ -118,7 +142,9 @@ class TestYamlVerticalTemplateAdapter:
         assert adapter.list_verticals() == []
 
     def test_invalid_yaml_file_is_skipped(self, tmp_verticals: Path):
-        (tmp_verticals / "broken.yaml").write_text("vertical_id: bad\nthis: is: not: valid: yaml: !!!\n")
+        (tmp_verticals / "broken.yaml").write_text(
+            "vertical_id: bad\nthis: is: not: valid: yaml: !!!\n"
+        )
         # Should load without raising; other files still available
         adapter = YamlVerticalTemplateAdapter(tmp_verticals)
         assert adapter.get_template("beauty_salon") is not None

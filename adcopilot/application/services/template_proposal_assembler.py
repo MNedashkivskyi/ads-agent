@@ -44,9 +44,7 @@ _PLACEHOLDER_DESCRIPTIONS = [
 ]
 
 # Ensure all standard negative categories are covered.
-_STANDARD_NEGATIVE_ANCHORS: list[str] = [
-    terms[0] for _, terms in POLISH_STANDARD_NEGATIVES
-]
+_STANDARD_NEGATIVE_ANCHORS: list[str] = [terms[0] for _, terms in POLISH_STANDARD_NEGATIVES]
 
 _MATCH_TYPE_MAP: dict[TemplateMatchType, MatchType] = {
     TemplateMatchType.EXACT: MatchType.EXACT,
@@ -97,9 +95,7 @@ class TemplateProposalAssembler:
             Optional phone number for the call extension callout.
         """
         city = brief.location.split(",")[0].strip()
-        service = (
-            template.common_services[0] if template.common_services else "usługi"
-        )
+        service = template.common_services[0] if template.common_services else "usługi"
 
         tier = classify_budget_tier(brief.monthly_budget_pln)
         daily_budget_micros = self._calc_daily_budget(brief.monthly_budget_pln)
@@ -157,7 +153,9 @@ class TemplateProposalAssembler:
 
             name = _resolve(ag_tmpl.name_template, city, service)
             placeholder_headlines = [_resolve(h, city, service) for h in _PLACEHOLDER_HEADLINES]
-            placeholder_descriptions = [_resolve(d, city, service) for d in _PLACEHOLDER_DESCRIPTIONS]
+            placeholder_descriptions = [
+                _resolve(d, city, service) for d in _PLACEHOLDER_DESCRIPTIONS
+            ]
 
             ad = AdProposal(
                 headlines=placeholder_headlines,

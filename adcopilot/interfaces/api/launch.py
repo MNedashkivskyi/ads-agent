@@ -229,7 +229,9 @@ async def check_conversion_tracking(
             creds_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
             creds = await creds_repo.get(AccountId(account_id))
             if creds is None:
-                raise HTTPException(status_code=404, detail="No OAuth credentials found for account")
+                raise HTTPException(
+                    status_code=404, detail="No OAuth credentials found for account"
+                )
             refresh_token = creds.refresh_token
     finally:
         await engine.dispose()

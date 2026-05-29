@@ -105,9 +105,7 @@ async def _async_link_google_ads_accounts(
     refresh_token: str = raw["refresh_token"]
     access_token: str | None = raw.get("access_token")
     expires_at_iso: str | None = raw.get("expires_at")
-    expires_at: datetime | None = (
-        datetime.fromisoformat(expires_at_iso) if expires_at_iso else None
-    )
+    expires_at: datetime | None = datetime.fromisoformat(expires_at_iso) if expires_at_iso else None
 
     # --- open DB session ---
     engine = create_async_engine(settings.DATABASE_URL)
@@ -210,9 +208,7 @@ async def _async_link_google_ads_accounts(
     redis = _redis_client()
     now_iso = datetime.now(UTC).isoformat()
     for customer_id in linked_ids:
-        account_id = str(
-            uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}")
-        )
+        account_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}"))
         # Mark the account as "initial sync in progress" in Redis.
         # TTL of 10 min — if the task hangs, the marker auto-expires so the
         # frontend doesn't show "syncing" forever.
@@ -1155,7 +1151,7 @@ async def _run_regenerate_ad_copy(
                 f"Wygeneruj 5 nagłówków (max 30 znaków każdy) i 2 opisy (max 90 znaków) "
                 f"dla reklamy Google Ads dla firmy: {brief.business_description}. "
                 f"Grupa reklam: '{ad_group.name}'. "
-                f"Zwróć JSON: {{\"headlines\": [...], \"descriptions\": [...]}}. "
+                f'Zwróć JSON: {{"headlines": [...], "descriptions": [...]}}. '
                 f"Tylko JSON, bez dodatkowego tekstu."
             )
 
@@ -3056,7 +3052,7 @@ async def _run_post_launch_checkins() -> dict[str, object]:
 
     # Map days to template keys
     template_key_map = {
-        3: "day_3_no_data",   # default; overridden below if data available
+        3: "day_3_no_data",  # default; overridden below if data available
         7: "day_7_performance",
         14: "day_14_insight",
         30: "day_30_summary",
@@ -3069,11 +3065,25 @@ async def _run_post_launch_checkins() -> dict[str, object]:
                 result = await session.execute(
                     select(LaunchBriefModel).where(
                         LaunchBriefModel.status == LaunchStatus.ENABLED,
-                        LaunchBriefModel.created_at >= datetime(
-                            target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=UTC
+                        LaunchBriefModel.created_at
+                        >= datetime(
+                            target_date.year,
+                            target_date.month,
+                            target_date.day,
+                            0,
+                            0,
+                            0,
+                            tzinfo=UTC,
                         ),
-                        LaunchBriefModel.created_at < datetime(
-                            target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=UTC
+                        LaunchBriefModel.created_at
+                        < datetime(
+                            target_date.year,
+                            target_date.month,
+                            target_date.day,
+                            23,
+                            59,
+                            59,
+                            tzinfo=UTC,
                         ),
                     )
                 )
@@ -3190,9 +3200,7 @@ async def _run_weekly_conversion_tracking_reminders() -> dict[str, object]:
     try:
         async with AsyncSession(engine) as session:
             result = await session.execute(
-                select(LaunchBriefModel).where(
-                    LaunchBriefModel.status == LaunchStatus.ENABLED
-                )
+                select(LaunchBriefModel).where(LaunchBriefModel.status == LaunchStatus.ENABLED)
             )
             enabled_briefs = result.scalars().all()
             # Deduplicate by account
@@ -3207,7 +3215,9 @@ async def _run_weekly_conversion_tracking_reminders() -> dict[str, object]:
                 try:
                     from adcopilot.domain.entities import AccountId
 
-                    creds_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
+                    creds_repo = SqlOAuthCredentialsRepository(
+                        session, settings.TOKEN_ENCRYPTION_KEY
+                    )
                     creds = await creds_repo.get(AccountId(account_id))
                     if creds is None:
                         continue

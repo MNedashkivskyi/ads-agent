@@ -55,7 +55,9 @@ async def analyze_website(
         try:
             llm = AnthropicClient(api_key=settings.LLM_API_KEY)
             extractor = WebsiteIntelligenceExtractor(llm)
-            intelligence = await extractor.enrich(intelligence, vertical=body.vertical_id or "general")
+            intelligence = await extractor.enrich(
+                intelligence, vertical=body.vertical_id or "general"
+            )
         except Exception as exc:
             logger.warning("website_analyze: LLM enrichment failed", error=str(exc))
 

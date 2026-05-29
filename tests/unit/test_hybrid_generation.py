@@ -166,9 +166,7 @@ class TestHybridPathWithTemplateId:
 
 class TestFullLLMPathWhenTemplateIdIsNone:
     @pytest.mark.asyncio
-    async def test_full_llm_path_runs_when_no_template_id(
-        self, use_case, mock_generator, brief
-    ):
+    async def test_full_llm_path_runs_when_no_template_id(self, use_case, mock_generator, brief):
         """When template_id=None, existing LLM pipeline should run unchanged."""
         # Mock the full pipeline
         from adcopilot.infrastructure.llm.campaign_generator import (
@@ -218,6 +216,7 @@ class TestFullLLMPathWhenTemplateIdIsNone:
         from adcopilot.infrastructure.vertical_templates.yaml_adapter import (
             YamlVerticalTemplateAdapter,
         )
+
         _adapter = YamlVerticalTemplateAdapter()
         _tmpl = _adapter.get_default_template()
         _assembler = TemplateProposalAssembler()
@@ -246,6 +245,7 @@ class TestFallbackWhenTemplateNotFound:
         )
         # detect_vertical needs to return something for the LLM path
         from adcopilot.infrastructure.llm.campaign_generator import VerticalClassification
+
         mock_generator.detect_vertical.return_value = VerticalClassification(vertical="generic")
 
         from adcopilot.infrastructure.llm.campaign_generator import (
@@ -255,6 +255,7 @@ class TestFallbackWhenTemplateNotFound:
             KeywordItem,
             SitelinkItem,
         )
+
         mock_generator.build_structure.return_value = CampaignStructureResponse(
             campaign_name="Fallback Campaign",
             ad_groups=[
@@ -281,6 +282,7 @@ class TestFallbackWhenTemplateNotFound:
         from adcopilot.application.services.template_proposal_assembler import (
             TemplateProposalAssembler,
         )
+
         _base = TemplateProposalAssembler().assemble(adapter.get_default_template(), brief)
         mock_generator.assemble_proposal = MagicMock(return_value=_base)
 
