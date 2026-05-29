@@ -15,10 +15,10 @@ import re
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TypeVar
+from typing import Annotated, TypeVar
 
 import structlog
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, BeforeValidator, Field, field_validator
 
 from adcopilot.application.ports.llm import LLMClient
 from adcopilot.domain.exceptions import LLMError
@@ -131,8 +131,8 @@ class BrandKeywordItem(BaseModel):
 class BrandAdItem(BaseModel):
     """Brand RSA — simple, name-focused copy."""
 
-    headlines: list[str] = Field(min_length=3, max_length=5)
-    descriptions: list[str] = Field(min_length=2, max_length=2)
+    headlines: list[str] = Field(min_length=3, max_length=15)
+    descriptions: list[str] = Field(min_length=2, max_length=4)
     path1: str = Field(default="")
     path2: str = Field(default="")
 
@@ -146,11 +146,16 @@ class BrandCampaignResponse(BaseModel):
 
 
 class SitelinkItem(BaseModel):
-    """One sitelink in the extensions response."""
+    """One sitelink in the extensions response.
 
-    link_text: str = Field(max_length=25)
-    description1: str = Field(max_length=35)
-    description2: str = Field(max_length=35)
+    Truncation happens here via BeforeValidator so that Pydantic never rejects
+    an LLM response that is slightly over the Google Ads character limits.
+    The downstream assembly layer also slices, but this is the first gate.
+    """
+
+    link_text: Annotated[str, BeforeValidator(lambda v: str(v)[:25])]
+    description1: Annotated[str, BeforeValidator(lambda v: str(v)[:35])]
+    description2: Annotated[str, BeforeValidator(lambda v: str(v)[:35])]
     final_url: str = Field(default="https://example.com")
 
 
@@ -619,8 +624,8 @@ class CampaignGenerator:
             ]
             brand_campaign_name = brand.brand_campaign_name
             brand_ad = AdProposal(
-                headlines=brand.brand_ad.headlines,
-                descriptions=brand.brand_ad.descriptions,
+                headlines=[h[:30] for h in brand.brand_ad.headlines],
+                descriptions=[d[:90] for d in brand.brand_ad.descriptions],
                 final_url=_extract_url(brief),
                 path_segments=(brand.brand_ad.path1[:15], brand.brand_ad.path2[:15]),
             )
