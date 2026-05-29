@@ -153,7 +153,7 @@ def _rule_budget(
     brief: CampaignBrief,
     ctx: ValidationContext,
 ) -> list[str]:
-    """Rule 1: daily_budget_micros == monthly_budget_pln / 30 * seasonal ± 5 %."""
+    """Rule 1: daily_budget_micros == monthly_budget_pln / 30 * seasonal * pp ± 5 %."""
     errors: list[str] = []
     base_expected = int(brief.monthly_budget_pln / Decimal("30") * Decimal("1_000_000"))
     if base_expected == 0:
@@ -165,7 +165,21 @@ def _rule_budget(
     # therefore compare against the seasonally-adjusted expected value, or
     # every proposal generated in a non-neutral month would fail.
     multiplier = proposal.seasonal_multiplier or 1.0
-    expected = int(base_expected * multiplier)
+
+    # Voivodeship purchasing-power index is also applied to the budget
+    # (see ``_apply_purchasing_power``). Include it in the expected value so
+    # proposals for high-income locations (e.g. Warsaw, mazowieckie=1.50)
+    # don't systematically fail budget validation.
+    try:
+        from adcopilot.domain.polish_market.voivodeship_data import (
+            get_purchasing_power_for_city,
+        )
+
+        pp_index = get_purchasing_power_for_city(brief.location)
+    except Exception:
+        pp_index = 1.0
+
+    expected = int(base_expected * multiplier * pp_index)
 
     actual = proposal.daily_budget_micros
     drift = abs(actual - expected) / expected
@@ -174,7 +188,7 @@ def _rule_budget(
             f"Rule 1 (Budget): daily_budget_micros {actual:,} deviates "
             f"{drift:.1%} from expected {expected:,} "
             f"(monthly {brief.monthly_budget_pln} PLN / 30 * 1 000 000 "
-            f"× seasonal {multiplier:.2f}). "
+            f"× seasonal {multiplier:.2f} × pp {pp_index:.2f}). "
             f"Allowed tolerance: ±{_BUDGET_TOLERANCE:.0%}."
         )
     return errors

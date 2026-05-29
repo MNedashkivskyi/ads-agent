@@ -277,6 +277,7 @@ IMPORTANT — Polish standard negatives to always include at least one from each
 - DIY: "jak zrobić", "samodzielnie", "zrób sam", "poradnik"
 - Education: "kurs", "szkolenie", "studia", "jak zrobić", "instrukcja"
 - Forum/media: "youtube", "tiktok", "forum", "blog", "opinia"
+- Download/pobieranie: "do pobrania", "filmik", "szablon", "wzór", "prezentacja"
 
 Respond ONLY with valid JSON — no markdown, no prose:
 { "keywords": ["<string>", "…"] }"""
