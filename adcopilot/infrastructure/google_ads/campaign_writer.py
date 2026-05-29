@@ -152,7 +152,7 @@ class CampaignWriter:
             }
             field = _STRATEGY_MAP.get(strategy, "maximize_conversions")
             sub = getattr(campaign, field)
-            sub.CopyFrom(type(sub)())
+            client.copy_from(sub, type(sub)())
 
             # Geographic targeting
             geo_target = campaign.geo_target_type_setting
@@ -649,7 +649,7 @@ class CampaignWriter:
             campaign.status = client.enums.CampaignStatusEnum.PAUSED
             campaign.campaign_budget = budget_rn
             campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
-            campaign.target_spend.CopyFrom(type(campaign.target_spend)())
+            client.copy_from(campaign.target_spend, type(campaign.target_spend)())
             campaign_response = campaign_service.mutate_campaigns(
                 customer_id=cid, operations=[campaign_op]
             )
@@ -962,7 +962,7 @@ class CampaignWriter:
             campaign.status = client.enums.CampaignStatusEnum.ENABLED
             from google.protobuf import field_mask_pb2
 
-            op.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
+            client.copy_from(op.update_mask, field_mask_pb2.FieldMask(paths=["status"]))
             campaign_service.mutate_campaigns(customer_id=cid, operations=[op])
 
             logger.info(
