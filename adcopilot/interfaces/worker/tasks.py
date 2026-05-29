@@ -1083,6 +1083,127 @@ async def _run_generate_campaign(
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
+    max_retries=1,
+    default_retry_delay=10,
+    autoretry_for=(Exception,),
+    name="adcopilot.interfaces.worker.tasks.regenerate_ad_copy_task",
+)
+def regenerate_ad_copy_task(
+    brief_id: str,
+    proposal_id: str,
+    ad_group_index: int = 0,
+) -> dict[str, object]:
+    """Re-generate ad copy for one ad group of an existing proposal using the LLM."""
+    import asyncio
+
+    return asyncio.run(_run_regenerate_ad_copy(brief_id, proposal_id, ad_group_index))
+
+
+async def _run_regenerate_ad_copy(
+    brief_id: str,
+    proposal_id: str,
+    ad_group_index: int,
+) -> dict[str, object]:
+    from dataclasses import replace as dc_replace
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.domain.launch.entities import (
+        AdProposal,
+        CampaignBriefId,
+        CampaignProposalId,
+    )
+    from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
+        SqlCampaignBriefRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.launch_proposal_repository import (
+        SqlCampaignProposalRepository,
+    )
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+
+    try:
+        async with AsyncSession(engine) as session:
+            brief_repo = SqlCampaignBriefRepository(session)
+            brief = await brief_repo.get(CampaignBriefId(brief_id))
+            if brief is None:
+                logger.warning("regenerate_ad_copy: brief not found", brief_id=brief_id)
+                return {"error": "brief_not_found"}
+
+            proposal_repo = SqlCampaignProposalRepository(session)
+            proposal = await proposal_repo.get(CampaignProposalId(proposal_id))
+            if proposal is None or ad_group_index >= len(proposal.ad_groups):
+                logger.warning(
+                    "regenerate_ad_copy: proposal or ad group not found",
+                    proposal_id=proposal_id,
+                    ad_group_index=ad_group_index,
+                )
+                return {"error": "not_found"}
+
+            if not settings.LLM_API_KEY:
+                logger.warning("regenerate_ad_copy: no LLM API key configured")
+                return {"error": "no_llm_key"}
+
+            from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
+
+            llm = AnthropicClient(api_key=settings.LLM_API_KEY)
+            ad_group = proposal.ad_groups[ad_group_index]
+
+            prompt = (
+                f"Wygeneruj 5 nagłówków (max 30 znaków każdy) i 2 opisy (max 90 znaków) "
+                f"dla reklamy Google Ads dla firmy: {brief.business_description}. "
+                f"Grupa reklam: '{ad_group.name}'. "
+                f"Zwróć JSON: {{\"headlines\": [...], \"descriptions\": [...]}}. "
+                f"Tylko JSON, bez dodatkowego tekstu."
+            )
+
+            try:
+                raw = await llm.complete(prompt, max_tokens=400)
+                import json as _json
+
+                data = _json.loads(raw)
+                new_headlines = [str(h)[:30] for h in data.get("headlines", [])[:15]]
+                new_descriptions = [str(d)[:90] for d in data.get("descriptions", [])[:4]]
+            except Exception as exc:
+                logger.warning(
+                    "regenerate_ad_copy: LLM failed",
+                    error=str(exc),
+                    proposal_id=proposal_id,
+                )
+                return {"error": "llm_failed"}
+
+            if len(new_headlines) < 3 or len(new_descriptions) < 2:
+                return {"error": "llm_output_insufficient"}
+
+            old_ad = ad_group.ads[0] if ad_group.ads else None
+            new_ad = AdProposal(
+                headlines=new_headlines,
+                descriptions=new_descriptions,
+                final_url=old_ad.final_url if old_ad else "https://example.com",
+                path_segments=old_ad.path_segments if old_ad else ("", ""),
+            )
+            new_ads = [new_ad] + list(ad_group.ads[1:])
+            updated_group = dc_replace(ad_group, ads=new_ads)
+            groups = list(proposal.ad_groups)
+            groups[ad_group_index] = updated_group
+            updated_proposal = dc_replace(proposal, ad_groups=groups)
+
+            async with session.begin():
+                await proposal_repo.save(updated_proposal)
+
+        logger.info(
+            "regenerate_ad_copy: complete",
+            proposal_id=proposal_id,
+            ad_group_index=ad_group_index,
+        )
+        return {"proposal_id": proposal_id, "ad_group_index": ad_group_index}
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
     max_retries=2,
     default_retry_delay=30,
     autoretry_for=(Exception,),

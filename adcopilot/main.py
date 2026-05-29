@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.billing import router as billing_router
     from adcopilot.interfaces.api.conversion_tracking import router as conversion_tracking_router
     from adcopilot.interfaces.api.conversion_tracking_guide import router as conversion_tracking_guide_router
+    from adcopilot.interfaces.api.proposal_editor import router as proposal_editor_router
     from adcopilot.interfaces.api.dashboard import router as dashboard_router
     from adcopilot.interfaces.api.debug import router as debug_router
     from adcopilot.interfaces.api.digest import router as digest_router
@@ -117,6 +118,7 @@ def create_app() -> FastAPI:
     application.include_router(notifications_router)
     application.include_router(conversion_tracking_router)
     application.include_router(conversion_tracking_guide_router)
+    application.include_router(proposal_editor_router)
     application.include_router(experiments_router)
     application.include_router(search_terms_router)
     application.include_router(ad_proposals_router)
