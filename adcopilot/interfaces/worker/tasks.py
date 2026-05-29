@@ -3034,6 +3034,10 @@ async def _run_post_launch_checkins() -> dict[str, object]:
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+    from adcopilot.application.services.checkin_aggregator import (
+        CheckInAggregator,
+        render_checkin_message,
+    )
     from adcopilot.application.services.post_launch_notifier import PostLaunchNotifier
     from adcopilot.config import get_settings
     from adcopilot.domain.launch.entities import LaunchStatus
@@ -3041,12 +3045,23 @@ async def _run_post_launch_checkins() -> dict[str, object]:
     from adcopilot.infrastructure.db.repositories.notification_repository import (
         SqlNotificationRepository,
     )
+    from adcopilot.infrastructure.db.repositories.snapshot_repository import (
+        SqlSnapshotRepository,
+    )
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
     today = date.today()
     checkin_days = [3, 7, 14, 30]
     sent = 0
+
+    # Map days to template keys
+    template_key_map = {
+        3: "day_3_no_data",   # default; overridden below if data available
+        7: "day_7_performance",
+        14: "day_14_insight",
+        30: "day_30_summary",
+    }
 
     try:
         for days in checkin_days:
@@ -3065,21 +3080,64 @@ async def _run_post_launch_checkins() -> dict[str, object]:
                 )
                 briefs = result.scalars().all()
 
+                class _SnapshotRepoAdapter:
+                    """Wraps SqlSnapshotRepository to provide list_by_account()."""
+                    def __init__(self, inner, account_id_str):
+                        self._inner = inner
+                        self._account_id = account_id_str
+
+                    async def list_by_account(self, account_id, limit=7):
+                        from adcopilot.domain.entities import AccountId
+                        from datetime import date, timedelta
+                        snaps = []
+                        for delta in range(limit):
+                            d = date.today() - timedelta(days=delta)
+                            try:
+                                day_snaps = await self._inner.get_campaigns_by_date(
+                                    AccountId(account_id), d
+                                )
+                                snaps.extend(day_snaps)
+                            except Exception:
+                                pass
+                        return snaps
+
+                snap_repo = _SnapshotRepoAdapter(SqlSnapshotRepository(session), account_id)
+                aggregator = CheckInAggregator(snap_repo)
+
                 for brief in briefs:
                     try:
+                        campaign_name = brief.business_description[:60]
+                        account_id = str(brief.account_id)
+
+                        metrics = await aggregator.get_metrics(
+                            account_id, brief.campaign_resource_name
+                        )
+
+                        if days == 3:
+                            tmpl_key = "day_3_no_data" if metrics.is_empty else "day_3_with_data"
+                        else:
+                            tmpl_key = template_key_map[days]
+
                         notifier = PostLaunchNotifier(SqlNotificationRepository(session))
                         await notifier.notify_checkin(
                             user_id=str(brief.user_id),
-                            campaign_name=brief.business_description[:60],
-                            account_id=str(brief.account_id),
+                            campaign_name=campaign_name,
+                            account_id=account_id,
                             days_since_launch=days,
-                            clicks=0,
-                            impressions=0,
-                            cost_pln=0.0,
-                            conversions=0,
+                            clicks=metrics.clicks,
+                            impressions=metrics.impressions,
+                            cost_pln=metrics.cost_pln,
+                            conversions=metrics.conversions,
                         )
                         await session.commit()
                         sent += 1
+                        logger.debug(
+                            "post_launch_checkin.sent",
+                            brief_id=str(brief.id),
+                            days=days,
+                            template=tmpl_key,
+                            ctr=metrics.ctr,
+                        )
                     except Exception as exc:
                         logger.warning(
                             "post_launch_checkin.failed",
