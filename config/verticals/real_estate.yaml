@@ -1,0 +1,141 @@
+vertical_id: real_estate
+display_name: Biuro nieruchomości
+display_emoji: "🏠"
+language: pl
+competitive_level: high
+
+ad_groups:
+  - name_template: "Biuro nieruchomości {city}"
+    keyword_bank:
+      - text: "biuro nieruchomości {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "agencja nieruchomości {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "pośrednik nieruchomości {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "agent nieruchomości {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "doradca nieruchomości {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.1
+
+  - name_template: "Sprzedaż mieszkań {city}"
+    keyword_bank:
+      - text: "mieszkania na sprzedaż {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sprzedaż mieszkania {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "kupno mieszkania {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "mieszkania od dewelopera {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "kawalerka {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "apartament {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.15
+
+  - name_template: "Wynajem {city}"
+    keyword_bank:
+      - text: "wynajem mieszkania {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "mieszkania do wynajęcia {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "wynajem długoterminowy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "mieszkanie dla studenta {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+  - name_template: "Domy i działki {city}"
+    keyword_bank:
+      - text: "domy na sprzedaż {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "działki na sprzedaż {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "dom z ogrodem {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "działka budowlana {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.05
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - kurs
+    - szkolenie
+    - youtube
+    - tiktok
+  vertical_specific:
+    - praca agent nieruchomości
+    - kurs pośrednika
+    - olx
+    - otodom opinie
+    - bezpłatna wycena online
+    - kredyt hipoteczny kalkulator
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 3.5
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 8.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 18.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Oferty sprzedaży"
+      description1: "Aktualne mieszkania"
+      path: "sprzedaz"
+    - text: "Oferty wynajmu"
+      description1: "Aktualne wynajmy"
+      path: "wynajem"
+    - text: "Wycena nieruchomości"
+      description1: "Bezpłatna konsultacja"
+      path: "wycena"
+    - text: "Kontakt"
+      description1: "Zadzwoń lub napisz"
+      path: "kontakt"
+  callouts:
+    - "Doświadczeni agenci"
+    - "Bezpłatna wycena"
+    - "Sprawdzone oferty"
+    - "Pomoc kredytowa"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Sprzedaż mieszkań
+  - Wynajem mieszkań
+  - Sprzedaż domów
+  - Sprzedaż działek
+  - Wycena nieruchomości
+  - Pomoc w kredycie hipotecznym
+  - Home staging
+  - Obsługa transakcji

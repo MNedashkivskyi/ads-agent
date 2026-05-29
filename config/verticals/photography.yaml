@@ -1,0 +1,125 @@
+vertical_id: photography
+display_name: Fotograf
+display_emoji: "📸"
+language: pl
+competitive_level: medium
+
+ad_groups:
+  - name_template: "Fotograf ślubny {city}"
+    keyword_bank:
+      - text: "fotograf ślubny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "fotografia ślubna {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "zdjęcia ślubne {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "fotograf na wesele {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "plener ślubny {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.15
+
+  - name_template: "Sesje rodzinne {city}"
+    keyword_bank:
+      - text: "sesja rodzinna {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "fotograf dziecięcy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sesja noworodkowa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sesja ciążowa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "sesja w plenerze {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.05
+
+  - name_template: "Fotografia biznesowa {city}"
+    keyword_bank:
+      - text: "zdjęcia biznesowe {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "fotograf produktowy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "zdjęcia do CV {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "fotograf wizerunkowy {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "fotografia korporacyjna {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - kurs
+    - youtube
+    - tiktok
+  vertical_specific:
+    - kurs fotografii
+    - praca fotograf
+    - lightroom presety
+    - canon sklep
+    - nikon sklep
+    - aparat używany
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 2.5
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 6.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 14.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Portfolio"
+      description1: "Zobacz moje zdjęcia"
+      path: "portfolio"
+    - text: "Cennik sesji"
+      description1: "Sprawdź pakiety"
+      path: "cennik"
+    - text: "Rezerwacja terminu"
+      description1: "Umów sesję online"
+      path: "rezerwacja"
+    - text: "Kontakt"
+      description1: "Zadzwoń lub napisz"
+      path: "kontakt"
+  callouts:
+    - "Doświadczony fotograf"
+    - "Naturalne kadry"
+    - "Szybka realizacja"
+    - "Album w cenie"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Fotografia ślubna
+  - Sesja narzeczeńska
+  - Sesja rodzinna
+  - Sesja noworodkowa
+  - Sesja ciążowa
+  - Fotografia biznesowa
+  - Zdjęcia produktowe
+  - Fotografia wnętrz
+  - Reportaż z eventów

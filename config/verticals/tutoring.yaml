@@ -1,0 +1,132 @@
+vertical_id: tutoring
+display_name: Korepetycje / Szkoła językowa
+display_emoji: "📚"
+language: pl
+competitive_level: medium
+
+ad_groups:
+  - name_template: "Korepetycje {city}"
+    keyword_bank:
+      - text: "korepetycje {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "korepetycje online"
+        match_type: PHRASE
+        priority: core
+      - text: "nauczyciel prywatny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "lekcje indywidualne {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "korepetytor {city}"
+        match_type: EXACT
+        priority: extended
+    default_bid_modifier: 1.0
+
+  - name_template: "Język angielski {city}"
+    keyword_bank:
+      - text: "angielski {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "kurs angielskiego {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "angielski online"
+        match_type: PHRASE
+        priority: core
+      - text: "korepetycje angielski {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "angielski dla dzieci {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "angielski biznesowy {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.05
+
+  - name_template: "Matematyka / Egzaminy {city}"
+    keyword_bank:
+      - text: "matematyka korepetycje {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "matura matematyka"
+        match_type: PHRASE
+        priority: core
+      - text: "egzamin ósmoklasisty {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "matura rozszerzona {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "fizyka korepetycje {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "chemia korepetycje {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.1
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - youtube
+    - tiktok
+    - praca
+    - pdf
+  vertical_specific:
+    - praca nauczyciel
+    - duolingo
+    - testy do druku
+    - karta pracy
+    - rozwiązania zadań
+    - ściąga matura
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 2.0
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 4.5
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 10.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Cennik lekcji"
+      description1: "Sprawdź ceny zajęć"
+      path: "cennik"
+    - text: "Nasi nauczyciele"
+      description1: "Doświadczona kadra"
+      path: "nauczyciele"
+    - text: "Lekcja próbna"
+      description1: "Sprawdź jak uczymy"
+      path: "lekcja-probna"
+    - text: "Kontakt"
+      description1: "Zadzwoń lub napisz"
+      path: "kontakt"
+  callouts:
+    - "Doświadczeni nauczyciele"
+    - "Lekcja próbna gratis"
+    - "Elastyczne terminy"
+    - "Stacjonarnie i online"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Korepetycje stacjonarne
+  - Korepetycje online
+  - Lekcje grupowe
+  - Lekcje indywidualne
+  - Przygotowanie do matury
+  - Przygotowanie do ósmoklasisty
+  - Kurs angielskiego
+  - Kursy językowe dla firm
+  - Język niemiecki
+  - Język hiszpański

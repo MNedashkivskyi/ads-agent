@@ -1,0 +1,128 @@
+vertical_id: cafe
+display_name: Kawiarnia
+display_emoji: "☕"
+language: pl
+competitive_level: medium
+
+ad_groups:
+  - name_template: "Kawiarnia {city}"
+    keyword_bank:
+      - text: "kawiarnia {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "dobra kawa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "kawiarnia w centrum {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "kawiarnia ze śniadaniem {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "klimatyczna kawiarnia {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "kawiarnia z tarasem {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+  - name_template: "Śniadania {city}"
+    keyword_bank:
+      - text: "śniadania {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "śniadania na mieście {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "brunch {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "śniadania wegańskie {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "śniadania w weekend {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.05
+
+  - name_template: "Ciasta i desery {city}"
+    keyword_bank:
+      - text: "ciasto na zamówienie {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "torty {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "desery {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "domowe ciasta {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "cukiernia {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - przepis
+    - youtube
+    - tiktok
+    - allegro
+    - olx
+  vertical_specific:
+    - ekspres do kawy sklep
+    - kawa ziarnista sklep
+    - praca barista
+    - przepis na kawę
+    - tanio nadwyrężona
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 1.5
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 3.5
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 7.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Menu"
+      description1: "Zobacz naszą kartę"
+      path: "menu"
+    - text: "Rezerwacja stolika"
+      description1: "Zarezerwuj online"
+      path: "rezerwacja"
+    - text: "Wydarzenia"
+      description1: "Co u nas się dzieje"
+      path: "wydarzenia"
+    - text: "Kontakt"
+      description1: "Zadzwoń lub napisz"
+      path: "kontakt"
+  callouts:
+    - "Świeżo palona kawa"
+    - "Domowe ciasta"
+    - "Przyjazna atmosfera"
+    - "WiFi gratis"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Kawa specialty
+  - Śniadania
+  - Brunch
+  - Domowe ciasta
+  - Torty na zamówienie
+  - Lunch
+  - Catering imprez
+  - Wynajem sali

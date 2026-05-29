@@ -1,0 +1,138 @@
+vertical_id: physiotherapy
+display_name: Fizjoterapia
+display_emoji: "🧑‍⚕️"
+language: pl
+competitive_level: medium
+
+ad_groups:
+  - name_template: "Fizjoterapeuta {city}"
+    keyword_bank:
+      - text: "fizjoterapeuta {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "gabinet fizjoterapii {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "rehabilitacja {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "fizykoterapia {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "fizjoterapia dzieci {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "fizjoterapia kręgosłupa {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+  - name_template: "Masaż leczniczy {city}"
+    keyword_bank:
+      - text: "masaż leczniczy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "masaż relaksacyjny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "masaż sportowy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "masaż tkanek głębokich {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "masaż klasyczny {city}"
+        match_type: EXACT
+        priority: core
+      - text: "masaż ciążowy {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.05
+
+  - name_template: "Terapia bólu {city}"
+    keyword_bank:
+      - text: "ból kręgosłupa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "ból pleców {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "rwa kulszowa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "dyskopatia {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "rehabilitacja po urazie {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "rehabilitacja kolana {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.1
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - studia
+    - kurs
+    - szkolenie
+    - youtube
+    - allegro
+    - olx
+  vertical_specific:
+    - studia fizjoterapia
+    - praca fizjoterapeuta
+    - sprzęt rehabilitacyjny
+    - nfz refundacja
+    - kurs masażu
+    - fizjoterapia online
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 3.0
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 7.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 15.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Cennik zabiegów"
+      description1: "Sprawdź nasze ceny"
+      path: "cennik"
+    - text: "Rezerwacja wizyty"
+      description1: "Umów się online"
+      path: "rezerwacja"
+    - text: "Nasi specjaliści"
+      description1: "Doświadczony zespół"
+      path: "zespol"
+    - text: "Kontakt"
+      description1: "Zadzwoń lub napisz"
+      path: "kontakt"
+  callouts:
+    - "Doświadczeni terapeuci"
+    - "Indywidualne podejście"
+    - "Nowoczesny sprzęt"
+    - "Krótkie terminy"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Konsultacja fizjoterapeutyczna
+  - Terapia manualna
+  - Masaż leczniczy
+  - Masaż sportowy
+  - Kinesiotaping
+  - Suche igłowanie
+  - Terapia punktów spustowych
+  - Rehabilitacja pourazowa
+  - Rehabilitacja kręgosłupa
+  - Trening medyczny

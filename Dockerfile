@@ -22,6 +22,11 @@ COPY --from=builder /app/.venv /app/.venv
 COPY alembic.ini ./
 COPY start.sh ./
 COPY adcopilot ./adcopilot
+# Vertical templates and prompt files used at runtime by the launch flow
+# (YamlVerticalTemplateAdapter, website_intelligence, etc.).  Without this
+# COPY the production image logs "verticals_dir_missing" and falls back to
+# zero categories on Step 1 of the campaign wizard.
+COPY config ./config
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
