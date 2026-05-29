@@ -213,6 +213,7 @@ class SqlCampaignProposalRepository:
             compliance_warnings=proposal.compliance_warnings or None,
         )
         self._session.add(pm)
+        await self._session.flush()  # ensure proposal row exists before FK children
 
         # Insert ad groups + children
         for position, ag in enumerate(proposal.ad_groups):
