@@ -3011,3 +3011,173 @@ async def _monthly_performance_reports() -> None:
                 )
     finally:
         await engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# Post-launch check-in Celery tasks (Phase 6)
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.post_launch_checkins_task",
+)
+def post_launch_checkins_task() -> dict[str, object]:
+    """Send check-in notifications for campaigns launched 3, 7, 14, or 30 days ago."""
+    import asyncio
+
+    return asyncio.run(_run_post_launch_checkins())
+
+
+async def _run_post_launch_checkins() -> dict[str, object]:
+    from datetime import UTC, date, datetime, timedelta
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.services.post_launch_notifier import PostLaunchNotifier
+    from adcopilot.config import get_settings
+    from adcopilot.domain.launch.entities import LaunchStatus
+    from adcopilot.infrastructure.db.models import LaunchBriefModel
+    from adcopilot.infrastructure.db.repositories.notification_repository import (
+        SqlNotificationRepository,
+    )
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    today = date.today()
+    checkin_days = [3, 7, 14, 30]
+    sent = 0
+
+    try:
+        for days in checkin_days:
+            target_date = today - timedelta(days=days)
+            async with AsyncSession(engine) as session:
+                result = await session.execute(
+                    select(LaunchBriefModel).where(
+                        LaunchBriefModel.status == LaunchStatus.ENABLED,
+                        LaunchBriefModel.created_at >= datetime(
+                            target_date.year, target_date.month, target_date.day, 0, 0, 0, tzinfo=UTC
+                        ),
+                        LaunchBriefModel.created_at < datetime(
+                            target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=UTC
+                        ),
+                    )
+                )
+                briefs = result.scalars().all()
+
+                for brief in briefs:
+                    try:
+                        notifier = PostLaunchNotifier(SqlNotificationRepository(session))
+                        await notifier.notify_checkin(
+                            user_id=str(brief.user_id),
+                            campaign_name=brief.business_description[:60],
+                            account_id=str(brief.account_id),
+                            days_since_launch=days,
+                            clicks=0,
+                            impressions=0,
+                            cost_pln=0.0,
+                            conversions=0,
+                        )
+                        await session.commit()
+                        sent += 1
+                    except Exception as exc:
+                        logger.warning(
+                            "post_launch_checkin.failed",
+                            brief_id=str(brief.id),
+                            days=days,
+                            error=str(exc),
+                        )
+    finally:
+        await engine.dispose()
+
+    logger.info("post_launch_checkins_task.complete", sent=sent, today=today.isoformat())
+    return {"sent": sent}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.weekly_conversion_tracking_reminders_task",
+)
+def weekly_conversion_tracking_reminders_task() -> dict[str, object]:
+    """Remind users with active campaigns that have no conversion tracking configured."""
+    import asyncio
+
+    return asyncio.run(_run_weekly_conversion_tracking_reminders())
+
+
+async def _run_weekly_conversion_tracking_reminders() -> dict[str, object]:
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.services.post_launch_notifier import PostLaunchNotifier
+    from adcopilot.config import get_settings
+    from adcopilot.domain.launch.entities import LaunchStatus
+    from adcopilot.infrastructure.adapters.google_ads_conversion_adapter import (
+        GoogleAdsConversionAdapter,
+    )
+    from adcopilot.infrastructure.db.models import LaunchBriefModel
+    from adcopilot.infrastructure.db.repositories.notification_repository import (
+        SqlNotificationRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
+    )
+    from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    sent = 0
+    checked = 0
+
+    try:
+        async with AsyncSession(engine) as session:
+            result = await session.execute(
+                select(LaunchBriefModel).where(
+                    LaunchBriefModel.status == LaunchStatus.ENABLED
+                )
+            )
+            enabled_briefs = result.scalars().all()
+            # Deduplicate by account
+            seen_accounts: set[str] = set()
+            for brief in enabled_briefs:
+                account_id = str(brief.account_id)
+                if account_id in seen_accounts:
+                    continue
+                seen_accounts.add(account_id)
+                checked += 1
+
+                try:
+                    from adcopilot.domain.entities import AccountId
+
+                    creds_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
+                    creds = await creds_repo.get(AccountId(account_id))
+                    if creds is None:
+                        continue
+
+                    google_ads_client = GoogleAdsQueriesAdapter(settings)
+                    adapter = GoogleAdsConversionAdapter(google_ads_client)
+                    status = await adapter.check(creds.refresh_token, account_id)
+
+                    if not status.has_conversion_tracking:
+                        notifier = PostLaunchNotifier(SqlNotificationRepository(session))
+                        await notifier.notify_conversion_tracking_reminder(
+                            user_id=str(brief.user_id),
+                            account_id=account_id,
+                            campaign_name=brief.business_description[:60],
+                        )
+                        await session.commit()
+                        sent += 1
+                except Exception as exc:
+                    logger.warning(
+                        "weekly_conversion_tracking_reminder.failed",
+                        account_id=account_id,
+                        error=str(exc),
+                    )
+    finally:
+        await engine.dispose()
+
+    logger.info(
+        "weekly_conversion_tracking_reminders_task.complete",
+        checked=checked,
+        sent=sent,
+    )
+    return {"checked": checked, "sent": sent}
