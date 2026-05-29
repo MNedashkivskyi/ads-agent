@@ -314,7 +314,7 @@ class PMaxCampaignWriter:
         campaign.status = client.enums.CampaignStatusEnum.ENABLED
         field_mask = client.get_type("FieldMask")
         field_mask.paths.append("status")
-        op.update_mask.CopyFrom(field_mask)
+        client.copy_from(op.update_mask, field_mask)
         campaign_service.mutate_campaigns(customer_id=customer_id, operations=[op])
 
     async def delete_draft_pmax_campaign(

@@ -49,7 +49,9 @@ class GoogleAdsMutationsAdapter:
             criterion.status = client.enums.AdGroupCriterionStatusEnum.PAUSED
             from google.protobuf import field_mask_pb2
 
-            criterion_operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
+            client.copy_from(
+                criterion_operation.update_mask, field_mask_pb2.FieldMask(paths=["status"])
+            )
             ad_group_criterion_service.mutate_ad_group_criteria(
                 customer_id=customer_id.replace("-", ""),
                 operations=[criterion_operation],
@@ -79,7 +81,7 @@ class GoogleAdsMutationsAdapter:
             ad.status = client.enums.AdGroupAdStatusEnum.PAUSED
             from google.protobuf import field_mask_pb2
 
-            operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
+            client.copy_from(operation.update_mask, field_mask_pb2.FieldMask(paths=["status"]))
             ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=customer_id.replace("-", ""),
                 operations=[operation],
@@ -155,7 +157,9 @@ class GoogleAdsMutationsAdapter:
             budget.amount_micros = new_budget_micros
             from google.protobuf import field_mask_pb2
 
-            operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["amount_micros"]))
+            client.copy_from(
+                operation.update_mask, field_mask_pb2.FieldMask(paths=["amount_micros"])
+            )
             campaign_budget_service.mutate_campaign_budgets(
                 customer_id=customer_id.replace("-", ""),
                 operations=[operation],
@@ -190,7 +194,7 @@ class GoogleAdsMutationsAdapter:
             criterion.status = client.enums.AdGroupCriterionStatusEnum.ENABLED
             from google.protobuf import field_mask_pb2
 
-            operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
+            client.copy_from(operation.update_mask, field_mask_pb2.FieldMask(paths=["status"]))
             ad_group_criterion_service.mutate_ad_group_criteria(
                 customer_id=customer_id.replace("-", ""),
                 operations=[operation],
@@ -220,7 +224,7 @@ class GoogleAdsMutationsAdapter:
             ad.status = client.enums.AdGroupAdStatusEnum.ENABLED
             from google.protobuf import field_mask_pb2
 
-            operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
+            client.copy_from(operation.update_mask, field_mask_pb2.FieldMask(paths=["status"]))
             ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=customer_id.replace("-", ""),
                 operations=[operation],
@@ -301,7 +305,9 @@ class GoogleAdsMutationsAdapter:
             )
             from google.protobuf import field_mask_pb2
 
-            operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["keyword.match_type"]))
+            client.copy_from(
+                operation.update_mask, field_mask_pb2.FieldMask(paths=["keyword.match_type"])
+            )
             ad_group_criterion_service.mutate_ad_group_criteria(
                 customer_id=customer_id.replace("-", ""),
                 operations=[operation],
@@ -355,10 +361,10 @@ class GoogleAdsMutationsAdapter:
             # sub-fields (uses defaults, which is correct for MAXIMIZE_CONVERSIONS
             # and MAXIMIZE_CLICKS without a target CPA/ROAS).
             sub_msg = getattr(campaign, field_name)
-            sub_msg.CopyFrom(type(sub_msg)())
+            client.copy_from(sub_msg, type(sub_msg)())
             from google.protobuf import field_mask_pb2
 
-            operation.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=[field_name]))
+            client.copy_from(operation.update_mask, field_mask_pb2.FieldMask(paths=[field_name]))
             campaign_service.mutate_campaigns(
                 customer_id=customer_id.replace("-", ""),
                 operations=[operation],
@@ -663,8 +669,9 @@ class GoogleAdsMutationsAdapter:
             campaign.target_cpa.target_cpa_micros = target_cpa_micros
             from google.protobuf import field_mask_pb2
 
-            op.update_mask.CopyFrom(
-                field_mask_pb2.FieldMask(paths=["target_cpa.target_cpa_micros"])
+            client.copy_from(
+                op.update_mask,
+                field_mask_pb2.FieldMask(paths=["target_cpa.target_cpa_micros"]),
             )
             campaign_service.mutate_campaigns(customer_id=cid, operations=[op])
             logger.info(

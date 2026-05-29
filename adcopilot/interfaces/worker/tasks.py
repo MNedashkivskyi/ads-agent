@@ -1806,7 +1806,7 @@ async def _pause_all_enabled_campaigns(
         campaign.status = client.enums.CampaignStatusEnum.PAUSED
         from google.protobuf import field_mask_pb2
 
-        op.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
+        client.copy_from(op.update_mask, field_mask_pb2.FieldMask(paths=["status"]))
         ops.append(op)
 
     campaign_service.mutate_campaigns(customer_id=cid, operations=ops)
