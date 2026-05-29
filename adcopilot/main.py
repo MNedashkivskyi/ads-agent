@@ -40,16 +40,24 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.auth import router as auth_router
     from adcopilot.interfaces.api.billing import router as billing_router
     from adcopilot.interfaces.api.conversion_tracking import router as conversion_tracking_router
+    from adcopilot.interfaces.api.conversion_tracking_guide import (
+        router as conversion_tracking_guide_router,
+    )
     from adcopilot.interfaces.api.dashboard import router as dashboard_router
     from adcopilot.interfaces.api.debug import router as debug_router
     from adcopilot.interfaces.api.digest import router as digest_router
     from adcopilot.interfaces.api.experiments import router as experiments_router
     from adcopilot.interfaces.api.insights import router as insights_router
     from adcopilot.interfaces.api.landing_page import router as landing_page_router
+    from adcopilot.interfaces.api.launch import api_router as launch_api_router
     from adcopilot.interfaces.api.launch import router as launch_router
+    from adcopilot.interfaces.api.launch_error_recovery import (
+        router as launch_error_recovery_router,
+    )
     from adcopilot.interfaces.api.notifications import router as notifications_router
     from adcopilot.interfaces.api.oauth import router as oauth_router
     from adcopilot.interfaces.api.pmax import router as pmax_router
+    from adcopilot.interfaces.api.proposal_editor import router as proposal_editor_router
     from adcopilot.interfaces.api.qa import router as qa_router
     from adcopilot.interfaces.api.qs_improvement import router as qs_improvement_router
     from adcopilot.interfaces.api.quality_score import router as quality_score_router
@@ -58,6 +66,7 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.seasonality import router as seasonality_router
     from adcopilot.interfaces.api.snapshots import router as snapshots_router
     from adcopilot.interfaces.api.users import router as users_router
+    from adcopilot.interfaces.api.website import router as website_router
     from adcopilot.rate_limit import limiter
     from adcopilot.security import PathPrefixRateLimitMiddleware
 
@@ -108,9 +117,14 @@ def create_app() -> FastAPI:
     application.include_router(billing_router)
     application.include_router(debug_router)
     application.include_router(launch_router)
+    application.include_router(launch_api_router)
+    application.include_router(website_router)
     application.include_router(dashboard_router)
     application.include_router(notifications_router)
     application.include_router(conversion_tracking_router)
+    application.include_router(conversion_tracking_guide_router)
+    application.include_router(launch_error_recovery_router)
+    application.include_router(proposal_editor_router)
     application.include_router(experiments_router)
     application.include_router(search_terms_router)
     application.include_router(ad_proposals_router)

@@ -1,0 +1,174 @@
+vertical_id: auto_repair
+display_name: Warsztat samochodowy
+display_emoji: "🔧"
+language: pl
+competitive_level: medium
+
+ad_groups:
+  - name_template: "Mechanik i naprawa {city}"
+    keyword_bank:
+      - text: "mechanik {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "warsztat samochodowy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "naprawa samochodu {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "mechanik samochodowy {city}"
+        match_type: EXACT
+        priority: core
+      - text: "serwis samochodowy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "auto naprawa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "awaria auta {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "dobry mechanik {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "tani serwis auta {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "naprawy blacharskie {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+  - name_template: "Wymiana opon i ogumienie {city}"
+    keyword_bank:
+      - text: "wymiana opon {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "wulkanizacja {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "opony zimowe {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "opony letnie {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "serwis opon {city}"
+        match_type: EXACT
+        priority: core
+      - text: "wyważanie kół {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "zbieżność kół {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "uszczelnienie opony {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "opony 4x4 {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "przechowywanie opon {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+  - name_template: "Przegląd i diagnostyka {city}"
+    keyword_bank:
+      - text: "przegląd techniczny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "diagnostyka komputerowa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "stacja kontroli pojazdów {city}"
+        match_type: EXACT
+        priority: core
+      - text: "badanie techniczne auta {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "olej wymiana {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "serwis oleju {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "hamulce naprawa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "klimatyzacja serwis {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "skrzynia biegów naprawa {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "zawieszenie naprawa {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - kurs
+    - szkolenie
+    - jak zrobić
+    - youtube
+    - tiktok
+  vertical_specific:
+    - sprzedaż opon
+    - sklep motoryzacyjny
+    - części samochodowe
+    - praca mechanik
+    - szkoła kierowców
+    - prawo jazdy
+    - wynajem auta
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 2.0
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 5.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 10.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Cennik usług"
+      description1: "Przejrzyste ceny napraw"
+      path: "cennik"
+    - text: "Umów wizytę"
+      description1: "Zarezerwuj termin"
+      path: "rezerwacja"
+    - text: "Wymiana opon"
+      description1: "Opony letnie i zimowe"
+      path: "opony"
+    - text: "Kontakt"
+      description1: "Zadzwoń do nas"
+      path: "kontakt"
+  callouts:
+    - "Szybka diagnoza"
+    - "Oryginalne części"
+    - "Doświadczeni mechanicy"
+    - "Gwarancja na naprawy"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Przegląd techniczny (OC)
+  - Diagnostyka komputerowa
+  - Wymiana opon
+  - Wulkanizacja
+  - Wymiana oleju
+  - Naprawa hamulców
+  - Serwis klimatyzacji
+  - Naprawa zawieszenia
+  - Blacharstwo i lakiernictwo
+  - Naprawa skrzyni biegów

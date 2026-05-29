@@ -1,0 +1,216 @@
+vertical_id: beauty_salon
+display_name: Salon urody
+display_emoji: "💅"
+language: pl
+competitive_level: medium
+
+ad_groups:
+  - name_template: "Manicure i pedicure {city}"
+    keyword_bank:
+      - text: "manicure {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "pedicure {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "salon paznokci {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "stylizacja paznokci {city}"
+        match_type: EXACT
+        priority: core
+      - text: "hybrydowe paznokcie {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "żelowe paznokcie"
+        match_type: PHRASE
+        priority: core
+      - text: "paznokcie tytanowe {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "manicure hybrydowy {city}"
+        match_type: EXACT
+        priority: core
+      - text: "pedicure leczniczy {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "indyjski pedicure {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "manicure japoński"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+  - name_template: "Rzęsy i brwi {city}"
+    keyword_bank:
+      - text: "rzęsy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "przedłużanie rzęs {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "laminacja rzęs {city}"
+        match_type: EXACT
+        priority: core
+      - text: "henna brwi {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "stylizacja brwi {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "regulacja brwi {city}"
+        match_type: EXACT
+        priority: core
+      - text: "lifting rzęs {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "laminacja brwi {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "rzęsy 1:1 {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "rzęsy objętościowe {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.05
+
+  - name_template: "Mezoterapia i zabiegi {city}"
+    keyword_bank:
+      - text: "mezoterapia {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "peeling twarzy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "zabieg na twarz {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "oczyszczanie twarzy {city}"
+        match_type: EXACT
+        priority: core
+      - text: "kosmetyczka {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "salon kosmetyczny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "depilacja laserowa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "depilacja woskiem {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "kwas hialuronowy {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "botoks {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.1
+
+  - name_template: "Fryzjer {city}"
+    keyword_bank:
+      - text: "fryzjer {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "salon fryzjerski {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "strzyżenie włosów {city}"
+        match_type: EXACT
+        priority: core
+      - text: "koloryzacja włosów {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "balayage {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "ombre włosy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "keratynowe prostowanie {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "botoks na włosy {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "trwała ondulacja"
+        match_type: PHRASE
+        priority: extended
+      - text: "strzyżenie damskie {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - kurs
+    - szkolenie
+    - jak zrobić
+    - youtube
+    - tiktok
+    - instrukcja
+  vertical_specific:
+    - szkolenie fryzjerskie
+    - kurs kosmetyczny
+    - produkty do paznokci
+    - sklep z kosmetykami
+    - allegro
+    - olx
+    - praca kosmetyczka
+    - kurs stylizacji
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 2.5
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 6.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 12.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Cennik usług"
+      description1: "Sprawdź nasze ceny"
+      path: "cennik"
+    - text: "Rezerwacja online"
+      description1: "Umów się przez internet"
+      path: "rezerwacja"
+    - text: "O nas"
+      description1: "Poznaj nasz zespół"
+      path: "o-nas"
+    - text: "Kontakt"
+      description1: "Zadzwoń lub napisz"
+      path: "kontakt"
+  callouts:
+    - "Doświadczony personel"
+    - "Rezerwacja online"
+    - "Markowe produkty"
+    - "Przyjazna atmosfera"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Manicure hybrydowy
+  - Pedicure
+  - Stylizacja rzęs
+  - Laminacja rzęs
+  - Stylizacja brwi
+  - Henna brwi
+  - Mezoterapia
+  - Oczyszczanie twarzy
+  - Depilacja laserowa
+  - Depilacja woskiem
+  - Fryzjer — strzyżenie
+  - Koloryzacja włosów
+  - Balayage / Ombre

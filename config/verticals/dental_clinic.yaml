@@ -1,0 +1,179 @@
+vertical_id: dental_clinic
+display_name: Gabinet stomatologiczny
+display_emoji: "🦷"
+language: pl
+competitive_level: high
+
+ad_groups:
+  - name_template: "Implanty i protetyka {city}"
+    keyword_bank:
+      - text: "implanty zębowe {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "implant zębowy {city}"
+        match_type: EXACT
+        priority: core
+      - text: "protetyka {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "korona zębowa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "most protetyczny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "proteza zębowa {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "licówki porcelanowe {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "dentysta implanty {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "cena implantu zębowego"
+        match_type: PHRASE
+        priority: extended
+      - text: "implanty All-on-4 {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.2
+
+  - name_template: "Wybielanie i estetyka {city}"
+    keyword_back:
+      - text: "wybielanie zębów {city}"
+        match_type: PHRASE
+        priority: core
+    keyword_bank:
+      - text: "wybielanie zębów {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "dentysta estetyczny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "stomatologia estetyczna {city}"
+        match_type: EXACT
+        priority: core
+      - text: "licówki {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "wybielanie gabinetowe {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "piękny uśmiech {city}"
+        match_type: BROAD
+        priority: core
+      - text: "aparat ortodontyczny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "Invisalign {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "wybielanie zoom"
+        match_type: PHRASE
+        priority: extended
+      - text: "retainer po aparacie"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.1
+
+  - name_template: "Dentysta i leczenie {city}"
+    keyword_bank:
+      - text: "dentysta {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "stomatolog {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "gabinet stomatologiczny {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "leczenie zębów {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "leczenie kanałowe {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "ból zęba dentysta {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "pilny dentysta {city}"
+        match_type: EXACT
+        priority: core
+      - text: "dentysta bez kolejki {city}"
+        match_type: PHRASE
+        priority: core
+      - text: "periodontolog {city}"
+        match_type: PHRASE
+        priority: extended
+      - text: "plomba zęba {city}"
+        match_type: PHRASE
+        priority: extended
+    default_bid_modifier: 1.0
+
+negatives:
+  universal:
+    - darmowy
+    - za darmo
+    - praca
+    - kurs
+    - szkolenie
+    - jak zrobić
+    - youtube
+    - tiktok
+  vertical_specific:
+    - studia stomatologiczne
+    - kurs asysty stomatologicznej
+    - sklep stomatologiczny
+    - materiały stomatologiczne
+    - sprzęt dentystyczny
+    - praca dentysta
+
+bidding_defaults:
+  micro:
+    bidding_strategy: MAXIMIZE_CLICKS
+    max_cpc_limit_pln: 5.0
+    daily_budget_ratio: 0.9
+  mid:
+    bidding_strategy: MAXIMIZE_CONVERSIONS
+    max_cpc_limit_pln: 15.0
+    daily_budget_ratio: 0.9
+  growth:
+    bidding_strategy: TARGET_CPA
+    max_cpc_limit_pln: 30.0
+    daily_budget_ratio: 0.9
+
+extensions:
+  sitelinks:
+    - text: "Cennik leczenia"
+      description1: "Przejrzyste ceny"
+      path: "cennik"
+    - text: "Umów wizytę"
+      description1: "Rezerwacja online"
+      path: "umow-wizyte"
+    - text: "Implanty"
+      description1: "Trwałe implanty zębowe"
+      path: "implanty"
+    - text: "Wybielanie"
+      description1: "Piękny biały uśmiech"
+      path: "wybielanie"
+  callouts:
+    - "Nowoczesny sprzęt"
+    - "Znieczulenie komputerowe"
+    - "Doświadczeni stomatolodzy"
+    - "Szybka rejestracja"
+  structured_snippet_category: "Usługi"
+
+common_services:
+  - Leczenie zębów (plomby)
+  - Leczenie kanałowe
+  - Implanty zębowe
+  - Korony i mosty protetyczne
+  - Protezy zębowe
+  - Wybielanie zębów
+  - Aparat ortodontyczny
+  - Invisalign
+  - Licówki porcelanowe
+  - Stomatologia estetyczna
+  - Kontrola i przegląd
+  - Pilny ból zęba

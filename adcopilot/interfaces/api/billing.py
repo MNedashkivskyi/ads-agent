@@ -12,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from adcopilot.config import Settings, get_settings
 from adcopilot.domain.entities import UserId
+from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
+    SqlCampaignBriefRepository,
+)
+from adcopilot.interfaces.api.auth_middleware import CurrentUser
+from adcopilot.interfaces.worker.tasks import create_campaign_task
 
 logger = structlog.get_logger(__name__)
 
@@ -33,6 +38,11 @@ class CheckoutRequest(BaseModel):
 
 class CheckoutResponse(BaseModel):
     checkout_url: str
+
+
+class SetupFeeCheckoutRequest(BaseModel):
+    success_url: str
+    cancel_url: str
 
 
 class PortalResponse(BaseModel):
@@ -141,6 +151,60 @@ async def create_portal(
     return PortalResponse(portal_url=portal["url"])
 
 
+@router.post("/api/proposals/{brief_id}/checkout-setup-fee", response_model=CheckoutResponse)
+async def create_setup_fee_checkout(
+    brief_id: str,
+    body: SetupFeeCheckoutRequest,
+    user_id: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> CheckoutResponse:
+    """Create a one-time Stripe Checkout session for the 399 PLN campaign setup fee.
+
+    The brief must be in PROPOSED state.  After successful payment, the Stripe
+    webhook updates the brief to APPROVED and enqueues ``create_campaign_task``.
+    """
+    import uuid
+
+    # Validate brief ID format
+    try:
+        uuid.UUID(brief_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid brief ID format") from None
+
+    if not settings.STRIPE_SETUP_FEE_PRICE_ID:
+        raise HTTPException(status_code=503, detail="Setup fee not configured")
+
+    stripe = _get_stripe(settings)
+
+    from adcopilot.domain.launch.entities import CampaignBriefId, LaunchStatus
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            repo = SqlCampaignBriefRepository(session)
+            brief = await repo.get(CampaignBriefId(brief_id))
+            if brief is None or brief.user_id != user_id:
+                raise HTTPException(status_code=404, detail="Brief not found")
+            if brief.status != LaunchStatus.PROPOSED:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Brief is in status '{brief.status}', expected 'proposed'",
+                )
+    finally:
+        await engine.dispose()
+
+    session_obj = stripe.checkout.Session.create(
+        payment_method_types=["card"],
+        line_items=[{"price": settings.STRIPE_SETUP_FEE_PRICE_ID, "quantity": 1}],
+        mode="payment",
+        success_url=body.success_url,
+        cancel_url=body.cancel_url,
+        metadata={"brief_id": brief_id},
+    )
+    logger.info("setup fee checkout created", brief_id=brief_id)
+    return CheckoutResponse(checkout_url=session_obj["url"])
+
+
 @router.post("/webhooks/stripe")
 async def stripe_webhook(
     request: Request,
@@ -182,6 +246,8 @@ async def _handle_stripe_event(event: Any, settings: Settings) -> None:
         await _handle_subscription_event(event_type, obj, settings)
     elif event_type == "invoice.payment_failed":
         await _handle_payment_failed(obj, settings)
+    elif event_type == "checkout.session.completed":
+        await _handle_checkout_session_completed(obj, settings)
     else:
         logger.debug("unhandled stripe event", event_type=event_type)
 
@@ -273,3 +339,37 @@ async def _handle_payment_failed(invoice: Any, settings: Settings) -> None:
         await engine.dispose()
 
     logger.info("payment failed handled", customer_id=customer_id)
+
+
+async def _handle_checkout_session_completed(session_obj: Any, settings: Settings) -> None:
+    """Activate a campaign brief after successful setup-fee payment."""
+    metadata: dict[str, str] = session_obj.get("metadata") or {}
+    brief_id = metadata.get("brief_id")
+    if not brief_id:
+        # Not a setup-fee session — nothing to do.
+        return
+
+    from adcopilot.domain.launch.entities import CampaignBriefId, LaunchStatus
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            repo = SqlCampaignBriefRepository(session)
+            brief = await repo.get(CampaignBriefId(brief_id))
+            if brief is None:
+                logger.warning("setup fee webhook: brief not found", brief_id=brief_id)
+                return
+            if brief.status not in (LaunchStatus.PROPOSED, LaunchStatus.APPROVED):
+                logger.info(
+                    "setup fee webhook: brief already progressed",
+                    brief_id=brief_id,
+                    status=brief.status,
+                )
+                return
+            updated = dataclasses.replace(brief, status=LaunchStatus.APPROVED)
+            await repo.save(updated)
+    finally:
+        await engine.dispose()
+
+    create_campaign_task.delay(brief_id)
+    logger.info("setup fee paid, campaign creation queued", brief_id=brief_id)

@@ -105,9 +105,7 @@ async def _async_link_google_ads_accounts(
     refresh_token: str = raw["refresh_token"]
     access_token: str | None = raw.get("access_token")
     expires_at_iso: str | None = raw.get("expires_at")
-    expires_at: datetime | None = (
-        datetime.fromisoformat(expires_at_iso) if expires_at_iso else None
-    )
+    expires_at: datetime | None = datetime.fromisoformat(expires_at_iso) if expires_at_iso else None
 
     # --- open DB session ---
     engine = create_async_engine(settings.DATABASE_URL)
@@ -990,19 +988,22 @@ async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
 def generate_campaign_task(
     brief_id: str,
     revision_text: str | None = None,
+    template_id: str | None = None,
 ) -> dict[str, object]:
     """Generate a campaign proposal (log-only; notification wired in Phase 1).
 
     Dispatched when the user submits a campaign brief or revision.
+    template_id: when set, uses hybrid path (template structure + LLM copy).
     """
     import asyncio
 
-    return asyncio.run(_run_generate_campaign(brief_id, revision_text))
+    return asyncio.run(_run_generate_campaign(brief_id, revision_text, template_id))
 
 
 async def _run_generate_campaign(
     brief_id: str,
     revision_text: str | None,
+    template_id: str | None = None,
 ) -> dict[str, object]:
     """Run the proposal-generation pipeline (log-only; notification wired in Phase 1)."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -1045,14 +1046,27 @@ async def _run_generate_campaign(
                 await proposal_repo.save(proposal)
                 await brief_repo.update_status(brief.id, LaunchStatus.PROPOSED)
             else:
+                from adcopilot.application.services.template_proposal_assembler import (
+                    TemplateProposalAssembler,
+                )
+                from adcopilot.infrastructure.vertical_templates.yaml_adapter import (
+                    YamlVerticalTemplateAdapter,
+                )
+
                 llm = AnthropicClient(api_key=settings.LLM_API_KEY)
                 generator = CampaignGenerator(llm)
                 use_case = GenerateCampaignProposalUseCase(
                     brief_repo=brief_repo,
                     proposal_repo=proposal_repo,
                     generator=generator,
+                    template_repo=YamlVerticalTemplateAdapter(),
+                    assembler=TemplateProposalAssembler(),
                 )
-                proposal = await use_case.execute(brief, revision_feedback=revision_text)
+                proposal = await use_case.execute(
+                    brief,
+                    revision_feedback=revision_text,
+                    template_id=template_id,
+                )
 
             proposal_id = str(proposal.id)
 
@@ -1064,6 +1078,127 @@ async def _run_generate_campaign(
 
     # TODO(phase-0.2): send proposal notification via new notifier
     return {"proposal_id": proposal_id, "error": error_text}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    max_retries=1,
+    default_retry_delay=10,
+    autoretry_for=(Exception,),
+    name="adcopilot.interfaces.worker.tasks.regenerate_ad_copy_task",
+)
+def regenerate_ad_copy_task(
+    brief_id: str,
+    proposal_id: str,
+    ad_group_index: int = 0,
+) -> dict[str, object]:
+    """Re-generate ad copy for one ad group of an existing proposal using the LLM."""
+    import asyncio
+
+    return asyncio.run(_run_regenerate_ad_copy(brief_id, proposal_id, ad_group_index))
+
+
+async def _run_regenerate_ad_copy(
+    brief_id: str,
+    proposal_id: str,
+    ad_group_index: int,
+) -> dict[str, object]:
+    from dataclasses import replace as dc_replace
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.domain.launch.entities import (
+        AdProposal,
+        CampaignBriefId,
+        CampaignProposalId,
+    )
+    from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
+        SqlCampaignBriefRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.launch_proposal_repository import (
+        SqlCampaignProposalRepository,
+    )
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+
+    try:
+        async with AsyncSession(engine) as session:
+            brief_repo = SqlCampaignBriefRepository(session)
+            brief = await brief_repo.get(CampaignBriefId(brief_id))
+            if brief is None:
+                logger.warning("regenerate_ad_copy: brief not found", brief_id=brief_id)
+                return {"error": "brief_not_found"}
+
+            proposal_repo = SqlCampaignProposalRepository(session)
+            proposal = await proposal_repo.get(CampaignProposalId(proposal_id))
+            if proposal is None or ad_group_index >= len(proposal.ad_groups):
+                logger.warning(
+                    "regenerate_ad_copy: proposal or ad group not found",
+                    proposal_id=proposal_id,
+                    ad_group_index=ad_group_index,
+                )
+                return {"error": "not_found"}
+
+            if not settings.LLM_API_KEY:
+                logger.warning("regenerate_ad_copy: no LLM API key configured")
+                return {"error": "no_llm_key"}
+
+            from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
+
+            llm = AnthropicClient(api_key=settings.LLM_API_KEY)
+            ad_group = proposal.ad_groups[ad_group_index]
+
+            prompt = (
+                f"Wygeneruj 5 nagłówków (max 30 znaków każdy) i 2 opisy (max 90 znaków) "
+                f"dla reklamy Google Ads dla firmy: {brief.business_description}. "
+                f"Grupa reklam: '{ad_group.name}'. "
+                f'Zwróć JSON: {{"headlines": [...], "descriptions": [...]}}. '
+                f"Tylko JSON, bez dodatkowego tekstu."
+            )
+
+            try:
+                raw = await llm.complete(prompt, max_tokens=400)
+                import json as _json
+
+                data = _json.loads(raw)
+                new_headlines = [str(h)[:30] for h in data.get("headlines", [])[:15]]
+                new_descriptions = [str(d)[:90] for d in data.get("descriptions", [])[:4]]
+            except Exception as exc:
+                logger.warning(
+                    "regenerate_ad_copy: LLM failed",
+                    error=str(exc),
+                    proposal_id=proposal_id,
+                )
+                return {"error": "llm_failed"}
+
+            if len(new_headlines) < 3 or len(new_descriptions) < 2:
+                return {"error": "llm_output_insufficient"}
+
+            old_ad = ad_group.ads[0] if ad_group.ads else None
+            new_ad = AdProposal(
+                headlines=new_headlines,
+                descriptions=new_descriptions,
+                final_url=old_ad.final_url if old_ad else "https://example.com",
+                path_segments=old_ad.path_segments if old_ad else ("", ""),
+            )
+            new_ads = [new_ad] + list(ad_group.ads[1:])
+            updated_group = dc_replace(ad_group, ads=new_ads)
+            groups = list(proposal.ad_groups)
+            groups[ad_group_index] = updated_group
+            updated_proposal = dc_replace(proposal, ad_groups=groups)
+
+            async with session.begin():
+                await proposal_repo.save(updated_proposal)
+
+        logger.info(
+            "regenerate_ad_copy: complete",
+            proposal_id=proposal_id,
+            ad_group_index=ad_group_index,
+        )
+        return {"proposal_id": proposal_id, "ad_group_index": ad_group_index}
+    finally:
+        await engine.dispose()
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
@@ -2874,3 +3009,246 @@ async def _monthly_performance_reports() -> None:
                 )
     finally:
         await engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# Post-launch check-in Celery tasks (Phase 6)
+# ---------------------------------------------------------------------------
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.post_launch_checkins_task",
+)
+def post_launch_checkins_task() -> dict[str, object]:
+    """Send check-in notifications for campaigns launched 3, 7, 14, or 30 days ago."""
+    import asyncio
+
+    return asyncio.run(_run_post_launch_checkins())
+
+
+async def _run_post_launch_checkins() -> dict[str, object]:
+    from datetime import UTC, date, datetime, timedelta
+
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.services.checkin_aggregator import (
+        CheckInAggregator,
+    )
+    from adcopilot.application.services.post_launch_notifier import PostLaunchNotifier
+    from adcopilot.config import get_settings
+    from adcopilot.domain.launch.entities import LaunchStatus
+    from adcopilot.infrastructure.db.models import LaunchBriefModel
+    from adcopilot.infrastructure.db.repositories.notification_repository import (
+        SqlNotificationRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.snapshot_repository import (
+        SqlSnapshotRepository,
+    )
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    today = date.today()
+    checkin_days = [3, 7, 14, 30]
+    sent = 0
+
+    # Map days to template keys
+    template_key_map = {
+        3: "day_3_no_data",  # default; overridden below if data available
+        7: "day_7_performance",
+        14: "day_14_insight",
+        30: "day_30_summary",
+    }
+
+    try:
+        for days in checkin_days:
+            target_date = today - timedelta(days=days)
+            async with AsyncSession(engine) as session:
+                result = await session.execute(
+                    select(LaunchBriefModel).where(
+                        LaunchBriefModel.status == LaunchStatus.ENABLED,
+                        LaunchBriefModel.created_at
+                        >= datetime(
+                            target_date.year,
+                            target_date.month,
+                            target_date.day,
+                            0,
+                            0,
+                            0,
+                            tzinfo=UTC,
+                        ),
+                        LaunchBriefModel.created_at
+                        < datetime(
+                            target_date.year,
+                            target_date.month,
+                            target_date.day,
+                            23,
+                            59,
+                            59,
+                            tzinfo=UTC,
+                        ),
+                    )
+                )
+                briefs = result.scalars().all()
+
+                class _SnapshotRepoAdapter:
+                    """Wraps SqlSnapshotRepository to provide list_by_account()."""
+
+                    def __init__(self, inner):
+                        self._inner = inner
+
+                    async def list_by_account(self, account_id, limit=7):
+                        from datetime import date, timedelta
+
+                        from adcopilot.domain.entities import AccountId
+
+                        snaps = []
+                        for delta in range(limit):
+                            d = date.today() - timedelta(days=delta)
+                            try:
+                                day_snaps = await self._inner.get_campaigns_by_date(
+                                    AccountId(account_id), d
+                                )
+                                snaps.extend(day_snaps)
+                            except Exception:
+                                pass
+                        return snaps
+
+                snap_repo = _SnapshotRepoAdapter(SqlSnapshotRepository(session))
+                aggregator = CheckInAggregator(snap_repo)
+
+                for brief in briefs:
+                    try:
+                        campaign_name = brief.business_description[:60]
+                        account_id = str(brief.account_id)
+
+                        metrics = await aggregator.get_metrics(
+                            account_id, brief.campaign_resource_name
+                        )
+
+                        if days == 3:
+                            tmpl_key = "day_3_no_data" if metrics.is_empty else "day_3_with_data"
+                        else:
+                            tmpl_key = template_key_map[days]
+
+                        notifier = PostLaunchNotifier(SqlNotificationRepository(session))
+                        await notifier.notify_checkin(
+                            user_id=str(brief.user_id),
+                            campaign_name=campaign_name,
+                            account_id=account_id,
+                            days_since_launch=days,
+                            clicks=metrics.clicks,
+                            impressions=metrics.impressions,
+                            cost_pln=metrics.cost_pln,
+                            conversions=metrics.conversions,
+                        )
+                        await session.commit()
+                        sent += 1
+                        logger.debug(
+                            "post_launch_checkin.sent",
+                            brief_id=str(brief.id),
+                            days=days,
+                            template=tmpl_key,
+                            ctr=metrics.ctr,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "post_launch_checkin.failed",
+                            brief_id=str(brief.id),
+                            days=days,
+                            error=str(exc),
+                        )
+    finally:
+        await engine.dispose()
+
+    logger.info("post_launch_checkins_task.complete", sent=sent, today=today.isoformat())
+    return {"sent": sent}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.weekly_conversion_tracking_reminders_task",
+)
+def weekly_conversion_tracking_reminders_task() -> dict[str, object]:
+    """Remind users with active campaigns that have no conversion tracking configured."""
+    import asyncio
+
+    return asyncio.run(_run_weekly_conversion_tracking_reminders())
+
+
+async def _run_weekly_conversion_tracking_reminders() -> dict[str, object]:
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.services.post_launch_notifier import PostLaunchNotifier
+    from adcopilot.config import get_settings
+    from adcopilot.domain.launch.entities import LaunchStatus
+    from adcopilot.infrastructure.adapters.google_ads_conversion_adapter import (
+        GoogleAdsConversionAdapter,
+    )
+    from adcopilot.infrastructure.db.models import LaunchBriefModel
+    from adcopilot.infrastructure.db.repositories.notification_repository import (
+        SqlNotificationRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
+    )
+    from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    sent = 0
+    checked = 0
+
+    try:
+        async with AsyncSession(engine) as session:
+            result = await session.execute(
+                select(LaunchBriefModel).where(LaunchBriefModel.status == LaunchStatus.ENABLED)
+            )
+            enabled_briefs = result.scalars().all()
+            # Deduplicate by account
+            seen_accounts: set[str] = set()
+            for brief in enabled_briefs:
+                account_id = str(brief.account_id)
+                if account_id in seen_accounts:
+                    continue
+                seen_accounts.add(account_id)
+                checked += 1
+
+                try:
+                    from adcopilot.domain.entities import AccountId
+
+                    creds_repo = SqlOAuthCredentialsRepository(
+                        session, settings.TOKEN_ENCRYPTION_KEY
+                    )
+                    creds = await creds_repo.get(AccountId(account_id))
+                    if creds is None:
+                        continue
+
+                    google_ads_client = GoogleAdsQueriesAdapter(settings)
+                    adapter = GoogleAdsConversionAdapter(google_ads_client)
+                    status = await adapter.check(creds.refresh_token, account_id)
+
+                    if not status.has_conversion_tracking:
+                        notifier = PostLaunchNotifier(SqlNotificationRepository(session))
+                        await notifier.notify_conversion_tracking_reminder(
+                            user_id=str(brief.user_id),
+                            account_id=account_id,
+                            campaign_name=brief.business_description[:60],
+                        )
+                        await session.commit()
+                        sent += 1
+                except Exception as exc:
+                    logger.warning(
+                        "weekly_conversion_tracking_reminder.failed",
+                        account_id=account_id,
+                        error=str(exc),
+                    )
+    finally:
+        await engine.dispose()
+
+    logger.info(
+        "weekly_conversion_tracking_reminders_task.complete",
+        checked=checked,
+        sent=sent,
+    )
+    return {"checked": checked, "sent": sent}
