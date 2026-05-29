@@ -1005,22 +1005,34 @@ async def _run_generate_campaign(
     revision_text: str | None,
     template_id: str | None = None,
 ) -> dict[str, object]:
-    """Run the proposal-generation pipeline (log-only; notification wired in Phase 1)."""
+    """Run the proposal-generation pipeline.
+
+    The operation is split into **three short DB interactions** so that no
+    database connection is held open during the slow LLM calls.  Holding a
+    long-running transaction open while waiting for LLM responses causes
+    Railway's managed PostgreSQL to kill the idle-in-transaction connection
+    (~30 s timeout), which silently prevents the brief status from ever
+    transitioning to PROPOSED.
+
+    Flow
+    ----
+    1. Short read-tx  \u2014 load the brief; bail out early on missing/invalid.
+    2. LLM pipeline   \u2014 no DB connection held at all (can take 1\u20133 minutes).
+    3. Short write-tx \u2014 save the proposal and mark the brief PROPOSED.
+    """
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.application.use_cases.launch.generate_proposal import (
         GenerateCampaignProposalUseCase,
     )
     from adcopilot.config import get_settings
-    from adcopilot.domain.launch.entities import CampaignBriefId
+    from adcopilot.domain.launch.entities import CampaignBriefId, LaunchStatus
     from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
         SqlCampaignBriefRepository,
     )
     from adcopilot.infrastructure.db.repositories.launch_proposal_repository import (
         SqlCampaignProposalRepository,
     )
-    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
-    from adcopilot.infrastructure.llm.campaign_generator import CampaignGenerator
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -1029,46 +1041,65 @@ async def _run_generate_campaign(
     error_text: str | None = None
 
     try:
+        # \u2500\u2500 Step 1: load brief (short tx, connection released immediately) \u2500\u2500
         async with AsyncSession(engine) as session, session.begin():
             brief_repo = SqlCampaignBriefRepository(session)
-            proposal_repo = SqlCampaignProposalRepository(session)
-
             brief = await brief_repo.get(CampaignBriefId(brief_id))
             if brief is None:
                 logger.error("generate_campaign_task: brief not found", brief_id=brief_id)
                 return {"error": "brief_not_found"}
+        # session and DB connection are fully released here;
+        # nothing is held open during the LLM calls below.
 
-            if not settings.LLM_API_KEY:
-                from adcopilot.domain.launch.entities import LaunchStatus
-                from adcopilot.domain.launch.templates import build_proposal_from_template
+        if not settings.LLM_API_KEY:
+            # Template-only path (fast, no LLM calls, no idle-connection risk)
+            from adcopilot.domain.launch.templates import build_proposal_from_template
 
-                proposal = build_proposal_from_template(brief)
-                await proposal_repo.save(proposal)
-                await brief_repo.update_status(brief.id, LaunchStatus.PROPOSED)
-            else:
-                from adcopilot.application.services.template_proposal_assembler import (
-                    TemplateProposalAssembler,
-                )
-                from adcopilot.infrastructure.vertical_templates.yaml_adapter import (
-                    YamlVerticalTemplateAdapter,
-                )
+            proposal = build_proposal_from_template(brief)
+            logger.info(
+                "proposal_generation_succeeded",
+                brief_id=brief.id,
+                proposal_id=proposal.id,
+                via="template_no_llm",
+            )
+        else:
+            # \u2500\u2500 Step 2: LLM pipeline \u2014 no DB connection held \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+            from adcopilot.application.services.template_proposal_assembler import (
+                TemplateProposalAssembler,
+            )
+            from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
+            from adcopilot.infrastructure.llm.campaign_generator import CampaignGenerator
+            from adcopilot.infrastructure.vertical_templates.yaml_adapter import (
+                YamlVerticalTemplateAdapter,
+            )
 
-                llm = AnthropicClient(api_key=settings.LLM_API_KEY)
-                generator = CampaignGenerator(llm)
-                use_case = GenerateCampaignProposalUseCase(
-                    brief_repo=brief_repo,
-                    proposal_repo=proposal_repo,
-                    generator=generator,
-                    template_repo=YamlVerticalTemplateAdapter(),
-                    assembler=TemplateProposalAssembler(),
-                )
-                proposal = await use_case.execute(
-                    brief,
-                    revision_feedback=revision_text,
-                    template_id=template_id,
-                )
+            llm = AnthropicClient(api_key=settings.LLM_API_KEY)
+            generator = CampaignGenerator(llm)
+            use_case = GenerateCampaignProposalUseCase(
+                brief_repo=None,     # not needed for content-only generation
+                proposal_repo=None,  # not needed for content-only generation
+                generator=generator,
+                template_repo=YamlVerticalTemplateAdapter(),
+                assembler=TemplateProposalAssembler(),
+            )
+            # generate_content_only runs the full LLM pipeline (vertical
+            # detection -> structure -> ad copy -> negatives -> extensions ->
+            # brand) plus validation, retry, and template-fallback, but does
+            # NOT touch the DB at all.
+            proposal = await use_case.generate_content_only(
+                brief,
+                revision_feedback=revision_text,
+                template_id=template_id,
+            )
 
-            proposal_id = str(proposal.id)
+        # \u2500\u2500 Step 3: persist proposal + mark brief PROPOSED (short write-tx) \u2500\u2500
+        async with AsyncSession(engine) as session, session.begin():
+            proposal_repo = SqlCampaignProposalRepository(session)
+            brief_repo_w = SqlCampaignBriefRepository(session)
+            await proposal_repo.save(proposal)
+            await brief_repo_w.update_status(brief.id, LaunchStatus.PROPOSED)
+
+        proposal_id = str(proposal.id)
 
     except Exception as exc:
         logger.exception("generate_campaign_task failed", brief_id=brief_id)

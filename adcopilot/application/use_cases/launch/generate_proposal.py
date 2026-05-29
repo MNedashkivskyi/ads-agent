@@ -260,6 +260,78 @@ class GenerateCampaignProposalUseCase:
         await self._brief_repo.update_status(brief.id, LaunchStatus.PROPOSED)
         return proposal
 
+    async def generate_content_only(
+        self,
+        brief: CampaignBrief,
+        revision_feedback: str | None = None,
+        template_id: str | None = None,
+    ) -> CampaignProposal:
+        """Run the LLM pipeline and return a proposal **without touching the DB**.
+
+        This method exists so Celery tasks can hold no database connection
+        open during the slow LLM calls (avoids idle-in-transaction timeouts on
+        managed PostgreSQL).  Callers are responsible for:
+
+        * saving the returned proposal (``proposal_repo.save()``)
+        * transitioning the brief status to ``PROPOSED``
+
+        Both operations should happen in a fresh, short-lived transaction
+        *after* this method returns.
+        """
+        logger.info(
+            "proposal_generation_started",
+            brief_id=brief.id,
+            revision=bool(revision_feedback),
+            template_id=template_id,
+        )
+
+        # Resolve template for the hybrid path
+        resolved_template = None
+        if template_id and self._template_repo:
+            resolved_template = self._template_repo.get_template(template_id)
+            if resolved_template is None:
+                logger.warning(
+                    "template_not_found_falling_back_to_llm",
+                    brief_id=brief.id,
+                    template_id=template_id,
+                )
+
+        try:
+            if resolved_template is not None:
+                proposal = await self._run_hybrid_pipeline(
+                    brief, resolved_template, revision_feedback=revision_feedback
+                )
+                logger.info(
+                    "proposal_generation_succeeded",
+                    brief_id=brief.id,
+                    proposal_id=proposal.id,
+                    via="hybrid",
+                    template_id=template_id,
+                )
+            else:
+                proposal = await self._run_pipeline(brief, revision_feedback=revision_feedback)
+                logger.info(
+                    "proposal_generation_succeeded",
+                    brief_id=brief.id,
+                    proposal_id=proposal.id,
+                    via="llm",
+                )
+        except LLMError as exc:
+            logger.warning(
+                "proposal_generation_failed_using_template",
+                brief_id=brief.id,
+                error=str(exc)[:300],
+            )
+            proposal = build_proposal_from_template(brief)
+            logger.info(
+                "proposal_generation_succeeded",
+                brief_id=brief.id,
+                proposal_id=proposal.id,
+                via="template",
+            )
+
+        return proposal
+
     # ------------------------------------------------------------------
     # Hybrid pipeline (template structure + LLM ad copy)
     # ------------------------------------------------------------------
