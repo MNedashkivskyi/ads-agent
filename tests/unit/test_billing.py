@@ -309,3 +309,278 @@ async def test_trial_reminders_returns_skipped_count() -> None:
     # Notifier not yet wired — users are skipped (log-only mode)
     assert result["sent"] == 0
     assert result["skipped"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Setup fee: checkout session endpoint
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_create_setup_fee_checkout_returns_url() -> None:
+    """Endpoint returns Stripe checkout URL for PROPOSED brief."""
+    from adcopilot.config import Settings
+    from adcopilot.domain.launch.entities import CampaignBrief, CampaignBriefId, LaunchStatus
+    from adcopilot.interfaces.api.billing import create_setup_fee_checkout, SetupFeeCheckoutRequest
+
+    brief_id = str(uuid.uuid4())
+    mock_brief = MagicMock()
+    mock_brief.user_id = "user-abc"
+    mock_brief.status = LaunchStatus.PROPOSED
+
+    mock_repo = MagicMock()
+    mock_repo.get = AsyncMock(return_value=mock_brief)
+
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+
+    mock_engine = MagicMock()
+    mock_engine.dispose = AsyncMock()
+
+    mock_stripe = MagicMock()
+    mock_stripe.checkout.Session.create.return_value = {"url": "https://checkout.stripe.com/pay/cs_test"}
+
+    settings = Settings(
+        DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
+        STRIPE_SECRET_KEY="sk_test",
+        STRIPE_SETUP_FEE_PRICE_ID="price_setup_fee_test",
+    )
+
+    with (
+        patch("sqlalchemy.ext.asyncio.create_async_engine", return_value=mock_engine),
+        patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_session),
+        patch(
+            "adcopilot.interfaces.api.billing.SqlCampaignBriefRepository",
+            return_value=mock_repo,
+        ),
+        patch("adcopilot.interfaces.api.billing._get_stripe", return_value=mock_stripe),
+    ):
+        result = await create_setup_fee_checkout(
+            brief_id=brief_id,
+            body=SetupFeeCheckoutRequest(
+                success_url="https://app.example.com/success",
+                cancel_url="https://app.example.com/cancel",
+            ),
+            user_id="user-abc",
+            settings=settings,
+        )
+
+    assert result.checkout_url == "https://checkout.stripe.com/pay/cs_test"
+    mock_stripe.checkout.Session.create.assert_called_once()
+    call_kwargs = mock_stripe.checkout.Session.create.call_args[1]
+    assert call_kwargs["mode"] == "payment"
+    assert call_kwargs["metadata"]["brief_id"] == brief_id
+
+
+@pytest.mark.asyncio
+async def test_create_setup_fee_checkout_rejects_invalid_uuid() -> None:
+    """Returns 400 for non-UUID brief_id."""
+    from fastapi import HTTPException
+
+    from adcopilot.config import Settings
+    from adcopilot.interfaces.api.billing import create_setup_fee_checkout, SetupFeeCheckoutRequest
+
+    settings = Settings(
+        DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
+        STRIPE_SECRET_KEY="sk_test",
+        STRIPE_SETUP_FEE_PRICE_ID="price_test",
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        await create_setup_fee_checkout(
+            brief_id="not-a-uuid",
+            body=SetupFeeCheckoutRequest(success_url="https://x.com", cancel_url="https://x.com"),
+            user_id="user-abc",
+            settings=settings,
+        )
+
+    assert exc_info.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_create_setup_fee_checkout_returns_503_when_not_configured() -> None:
+    """Returns 503 when STRIPE_SETUP_FEE_PRICE_ID is not set."""
+    from fastapi import HTTPException
+
+    from adcopilot.config import Settings
+    from adcopilot.interfaces.api.billing import create_setup_fee_checkout, SetupFeeCheckoutRequest
+
+    settings = Settings(
+        DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
+        STRIPE_SECRET_KEY="sk_test",
+        STRIPE_SETUP_FEE_PRICE_ID=None,
+    )
+
+    brief_id = str(uuid.uuid4())
+    with pytest.raises(HTTPException) as exc_info:
+        await create_setup_fee_checkout(
+            brief_id=brief_id,
+            body=SetupFeeCheckoutRequest(success_url="https://x.com", cancel_url="https://x.com"),
+            user_id="user-abc",
+            settings=settings,
+        )
+
+    assert exc_info.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_create_setup_fee_checkout_returns_409_when_not_proposed() -> None:
+    """Returns 409 when brief is not in PROPOSED status."""
+    from fastapi import HTTPException
+
+    from adcopilot.config import Settings
+    from adcopilot.domain.launch.entities import LaunchStatus
+    from adcopilot.interfaces.api.billing import create_setup_fee_checkout, SetupFeeCheckoutRequest
+
+    brief_id = str(uuid.uuid4())
+    mock_brief = MagicMock()
+    mock_brief.user_id = "user-abc"
+    mock_brief.status = LaunchStatus.APPROVED
+
+    mock_repo = MagicMock()
+    mock_repo.get = AsyncMock(return_value=mock_brief)
+
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+
+    mock_engine = MagicMock()
+    mock_engine.dispose = AsyncMock()
+
+    mock_stripe = MagicMock()
+
+    settings = Settings(
+        DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
+        STRIPE_SECRET_KEY="sk_test",
+        STRIPE_SETUP_FEE_PRICE_ID="price_test",
+    )
+
+    with (
+        patch("sqlalchemy.ext.asyncio.create_async_engine", return_value=mock_engine),
+        patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_session),
+        patch(
+            "adcopilot.interfaces.api.billing.SqlCampaignBriefRepository",
+            return_value=mock_repo,
+        ),
+        patch("adcopilot.interfaces.api.billing._get_stripe", return_value=mock_stripe),
+        pytest.raises(HTTPException) as exc_info,
+    ):
+        await create_setup_fee_checkout(
+            brief_id=brief_id,
+            body=SetupFeeCheckoutRequest(success_url="https://x.com", cancel_url="https://x.com"),
+            user_id="user-abc",
+            settings=settings,
+        )
+
+    assert exc_info.value.status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# Setup fee: webhook handler
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_checkout_session_completed_queues_create_campaign() -> None:
+    """Webhook handler approves brief and enqueues create_campaign_task."""
+    import dataclasses
+    from decimal import Decimal
+    from datetime import UTC, datetime
+
+    from adcopilot.config import Settings
+    from adcopilot.domain.entities import AccountId, UserId
+    from adcopilot.domain.launch.entities import (
+        CampaignBrief,
+        CampaignBriefId,
+        LaunchStatus,
+    )
+    from adcopilot.interfaces.api.billing import _handle_checkout_session_completed
+
+    brief_id = str(uuid.uuid4())
+    real_brief = CampaignBrief(
+        id=CampaignBriefId(brief_id),
+        user_id=UserId(str(uuid.uuid4())),
+        account_id=AccountId(str(uuid.uuid4())),
+        business_description="Test",
+        location="Warszawa",
+        typical_customer_value=Decimal("100"),
+        primary_action="call",
+        monthly_budget_pln=Decimal("500"),
+        exclusions=[],
+        language="pl",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        status=LaunchStatus.PROPOSED,
+    )
+
+    mock_repo = MagicMock()
+    mock_repo.get = AsyncMock(return_value=real_brief)
+    mock_repo.save = AsyncMock()
+
+    mock_session = AsyncMock()
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+    mock_session.begin = MagicMock(return_value=mock_session)
+
+    mock_engine = MagicMock()
+    mock_engine.dispose = AsyncMock()
+
+    mock_task = MagicMock()
+
+    settings = Settings(DATABASE_URL="postgresql+asyncpg://x:x@localhost/x")
+
+    with (
+        patch("sqlalchemy.ext.asyncio.create_async_engine", return_value=mock_engine),
+        patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_session),
+        patch(
+            "adcopilot.interfaces.api.billing.SqlCampaignBriefRepository",
+            return_value=mock_repo,
+        ),
+        patch(
+            "adcopilot.interfaces.api.billing.create_campaign_task",
+            mock_task,
+        ),
+    ):
+        await _handle_checkout_session_completed(
+            {"metadata": {"brief_id": brief_id}},
+            settings,
+        )
+
+    mock_task.delay.assert_called_once_with(brief_id)
+
+
+@pytest.mark.asyncio
+async def test_checkout_session_completed_ignores_non_setup_fee_sessions() -> None:
+    """Webhook handler is a no-op when metadata.brief_id is absent."""
+    from adcopilot.config import Settings
+    from adcopilot.interfaces.api.billing import _handle_checkout_session_completed
+
+    settings = Settings(DATABASE_URL="postgresql+asyncpg://x:x@localhost/x")
+
+    # Should not raise and should not touch the database
+    with patch("sqlalchemy.ext.asyncio.create_async_engine") as mock_engine_cls:
+        await _handle_checkout_session_completed({"metadata": {}}, settings)
+        await _handle_checkout_session_completed({"metadata": None}, settings)
+
+    mock_engine_cls.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_handle_stripe_event_dispatches_checkout_completed() -> None:
+    """_handle_stripe_event routes checkout.session.completed to the right handler."""
+    from adcopilot.config import Settings
+    from adcopilot.interfaces.api.billing import _handle_stripe_event
+
+    settings = Settings(DATABASE_URL="postgresql+asyncpg://x:x@localhost/x")
+    event = {
+        "type": "checkout.session.completed",
+        "data": {"object": {"metadata": {"brief_id": "some-uuid"}}},
+    }
+
+    with patch(
+        "adcopilot.interfaces.api.billing._handle_checkout_session_completed",
+        new_callable=AsyncMock,
+    ) as mock_handler:
+        await _handle_stripe_event(event, settings)
+
+    mock_handler.assert_awaited_once_with(event["data"]["object"], settings)

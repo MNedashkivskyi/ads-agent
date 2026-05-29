@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     STRIPE_STARTER_PRICE_ID: str | None = None
     STRIPE_PRO_PRICE_ID: str | None = None
     STRIPE_BUSINESS_PRICE_ID: str | None = None
+    STRIPE_SETUP_FEE_PRICE_ID: str | None = None  # One-time 399 PLN campaign setup fee
 
     # Sentry observability.  DSN is optional — the app runs fine without
     # Sentry, but when DSN is set all unhandled exceptions in the API,
