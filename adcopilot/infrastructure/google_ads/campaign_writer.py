@@ -582,7 +582,16 @@ class CampaignWriter:
                 "SATURDAY": client.enums.DayOfWeekEnum.SATURDAY,
                 "SUNDAY": client.enums.DayOfWeekEnum.SUNDAY,
             }
-            _MINUTE_MAP = {0: 0, 15: 15, 30: 30, 45: 45}
+            # start_minute / end_minute are MinuteOfHour enums — assigning a
+            # raw integer 0 maps to UNSPECIFIED, which Google Ads rejects as a
+            # missing required field. Map quarter-hours to the proper enum.
+            _MINUTE_ENUM = client.enums.MinuteOfHourEnum
+            _MINUTE_MAP = {
+                0: _MINUTE_ENUM.ZERO,
+                15: _MINUTE_ENUM.FIFTEEN,
+                30: _MINUTE_ENUM.THIRTY,
+                45: _MINUTE_ENUM.FORTY_FIVE,
+            }
 
             ops: list[Any] = []
             for entry in schedule:
@@ -593,9 +602,9 @@ class CampaignWriter:
                 sched = criterion.ad_schedule
                 sched.day_of_week = _DAY_MAP[entry.day_of_week]
                 sched.start_hour = entry.start_hour
-                sched.start_minute = _MINUTE_MAP.get(entry.start_minute, 0)
+                sched.start_minute = _MINUTE_MAP.get(entry.start_minute, _MINUTE_ENUM.ZERO)
                 sched.end_hour = entry.end_hour
-                sched.end_minute = _MINUTE_MAP.get(entry.end_minute, 0)
+                sched.end_minute = _MINUTE_MAP.get(entry.end_minute, _MINUTE_ENUM.ZERO)
                 ops.append(op)
 
             response = cc_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
