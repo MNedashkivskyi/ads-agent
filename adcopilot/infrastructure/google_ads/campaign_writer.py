@@ -20,6 +20,7 @@ Every successful mutation writes an AuditLog entry with the full payload.
 
 from __future__ import annotations
 
+import unicodedata
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -77,6 +78,18 @@ _BUDGET_MIN_UNIT_MICROS = 10_000
 def _round_to_budget_unit(micros: int) -> int:
     """Round a micros amount to the nearest Google Ads minimum billable unit."""
     return round(micros / _BUDGET_MIN_UNIT_MICROS) * _BUDGET_MIN_UNIT_MICROS
+
+
+def _sanitize_ad_text(text: str) -> str:
+    """Strip gimmicky symbols Google Ads prohibits under the SYMBOLS policy.
+
+    Removes Unicode "Symbol, other" (So) characters — stars (★ ☆), bullets,
+    arrows, check marks, emoji — that cause PROHIBITED policy findings, while
+    keeping letters, digits, currency symbols and ordinary punctuation. Any
+    whitespace left behind by removed symbols is collapsed.
+    """
+    cleaned = "".join(ch for ch in text if unicodedata.category(ch) != "So")
+    return " ".join(cleaned.split())
 
 
 class CampaignWriter:
@@ -341,7 +354,11 @@ class CampaignWriter:
                 ad.final_urls.append(adp.final_url)
 
                 rsa = ad.responsive_search_ad
-                for i, hl in enumerate(adp.headlines[:15]):
+                _headlines = [t for t in (_sanitize_ad_text(h) for h in adp.headlines[:15]) if t]
+                _descriptions = [
+                    t for t in (_sanitize_ad_text(d) for d in adp.descriptions[:4]) if t
+                ]
+                for i, hl in enumerate(_headlines):
                     asset = client.get_type("AdTextAsset")
                     asset.text = hl
                     # Pin first 3 headlines to positions 1-3
@@ -353,7 +370,7 @@ class CampaignWriter:
                         )
                     rsa.headlines.append(asset)
 
-                for i, desc in enumerate(adp.descriptions[:4]):  # noqa: B007
+                for desc in _descriptions:
                     asset = client.get_type("AdTextAsset")
                     asset.text = desc
                     rsa.descriptions.append(asset)
