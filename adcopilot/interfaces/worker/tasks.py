@@ -437,22 +437,25 @@ async def _generate_explanations(
         logger.warning("LLM_API_KEY not set — skipping explanation generation")
         return
     llm = AnthropicClient(api_key=settings.LLM_API_KEY)
-    use_case = ExplainRecommendationUseCase(llm=llm, repo=rec_repo)
+    try:
+        use_case = ExplainRecommendationUseCase(llm=llm, repo=rec_repo)
 
-    explained = 0
-    for rec in unexplained:
-        try:
-            await use_case.execute(rec.id, language="pl")
-            explained += 1
-        except Exception:
-            logger.warning("explain_recommendation_failed", rec_id=str(rec.id))
+        explained = 0
+        for rec in unexplained:
+            try:
+                await use_case.execute(rec.id, language="pl")
+                explained += 1
+            except Exception:
+                logger.warning("explain_recommendation_failed", rec_id=str(rec.id))
 
-    logger.info(
-        "explanations generated",
-        account_id=str(account_id),
-        total=len(unexplained),
-        explained=explained,
-    )
+        logger.info(
+            "explanations generated",
+            account_id=str(account_id),
+            total=len(unexplained),
+            explained=explained,
+        )
+    finally:
+        await llm.aclose()
 
 
 async def _record_qs_history(settings: object, account_id: str, snap_date: date) -> None:
@@ -1073,23 +1076,26 @@ async def _run_generate_campaign(
             )
 
             llm = AnthropicClient(api_key=settings.LLM_API_KEY)
-            generator = CampaignGenerator(llm)
-            use_case = GenerateCampaignProposalUseCase(
-                brief_repo=None,     # not needed for content-only generation
-                proposal_repo=None,  # not needed for content-only generation
-                generator=generator,
-                template_repo=YamlVerticalTemplateAdapter(),
-                assembler=TemplateProposalAssembler(),
-            )
-            # generate_content_only runs the full LLM pipeline (vertical
-            # detection -> structure -> ad copy -> negatives -> extensions ->
-            # brand) plus validation, retry, and template-fallback, but does
-            # NOT touch the DB at all.
-            proposal = await use_case.generate_content_only(
-                brief,
-                revision_feedback=revision_text,
-                template_id=template_id,
-            )
+            try:
+                generator = CampaignGenerator(llm)
+                use_case = GenerateCampaignProposalUseCase(
+                    brief_repo=None,     # not needed for content-only generation
+                    proposal_repo=None,  # not needed for content-only generation
+                    generator=generator,
+                    template_repo=YamlVerticalTemplateAdapter(),
+                    assembler=TemplateProposalAssembler(),
+                )
+                # generate_content_only runs the full LLM pipeline (vertical
+                # detection -> structure -> ad copy -> negatives -> extensions ->
+                # brand) plus validation, retry, and template-fallback, but does
+                # NOT touch the DB at all.
+                proposal = await use_case.generate_content_only(
+                    brief,
+                    revision_feedback=revision_text,
+                    template_id=template_id,
+                )
+            finally:
+                await llm.aclose()
 
         # \u2500\u2500 Step 3: persist proposal + mark brief PROPOSED (short write-tx) \u2500\u2500
         async with AsyncSession(engine) as session, session.begin():
@@ -1212,6 +1218,8 @@ async def _run_regenerate_ad_copy(
                     proposal_id=proposal_id,
                 )
                 return {"error": "llm_failed"}
+            finally:
+                await llm.aclose()
 
             if len(new_headlines) < 3 or len(new_descriptions) < 2:
                 return {"error": "llm_output_insufficient"}
@@ -2477,6 +2485,7 @@ def monthly_landing_page_audit_task() -> dict[str, object]:
         scored = 0
         alerted = 0
         errors = 0
+        llm: AnthropicClient | None = None
 
         try:
             async with AsyncSession(engine) as session:
@@ -2532,6 +2541,8 @@ def monthly_landing_page_audit_task() -> dict[str, object]:
 
                 await session.commit()
         finally:
+            if llm is not None:
+                await llm.aclose()
             await engine.dispose()
 
         _log.info("monthly_landing_page_audit.done", scored=scored, alerted=alerted, errors=errors)
@@ -2585,6 +2596,7 @@ def generate_weekly_insight_task() -> dict[str, object]:
         engine = build_async_engine(settings)
         delivered = 0
         errors = 0
+        llm: AnthropicClient | None = None
 
         try:
             async with AsyncSession(engine) as session:
@@ -2643,6 +2655,8 @@ def generate_weekly_insight_task() -> dict[str, object]:
 
                 await session.commit()
         finally:
+            if llm is not None:
+                await llm.aclose()
             await engine.dispose()
 
         _log.info("generate_weekly_insight.done", delivered=delivered, errors=errors)
@@ -3035,6 +3049,7 @@ async def _monthly_performance_reports() -> None:
         for account in accounts:
             account_id = str(account.id)
             user_id = str(account.user_id)
+            llm: AnthropicLLMClient | None = None
             try:
                 async with AsyncSession(engine) as session:
                     prompt_repo = SqlPromptVersionRepository(session)
@@ -3088,6 +3103,9 @@ async def _monthly_performance_reports() -> None:
                     account_id=account_id,
                     error=str(exc),
                 )
+            finally:
+                if llm is not None:
+                    await llm.aclose()
     finally:
         await engine.dispose()
 

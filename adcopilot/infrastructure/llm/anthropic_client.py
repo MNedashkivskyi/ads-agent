@@ -29,6 +29,24 @@ class AnthropicClient:
         self._client = anthropic.AsyncAnthropic(api_key=api_key)
         self._model = model
 
+    async def aclose(self) -> None:
+        """Close the underlying async HTTP client.
+
+        Must be called before the running event loop is closed; otherwise the
+        httpx client is torn down during GC on an already-closed loop, raising
+        a noisy ``RuntimeError: Event loop is closed``.
+        """
+        try:
+            await self._client.close()
+        except Exception:  # pragma: no cover - best-effort cleanup
+            logger.debug("AnthropicClient.aclose failed", exc_info=True)
+
+    async def __aenter__(self) -> AnthropicClient:
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self.aclose()
+
     async def complete(
         self,
         system: str,
