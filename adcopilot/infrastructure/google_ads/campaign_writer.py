@@ -151,6 +151,9 @@ class CampaignWriter:
             campaign.status = client.enums.CampaignStatusEnum.PAUSED
             campaign.campaign_budget = budget_rn
             campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
+            campaign.contains_eu_political_advertising = (
+                client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+            )
 
             strategy = proposal.bidding_strategy.upper().replace(" ", "_")
             _STRATEGY_MAP = {
@@ -659,6 +662,9 @@ class CampaignWriter:
             campaign.status = client.enums.CampaignStatusEnum.PAUSED
             campaign.campaign_budget = budget_rn
             campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
+            campaign.contains_eu_political_advertising = (
+                client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+            )
             client.copy_from(campaign.target_spend, type(campaign.target_spend)())
             campaign_response = campaign_service.mutate_campaigns(
                 customer_id=cid, operations=[campaign_op]
@@ -827,6 +833,9 @@ class CampaignWriter:
             campaign = campaign_op.create
             campaign.name = proposal.campaign_name
             campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.DISPLAY
+            campaign.contains_eu_political_advertising = (
+                client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+            )
             campaign.status = client.enums.CampaignStatusEnum.PAUSED
             campaign.campaign_budget = budget_rn
             campaign.bidding_strategy_type = (

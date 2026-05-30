@@ -152,6 +152,9 @@ class PMaxCampaignWriter:
         campaign = campaign_operation.create
         campaign.name = proposal.campaign_name
         campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
+        campaign.contains_eu_political_advertising = (
+            client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+        )
         campaign.status = client.enums.CampaignStatusEnum.PAUSED
         campaign.campaign_budget = budget_resource_name
         campaign.bidding_strategy_type = client.enums.BiddingStrategyTypeEnum.MAXIMIZE_CONVERSIONS
