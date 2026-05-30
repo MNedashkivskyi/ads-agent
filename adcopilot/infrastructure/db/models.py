@@ -699,6 +699,8 @@ class LaunchBriefModel(Base):
     # Set after create_campaign succeeds; required for enable_campaign.
     campaign_resource_name: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     vertical: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)
+    # Business website captured in the wizard; used as the ad final URL.
+    website_url: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

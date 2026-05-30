@@ -37,6 +37,7 @@ from adcopilot.domain.launch.entities import (
     StructuredSnippetProposal,
 )
 from adcopilot.domain.launch.structure_rules import build_structure_prompt_fragment
+from adcopilot.domain.launch.targeting import dedupe_negatives, normalize_final_url
 
 logger = structlog.get_logger(__name__)
 
@@ -402,9 +403,8 @@ def _negatives_user_prompt(
 
 
 def _extract_url(brief: CampaignBrief) -> str:
-    """Return a placeholder final URL derived from the brief."""
-    # In production this would come from the linked Google Ads account.
-    return "https://example.com"
+    """Return the ad final URL: the brief's website, or a safe placeholder."""
+    return normalize_final_url(brief.website_url) or "https://example.com"
 
 
 # ---------------------------------------------------------------------------
@@ -548,12 +548,14 @@ class CampaignGenerator:
 
         ad_groups: list[AdGroupProposal] = []
         all_cpcs: list[int] = []
+        positive_keyword_texts: list[str] = []
 
         for ag_item, copy_resp in zip(structure.ad_groups, ad_copies):  # noqa: B905
             keywords: list[KeywordProposal] = []
             for kw in ag_item.keywords:
                 cpc_micros = max(1, int(kw.estimated_cpc_pln * 1_000_000))
                 all_cpcs.append(cpc_micros)
+                positive_keyword_texts.append(kw.text)
                 try:
                     mt = MatchType(kw.match_type.lower())
                 except ValueError:
@@ -638,7 +640,7 @@ class CampaignGenerator:
             location_targeting=brief.location,
             bidding_strategy=structure.bidding_strategy,
             ad_groups=ad_groups,
-            negative_keywords=negatives.keywords,
+            negative_keywords=dedupe_negatives(negatives.keywords, positive_keyword_texts),
             sitelinks=domain_sitelinks,
             callouts=domain_callouts,
             structured_snippets=domain_snippets,

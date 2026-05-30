@@ -34,6 +34,7 @@ def _model_to_domain(m: LaunchBriefModel) -> CampaignBrief:
         interview_step=m.interview_step,
         campaign_resource_name=m.campaign_resource_name,
         vertical=getattr(m, "vertical", None),
+        website_url=getattr(m, "website_url", None),
     )
 
 
@@ -106,6 +107,7 @@ class SqlCampaignBriefRepository:
         m.interview_step = brief.interview_step
         m.campaign_resource_name = brief.campaign_resource_name
         m.vertical = brief.vertical
+        m.website_url = brief.website_url
         m.created_at = brief.created_at
 
         await self._session.flush()

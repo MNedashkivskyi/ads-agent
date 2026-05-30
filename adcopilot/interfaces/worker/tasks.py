@@ -1354,6 +1354,20 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
                 campaign_rn, budget_rn = await writer.create_campaign(
                     account.customer_id, credentials.refresh_token, proposal
                 )
+                # Best-effort: attach location + language targeting so the
+                # campaign does not run worldwide/all-languages. A failure here
+                # must not abort the launch (criteria cascade-delete with the
+                # campaign on rollback, so nothing is tracked separately).
+                try:
+                    await writer.create_location_and_language_criteria(
+                        account.customer_id,
+                        credentials.refresh_token,
+                        campaign_rn,
+                        proposal.location_targeting,
+                        brief.language,
+                    )
+                except Exception:
+                    logger.warning("location_language_criteria_failed", brief_id=brief_id)
                 ag_rns = await writer.create_ad_groups(
                     account.customer_id,
                     credentials.refresh_token,

@@ -281,6 +281,9 @@ class CampaignBrief:
     vertical: str | None = None
     """Detected Polish market vertical (e.g. 'prawnik', 'salon'). Used for budget validation."""
 
+    website_url: str | None = None
+    """The business website URL, captured from the wizard. Used as the ad final URL."""
+
 
 # ---------------------------------------------------------------------------
 # Performance Max campaign proposal (e-commerce with Merchant Center feed)

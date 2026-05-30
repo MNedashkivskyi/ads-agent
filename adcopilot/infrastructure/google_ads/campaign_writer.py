@@ -48,6 +48,7 @@ from adcopilot.domain.launch.entities import (
     StructuredSnippetProposal,
 )
 from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
+from adcopilot.domain.launch.targeting import language_constant_id
 from adcopilot.domain.recommendation import RecommendationId
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
 
@@ -469,6 +470,107 @@ class CampaignWriter:
             raise
         except Exception as exc:
             raise _wrap_exc("create_negative_keywords", exc) from exc
+
+    # ------------------------------------------------------------------
+    # Step 5.5 — Location + language targeting (campaign criteria)
+    # ------------------------------------------------------------------
+
+    def _suggest_geo_targets(
+        self,
+        client: Any,
+        cid: str,
+        location_names: list[str],
+        language_code: str | None,
+    ) -> list[str]:
+        """Resolve human location names to geo target constant resource names.
+
+        Bounded to at most 5 names (one suggest call per name) to respect quota.
+        Names that cannot be resolved are skipped.
+        """
+        gtc_service = client.get_service("GeoTargetConstantService")
+        geo_rns: list[str] = []
+        for name in location_names[:5]:
+            cleaned = name.strip()
+            if not cleaned:
+                continue
+            try:
+                request = client.get_type("SuggestGeoTargetConstantsRequest")
+                request.locale = (language_code or "pl").lower()
+                request.country_code = "PL"
+                request.location_names.names.append(cleaned)
+                response = gtc_service.suggest_geo_target_constants(request=request)
+                suggestions = list(response.geo_target_constant_suggestions)
+                if suggestions:
+                    geo_rns.append(suggestions[0].geo_target_constant.resource_name)
+            except Exception as exc:  # noqa: BLE001 — one bad name must not abort the rest
+                logger.warning("geo_target_suggest_failed", name=cleaned, error=str(exc))
+        return geo_rns
+
+    async def create_location_and_language_criteria(
+        self,
+        customer_id: str,
+        refresh_token: str,
+        campaign_resource_name: str,
+        location: str,
+        language_code: str | None,
+    ) -> list[str]:
+        """Attach LOCATION + LANGUAGE campaign criteria; return resource names.
+
+        Without these, a Search campaign targets the whole world in all
+        languages. The campaign location string may contain several
+        comma-separated places; each is resolved to a geo target constant.
+        """
+        try:
+            client = self._build_client(refresh_token)
+            cid = self._cid(customer_id)
+            cc_service = client.get_service("CampaignCriterionService")
+
+            ops: list[Any] = []
+
+            # --- Language criterion ---
+            lang_op = client.get_type("CampaignCriterionOperation")
+            lang_crit = lang_op.create
+            lang_crit.campaign = campaign_resource_name
+            lang_crit.language.language_constant = (
+                f"languageConstants/{language_constant_id(language_code)}"
+            )
+            ops.append(lang_op)
+
+            # --- Location criteria ---
+            location_names = [p for p in (location or "").split(",") if p.strip()]
+            geo_rns = self._suggest_geo_targets(client, cid, location_names, language_code)
+            for geo_rn in geo_rns:
+                loc_op = client.get_type("CampaignCriterionOperation")
+                loc_crit = loc_op.create
+                loc_crit.campaign = campaign_resource_name
+                loc_crit.location.geo_target_constant = geo_rn
+                ops.append(loc_op)
+
+            response = cc_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
+            rns = [r.resource_name for r in response.results]
+
+            logger.info(
+                "location_language_criteria_created",
+                customer_id=customer_id,
+                campaign_rn=campaign_resource_name,
+                language_id=language_constant_id(language_code),
+                geo_count=len(geo_rns),
+            )
+            await self._log(
+                "LOCATION_LANGUAGE_CRITERIA_CREATE",
+                {
+                    "campaign_resource_name": campaign_resource_name,
+                    "language_constant_id": language_constant_id(language_code),
+                    "geo_target_resource_names": geo_rns,
+                    "criterion_resource_names": rns,
+                },
+            )
+            return rns
+
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_exc("create_location_and_language_criteria", exc) from exc
 
     async def create_extensions(
         self,
