@@ -102,6 +102,14 @@ class LaunchProposalResponse(BaseModel):
     brief_id: str
 
 
+class LaunchStatusResponse(BaseModel):
+    """Outcome of the background campaign-creation task for a launched brief."""
+
+    status: str  # "creating" | "created" | "failed"
+    campaign_resource_name: str | None = None
+    message: str | None = None  # human-readable Polish reason, esp. on failure
+
+
 class ConversionTrackingStatusResponse(BaseModel):
     customer_id: str
     has_conversion_tracking: bool
@@ -443,3 +451,65 @@ async def launch_proposal(
     create_campaign_task.delay(brief_id)
     logger.info("proposal launched without setup fee", proposal_id=proposal_id, brief_id=brief_id)
     return LaunchProposalResponse(status="launching", brief_id=brief_id)
+
+
+@api_router.get(
+    "/proposals/{brief_id}/launch-status",
+    response_model=LaunchStatusResponse,
+)
+async def get_launch_status(
+    brief_id: str,
+    user_id: CurrentUser,
+) -> LaunchStatusResponse:
+    """Poll the outcome of the background campaign-creation task.
+
+    Returns ``creating`` while the Celery task runs, ``created`` once the
+    brief reaches CREATED_PAUSED/ENABLED (with the campaign resource name),
+    or ``failed`` with a human-readable Polish reason taken from the failure
+    notification the worker persisted. Lets the launch UI show a real
+    success/failure result instead of silently redirecting to the dashboard.
+    """
+    try:
+        uuid.UUID(brief_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid brief ID format") from None
+
+    from sqlalchemy import select
+
+    from adcopilot.domain.launch.entities import CampaignBriefId, LaunchStatus
+    from adcopilot.infrastructure.db.models import NotificationModel
+    from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
+        SqlCampaignBriefRepository,
+    )
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            brief_repo = SqlCampaignBriefRepository(session)
+            brief = await brief_repo.get(CampaignBriefId(brief_id))
+            if brief is None or brief.user_id != user_id:
+                raise HTTPException(status_code=404, detail="Brief not found")
+
+            if brief.status in (LaunchStatus.CREATED_PAUSED, LaunchStatus.ENABLED):
+                return LaunchStatusResponse(
+                    status="created",
+                    campaign_resource_name=brief.campaign_resource_name,
+                )
+
+            # No terminal success yet — check whether the worker recorded a
+            # failure notification for this brief (it carries the error reason).
+            stmt = (
+                select(NotificationModel)
+                .where(NotificationModel.user_id == str(user_id))
+                .where(NotificationModel.metadata_["brief_id"].astext == brief_id)
+                .order_by(NotificationModel.created_at.desc())
+                .limit(1)
+            )
+            notif = (await session.execute(stmt)).scalars().first()
+            if notif is not None and (notif.metadata_ or {}).get("error"):
+                return LaunchStatusResponse(status="failed", message=notif.body)
+
+            return LaunchStatusResponse(status="creating")
+    finally:
+        await engine.dispose()
