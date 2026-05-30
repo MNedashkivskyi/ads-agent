@@ -1293,6 +1293,8 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
     _saved_refresh_token: str | None = None
     _saved_customer_id: str | None = None
     _saved_primary_action: str | None = None
+    _saved_user_id: str | None = None
+    _saved_campaign_name: str | None = None
 
     try:
         async with AsyncSession(engine) as session, session.begin():
@@ -1305,10 +1307,12 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
             brief = await brief_repo.get(CampaignBriefId(brief_id))
             if brief is None:
                 return {"error": "brief_not_found"}
+            _saved_user_id = str(brief.user_id)
 
             proposal = await proposal_repo.get_by_brief(brief.id)
             if proposal is None:
                 return {"error": "proposal_not_found"}
+            _saved_campaign_name = proposal.campaign_name
 
             account = await account_repo.get(brief.account_id)
             if account is None:
@@ -1467,7 +1471,43 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
     finally:
         await engine.dispose()
 
-    # TODO(phase-0.2): send campaign created notification via new notifier
+    # Notify the user of the outcome via a web-app notification.
+    if _saved_user_id:
+        from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+
+        _name = _saved_campaign_name or "Twoja kampania"
+        notif_engine = create_async_engine(settings.DATABASE_URL)
+        try:
+            async with AsyncSession(notif_engine) as notif_session, notif_session.begin():
+                notifier = SqlWebNotifier(notif_session)
+                if error_text:
+                    await notifier.send_execution_result(
+                        user_id=_saved_user_id,
+                        title="Nie udało się utworzyć kampanii",
+                        body=(
+                            f"Podczas tworzenia kampanii „{_name}” wystąpił błąd. "
+                            "Spróbuj ponownie lub skontaktuj się z pomocą techniczną."
+                        ),
+                        metadata={"brief_id": brief_id, "error": error_text},
+                    )
+                else:
+                    await notifier.send_execution_result(
+                        user_id=_saved_user_id,
+                        title="Kampania została utworzona",
+                        body=(
+                            f"Kampania „{_name}” została pomyślnie utworzona i jest wstrzymana. "
+                            "Możesz ją teraz przejrzeć i uruchomić."
+                        ),
+                        metadata={
+                            "brief_id": brief_id,
+                            "campaign_resource_name": campaign_rn or "",
+                        },
+                    )
+        except Exception:
+            logger.exception("failed to send campaign outcome notification", brief_id=brief_id)
+        finally:
+            await notif_engine.dispose()
+
     return {"campaign_rn": campaign_rn, "error": error_text}
 
 

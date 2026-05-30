@@ -134,7 +134,7 @@ class CampaignWriter:
             budget_service = client.get_service("CampaignBudgetService")
             budget_op = client.get_type("CampaignBudgetOperation")
             budget = budget_op.create
-            budget.name = f"{proposal.campaign_name} Budget"
+            budget.name = f"{proposal.campaign_name} Budget – {uuid.uuid4().hex[:8]}"
             budget.amount_micros = _round_to_budget_unit(proposal.daily_budget_micros)
             budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
 
@@ -646,7 +646,7 @@ class CampaignWriter:
             budget_service = client.get_service("CampaignBudgetService")
             budget_op = client.get_type("CampaignBudgetOperation")
             budget = budget_op.create
-            budget.name = f"{proposal.brand_campaign_name} Budget"
+            budget.name = f"{proposal.brand_campaign_name} Budget – {uuid.uuid4().hex[:8]}"
             budget.amount_micros = _round_to_budget_unit(proposal.brand_daily_budget_micros)
             budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
             budget_response = budget_service.mutate_campaign_budgets(
@@ -818,7 +818,7 @@ class CampaignWriter:
             budget_service = client.get_service("CampaignBudgetService")
             budget_op = client.get_type("CampaignBudgetOperation")
             budget = budget_op.create
-            budget.name = f"{proposal.campaign_name} Budget"
+            budget.name = f"{proposal.campaign_name} Budget – {uuid.uuid4().hex[:8]}"
             budget.amount_micros = _round_to_budget_unit(proposal.daily_budget_micros)
             budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
 
