@@ -777,7 +777,7 @@ class CampaignWriter:
                     criterion.negative = False
                     criterion.bid_modifier = 1.0
                     criterion.user_interest.user_interest_category = (
-                        f"userinterests/{signal.segment_id}"
+                        f"customers/{cid}/userInterests/{signal.segment_id}"
                     )
                     ops.append(op)
 
