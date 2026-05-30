@@ -24,7 +24,6 @@ from adcopilot.domain.launch.entities import (
     SitelinkProposal,
     StructuredSnippetProposal,
 )
-from adcopilot.domain.launch.targeting import dedupe_negatives, normalize_final_url
 from adcopilot.domain.launch.vertical_template import (
     KeywordPriority,
     TemplateMatchType,
@@ -102,14 +101,9 @@ class TemplateProposalAssembler:
         daily_budget_micros = self._calc_daily_budget(brief.monthly_budget_pln)
         bidding_strategy = template.bidding_defaults.for_tier(tier.value).bidding_strategy
 
-        final_url = normalize_final_url(brief.website_url) or "https://example.com"
-
-        ad_groups = self._build_ad_groups(
-            template, tier, city, service, brief.exclusions, final_url
-        )
-        positive_texts = [kw.text for ag in ad_groups for kw in ag.keywords]
-        negative_keywords = self._build_negatives(template, brief, positive_texts)
-        sitelinks = self._build_sitelinks(template, final_url)
+        ad_groups = self._build_ad_groups(template, tier, city, service, brief.exclusions)
+        negative_keywords = self._build_negatives(template, brief)
+        sitelinks = self._build_sitelinks(template)
         callouts = self._build_callouts(template, phone)
         structured_snippets = self._build_structured_snippets(template)
         cpc_micros = _estimate_cpc_micros(tier, template)
@@ -148,7 +142,6 @@ class TemplateProposalAssembler:
         city: str,
         service: str,
         exclusions: list[str],
-        final_url: str,
     ) -> list[AdGroupProposal]:
         ad_groups: list[AdGroupProposal] = []
         exclusions_lower = {e.lower() for e in exclusions}
@@ -167,7 +160,7 @@ class TemplateProposalAssembler:
             ad = AdProposal(
                 headlines=placeholder_headlines,
                 descriptions=placeholder_descriptions,
-                final_url=final_url,
+                final_url="https://example.com",
                 path_segments=(city[:15], ""),
             )
             ad_groups.append(AdGroupProposal(name=name, keywords=keywords, ads=[ad]))
@@ -202,7 +195,6 @@ class TemplateProposalAssembler:
         self,
         template: VerticalTemplate,
         brief: CampaignBrief,
-        positive_texts: list[str],
     ) -> list[str]:
         negatives: list[str] = []
 
@@ -215,20 +207,22 @@ class TemplateProposalAssembler:
         # User exclusions
         negatives.extend(brief.exclusions)
 
-        # Deduplicate, and drop any negative that collides with a positive keyword
-        # (a collision would suppress traffic we are bidding on).
-        return dedupe_negatives(negatives, positive_texts)
+        # Deduplicate preserving order
+        seen: set[str] = set()
+        result: list[str] = []
+        for n in negatives:
+            if n not in seen:
+                seen.add(n)
+                result.append(n)
+        return result
 
-    def _build_sitelinks(
-        self, template: VerticalTemplate, final_url: str
-    ) -> list[SitelinkProposal]:
-        base = final_url.rstrip("/")
+    def _build_sitelinks(self, template: VerticalTemplate) -> list[SitelinkProposal]:
         return [
             SitelinkProposal(
                 link_text=sl.text,
                 description1=sl.description1 or "",
                 description2=sl.description2 or "",
-                final_url=f"{base}/{sl.path}" if sl.path else final_url,
+                final_url=f"https://example.com/{sl.path}" if sl.path else "https://example.com",
             )
             for sl in template.extensions.sitelinks
         ]

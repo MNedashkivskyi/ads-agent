@@ -289,7 +289,6 @@ async def generate_proposal(
         CampaignBriefId,
         LaunchStatus,
     )
-    from adcopilot.domain.launch.targeting import normalize_final_url
     from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
         SqlCampaignBriefRepository,
     )
@@ -316,7 +315,6 @@ async def generate_proposal(
         language="pl",
         created_at=datetime.now(UTC),
         status=LaunchStatus.GENERATING,
-        website_url=normalize_final_url(body.website_url, fallback=None),
     )
 
     try:
