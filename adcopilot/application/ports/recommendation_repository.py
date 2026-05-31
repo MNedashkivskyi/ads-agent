@@ -29,6 +29,20 @@ class RecommendationRepository(Protocol):
         self, rec_id: RecommendationId, status: RecommendationStatus
     ) -> None: ...
 
+    async def expire_open_for_campaign(
+        self, account_id: AccountId, campaign_id: int
+    ) -> int: ...
+
+    async def expire_pending_not_matching(
+        self, account_id: AccountId, keep_keys: set[tuple[str, str]]
+    ) -> int:
+        """Expire PENDING recs whose (kind, target_hash) is not in keep_keys.
+
+        Used after a detection run to drop suggestions that are no longer
+        detected (the underlying issue was resolved). Returns the count expired.
+        """
+        ...
+
     async def update_explanation(self, rec_id: RecommendationId, explanation: str) -> None: ...
 
     async def list_executed_in_date_range(self, start: date, end: date) -> list[Recommendation]: ...

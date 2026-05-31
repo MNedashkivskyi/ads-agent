@@ -245,6 +245,53 @@ async def test_expire_open_for_campaign_only_touches_open_recs(
     assert (await rec_repo.get(failed.id)).status == RecommendationStatus.EXPIRED
     assert (await rec_repo.get(executed.id)).status == RecommendationStatus.EXECUTED
     assert (await rec_repo.get(other_campaign.id)).status == RecommendationStatus.PENDING
+
+
+@pytest.mark.integration
+async def test_expire_pending_not_matching_drops_stale_pending(
+    db_session: AsyncSession,
+) -> None:
+    """Reconciliation expires PENDING recs whose key isn't in the keep set,
+    leaving matched PENDING and all non-PENDING recs untouched."""
+    from adcopilot.domain.recommendation import (
+        Recommendation,
+        RecommendationId,
+        RecommendationKind,
+        RecommendationSeverity,
+        RecommendationStatus,
+    )
+
+    account_id = await _seed_user_and_account(db_session)
+    rec_repo = SqlRecommendationRepository(db_session)
+
+    def _rec(criterion_id: int, status: RecommendationStatus) -> Recommendation:
+        return Recommendation(
+            id=RecommendationId(str(uuid.uuid4())),
+            account_id=account_id,
+            kind=RecommendationKind.PAUSE_KEYWORD,
+            severity=RecommendationSeverity.HIGH,
+            target={"criterion_id": criterion_id},
+            payload={},
+            evidence={},
+            estimated_monthly_savings_micros=0,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            status=status,
+        )
+
+    still_detected = _rec(1, RecommendationStatus.PENDING)  # in keep set → stays
+    resolved = _rec(2, RecommendationStatus.PENDING)  # not in keep set → expire
+    executed = _rec(3, RecommendationStatus.EXECUTED)  # never touched
+    for r in (still_detected, resolved, executed):
+        await rec_repo.save(r)
+    await db_session.flush()
+
+    keep_keys = {(still_detected.kind.value, still_detected.target_hash)}
+    expired = await rec_repo.expire_pending_not_matching(account_id, keep_keys)
+    assert expired == 1
+
+    assert (await rec_repo.get(still_detected.id)).status == RecommendationStatus.PENDING
+    assert (await rec_repo.get(resolved.id)).status == RecommendationStatus.EXPIRED
+    assert (await rec_repo.get(executed.id)).status == RecommendationStatus.EXECUTED
     # Fernet v0 tokens always begin with the base64 form of \x80 ("gAAAAA").
     assert raw_value.startswith("gAAAAA"), (
         f"Expected Fernet-format ciphertext on disk, got prefix {raw_value[:10]!r}"

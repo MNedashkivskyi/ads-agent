@@ -511,6 +511,7 @@ async def list_recommendations(
     """List all recommendations across the user's accounts."""
     import uuid as uuid_mod
 
+    from adcopilot.domain.recommendation import RecommendationStatus
     from adcopilot.infrastructure.db.models import RecommendationModel
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
@@ -529,7 +530,12 @@ async def list_recommendations(
             account_uuids = [uuid_mod.UUID(a.id) for a in accounts]
             result = await session.execute(
                 select(RecommendationModel)
-                .where(RecommendationModel.account_id.in_(account_uuids))
+                .where(
+                    RecommendationModel.account_id.in_(account_uuids),
+                    # Hide EXPIRED recs — they are no longer actual (issue
+                    # resolved, or the campaign was removed) and must not appear.
+                    RecommendationModel.status != RecommendationStatus.EXPIRED.value,
+                )
                 .order_by(RecommendationModel.created_at.desc())
             )
             recs = result.scalars().all()

@@ -68,10 +68,20 @@ class RuleEngine:
             existing_keys.add(key)  # prevent intra-batch dupes
             new_recs.append(rec)
 
+        # 5. Reconcile: expire still-open PENDING recs that this run no longer
+        #    detected, so the list only shows currently-actual recommendations.
+        #    Guard against wiping the list on an empty/failed snapshot by
+        #    requiring real campaign data in the context before reconciling.
+        expired = 0
+        if ctx.campaigns:
+            keep_keys = {(rec.kind.value, rec.target_hash) for rec in candidates}
+            expired = await self._repo.expire_pending_not_matching(ctx.account.id, keep_keys)
+
         logger.info(
             "rule engine completed",
             account_id=ctx.account.id,
             candidates=len(candidates),
             new=len(new_recs),
+            expired_stale=expired,
         )
         return new_recs

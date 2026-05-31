@@ -136,6 +136,32 @@ class SqlRecommendationRepository:
         result = await self._session.execute(stmt)
         return result.rowcount or 0
 
+    async def expire_pending_not_matching(
+        self, account_id: AccountId, keep_keys: set[tuple[str, str]]
+    ) -> int:
+        """Expire PENDING recs whose (kind, target_hash) is not in keep_keys.
+
+        Called after a detection run so the list only shows currently-actual
+        recommendations: any still-open suggestion that the latest run no longer
+        produces (issue resolved) is moved to EXPIRED. Only PENDING recs are
+        touched — APPROVED / EXECUTED / DECLINED / FAILED reflect user/worker
+        actions and are left intact. Returns the number expired.
+        """
+        result = await self._session.execute(
+            select(RecommendationModel).where(
+                RecommendationModel.account_id == uuid.UUID(account_id),
+                RecommendationModel.status == RecommendationStatus.PENDING.value,
+            )
+        )
+        count = 0
+        now = datetime.now(tz=UTC)
+        for m in result.scalars().all():
+            if (m.kind, m.target_hash) not in keep_keys:
+                m.status = RecommendationStatus.EXPIRED.value
+                m.updated_at = now
+                count += 1
+        return count
+
     async def update_explanation(self, rec_id: RecommendationId, explanation: str) -> None:
         result = await self._session.execute(
             select(RecommendationModel).where(RecommendationModel.id == uuid.UUID(rec_id))
