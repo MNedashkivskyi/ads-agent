@@ -1297,6 +1297,7 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
     engine = create_async_engine(settings.DATABASE_URL)
 
     error_text: str | None = None
+    error_reason: str | None = None
     campaign_rn: str | None = None
     _saved_refresh_token: str | None = None
     _saved_customer_id: str | None = None
@@ -1476,6 +1477,13 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
     except Exception as exc:
         logger.exception("create_campaign_task failed", brief_id=brief_id)
         error_text = str(exc)[:200]
+        # Translate the Google Ads failure into a clear Polish reason the user
+        # can act on, instead of a raw gRPC/enum payload.
+        from adcopilot.infrastructure.google_ads.error_messages import (
+            humanize_google_ads_error,
+        )
+
+        error_reason = humanize_google_ads_error(exc)
     finally:
         await engine.dispose()
 
@@ -1489,14 +1497,18 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
             async with AsyncSession(notif_engine) as notif_session, notif_session.begin():
                 notifier = SqlWebNotifier(notif_session)
                 if error_text:
+                    reason = error_reason or (
+                        "Spróbuj ponownie lub skontaktuj się z pomocą techniczną."
+                    )
                     await notifier.send_execution_result(
                         user_id=_saved_user_id,
                         title="Nie udało się utworzyć kampanii",
-                        body=(
-                            f"Podczas tworzenia kampanii „{_name}” wystąpił błąd. "
-                            "Spróbuj ponownie lub skontaktuj się z pomocą techniczną."
-                        ),
-                        metadata={"brief_id": brief_id, "error": error_text},
+                        body=f"Nie udało się utworzyć kampanii „{_name}”. {reason}",
+                        metadata={
+                            "brief_id": brief_id,
+                            "error": error_text,
+                            "reason": error_reason or "",
+                        },
                     )
                 else:
                     await notifier.send_execution_result(

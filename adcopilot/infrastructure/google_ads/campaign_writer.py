@@ -50,6 +50,7 @@ from adcopilot.domain.launch.entities import (
 from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
 from adcopilot.domain.recommendation import RecommendationId
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
+from adcopilot.infrastructure.google_ads.error_messages import is_duplicate_campaign_name
 
 logger = structlog.get_logger(__name__)
 
@@ -73,6 +74,10 @@ def _wrap_exc(operation: str, exc: Exception) -> Exception:
 # Google Ads rejects budget amounts that are not a multiple of the minimum
 # billable unit (10,000 micros = 0.01 of the account currency).
 _BUDGET_MIN_UNIT_MICROS = 10_000
+
+# How many times to retry campaign creation with a disambiguating suffix when
+# the chosen name collides with an existing active/paused campaign.
+_MAX_CAMPAIGN_NAME_ATTEMPTS = 6
 
 
 def _round_to_budget_unit(micros: int) -> int:
@@ -127,6 +132,61 @@ class CampaignWriter:
             created_at=datetime.now(UTC),
         )
         await self._audit.save(log)
+
+    def _mutate_campaign_with_unique_name(
+        self,
+        campaign_service: Any,
+        cid: str,
+        campaign_op: Any,
+        campaign: Any,
+        base_name: str,
+    ) -> str:
+        """Create the campaign, retrying with a numeric suffix on name clashes.
+
+        Google Ads requires a campaign name unique among the account's active
+        and paused campaigns. If ``base_name`` is taken (e.g. the user launched
+        a similar campaign before, or a previous attempt left one behind), retry
+        as "name (2)", "name (3)", … so a launch is never blocked purely by a
+        name collision. Returns the created campaign resource name.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_CAMPAIGN_NAME_ATTEMPTS):
+            campaign.name = base_name if attempt == 0 else f"{base_name} ({attempt + 1})"
+            try:
+                response = campaign_service.mutate_campaigns(
+                    customer_id=cid, operations=[campaign_op]
+                )
+                if attempt > 0:
+                    logger.info(
+                        "campaign_name_disambiguated",
+                        final_name=campaign.name,
+                        attempts=attempt + 1,
+                    )
+                return str(response.results[0].resource_name)
+            except Exception as exc:  # noqa: BLE001 — re-raised unless it's a name clash
+                if is_duplicate_campaign_name(exc) and attempt < _MAX_CAMPAIGN_NAME_ATTEMPTS - 1:
+                    last_exc = exc
+                    logger.warning("duplicate_campaign_name_retry", attempted_name=campaign.name)
+                    continue
+                raise
+        # Unreachable: the final attempt either succeeds or re-raises above.
+        raise last_exc  # type: ignore[misc]
+
+    def _safe_remove_budget(
+        self, client: Any, budget_service: Any, cid: str, budget_rn: str
+    ) -> None:
+        """Best-effort delete of a just-created budget after a campaign failure.
+
+        Prevents orphan budgets when the campaign cannot be created (the budget
+        is created first). Any error here is logged and swallowed.
+        """
+        try:
+            op = client.get_type("CampaignBudgetOperation")
+            op.remove = budget_rn
+            budget_service.mutate_campaign_budgets(customer_id=cid, operations=[op])
+            logger.info("orphan_budget_removed", budget_rn=budget_rn)
+        except Exception:  # noqa: BLE001 — cleanup must never mask the real error
+            logger.warning("orphan_budget_cleanup_failed", budget_rn=budget_rn)
 
     # ------------------------------------------------------------------
     # Step 1 — Campaign + Budget
@@ -186,10 +246,15 @@ class CampaignWriter:
                 client.enums.PositiveGeoTargetTypeEnum.PRESENCE_OR_INTEREST
             )
 
-            campaign_response = campaign_service.mutate_campaigns(
-                customer_id=cid, operations=[campaign_op]
-            )
-            campaign_rn: str = campaign_response.results[0].resource_name
+            try:
+                campaign_rn: str = self._mutate_campaign_with_unique_name(
+                    campaign_service, cid, campaign_op, campaign, proposal.campaign_name
+                )
+            except Exception:
+                # Campaign creation failed for good — remove the orphan budget
+                # we created moments ago so it does not accumulate on the account.
+                self._safe_remove_budget(client, budget_service, cid, budget_rn)
+                raise
 
             logger.info(
                 "campaign_created",
@@ -692,10 +757,13 @@ class CampaignWriter:
                 client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
             )
             client.copy_from(campaign.target_spend, type(campaign.target_spend)())
-            campaign_response = campaign_service.mutate_campaigns(
-                customer_id=cid, operations=[campaign_op]
-            )
-            campaign_rn: str = campaign_response.results[0].resource_name
+            try:
+                campaign_rn: str = self._mutate_campaign_with_unique_name(
+                    campaign_service, cid, campaign_op, campaign, proposal.brand_campaign_name
+                )
+            except Exception:
+                self._safe_remove_budget(client, budget_service, cid, budget_rn)
+                raise
 
             # Ad group
             ag_service = client.get_service("AdGroupService")
