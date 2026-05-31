@@ -845,13 +845,22 @@ def execute_recommendation_task(
     assert isinstance(self, Task)
     try:
         return asyncio.run(_run_execute_recommendation(rec_id))
-    except GoogleAdsAuthError:
-        # Permanent auth failure — mark rec FAILED, set needs_reauth, notify user.
+    except GoogleAdsAuthError as exc:
+        # Expected, terminal condition: the user's Google OAuth token expired or
+        # was revoked. Retrying can't help — mark the rec FAILED and flag the
+        # account needs_reauth (so the UI can prompt a reconnect), then finish
+        # the task cleanly. Re-raising would log a misleading "task raised
+        # unexpected" traceback and trip the task_failure → Sentry path.
+        logger.warning(
+            "recommendation needs reauth — token expired/revoked",
+            rec_id=rec_id,
+            error=str(exc),
+        )
         try:
             asyncio.run(_handle_auth_failure(rec_id))
         except Exception:
             logger.exception("failed to handle auth failure", rec_id=rec_id)
-        raise
+        return {"rec_id": rec_id, "status": "failed", "reason": "needs_reauth"}
     except CampaignNotFoundError as exc:
         # Expected, terminal business condition: the recommendation is stale and
         # the campaign was removed in Google Ads. There is nothing to retry, so
