@@ -29,35 +29,15 @@ from adcopilot.domain.launch.vertical_template import (
     TemplateMatchType,
     VerticalTemplate,
 )
-from adcopilot.domain.polish_market.grammar import city_location_phrase
 from adcopilot.domain.polish_market.negative_keywords import POLISH_STANDARD_NEGATIVES
 
 # Placeholder ad copy inserted when the assembler runs without LLM.
 # These will be replaced by LLM stage 3 in the hybrid path.
-# The city-aware headline is built separately (see _local_offer_headline) so it
-# uses the correct Polish locative case ("w Warszawie", not "w Warszawa").
 _PLACEHOLDER_HEADLINES = [
+    "Najlepsza oferta w {city}",
     "Sprawdź naszą ofertę",
     "Skontaktuj się z nami",
 ]
-
-# Google Ads hard limit for a single headline.
-_HEADLINE_MAX = 30
-
-
-def _local_offer_headline(city: str) -> str:
-    """Build a grammatical, <=30-char "local offer" headline for *city*.
-
-    Uses the Polish locative case and shrinks the prefix (or drops the city) so
-    long city names never blow the 30-character headline limit.
-    """
-    phrase = city_location_phrase(city)  # "w Warszawie" / "— Sopot"
-    if not phrase:
-        return "Najlepsza oferta w okolicy"
-    for candidate in (f"Najlepsza oferta {phrase}", f"Oferta {phrase}"):
-        if len(candidate) <= _HEADLINE_MAX:
-            return candidate
-    return "Najlepsza oferta w okolicy"
 _PLACEHOLDER_DESCRIPTIONS = [
     "Profesjonalne usługi dla Twojej firmy. Zadzwoń lub umów się online.",
     "Doświadczony zespół, szybka realizacja. Sprawdź naszą ofertę już dziś.",
@@ -172,10 +152,7 @@ class TemplateProposalAssembler:
                 continue
 
             name = _resolve(ag_tmpl.name_template, city, service)
-            placeholder_headlines = [
-                _local_offer_headline(city),
-                *(_resolve(h, city, service) for h in _PLACEHOLDER_HEADLINES),
-            ]
+            placeholder_headlines = [_resolve(h, city, service) for h in _PLACEHOLDER_HEADLINES]
             placeholder_descriptions = [
                 _resolve(d, city, service) for d in _PLACEHOLDER_DESCRIPTIONS
             ]
