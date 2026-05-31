@@ -42,8 +42,8 @@ async def test_campaign_level_removal() -> None:
     rec = _rec(
         target={"criterion_id": "999", "campaign_id": "10"},
         evidence={
-            "conflict_scope": "campaign",
-            "negative_keyword_text": "free",
+            "conflict_scope": "CAMPAIGN",
+            "negative_text": "free",
             "negative_match_type": "EXACT",
         },
     )
@@ -63,8 +63,8 @@ async def test_ad_group_level_removal() -> None:
     rec = _rec(
         target={"criterion_id": "999", "campaign_id": "10", "ad_group_id": "20"},
         evidence={
-            "conflict_scope": "ad_group",
-            "negative_keyword_text": "free",
+            "conflict_scope": "AD_GROUP",
+            "negative_text": "free",
             "negative_match_type": "BROAD",
         },
     )
