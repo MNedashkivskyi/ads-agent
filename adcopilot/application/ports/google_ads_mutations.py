@@ -6,6 +6,15 @@ from typing import Protocol
 
 
 class GoogleAdsMutationsPort(Protocol):
+    async def campaign_exists(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+    ) -> bool:
+        """Return True if the campaign exists and is not REMOVED."""
+        ...
+
     async def pause_keyword(
         self,
         refresh_token: str,

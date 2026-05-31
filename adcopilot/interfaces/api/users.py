@@ -591,6 +591,47 @@ async def refresh_recommendations(
         await engine.dispose()
 
 
+@router.get("/{user_id}/recommendations/last-refreshed")
+async def recommendations_last_refreshed(
+    user_id: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, str | None]:
+    """Return when recommendation data was last refreshed for the user.
+
+    Derived from the most recent campaign snapshot write (snapshots are
+    upserted on every refresh), which reflects the last successful data pull
+    and detection run.
+    """
+    import uuid as uuid_mod
+
+    from sqlalchemy import func, select
+
+    from adcopilot.infrastructure.db.models import CampaignSnapshotModel
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            accounts = await account_repo.list_for_user(UserId(user_id))
+            if not accounts:
+                return {"last_refreshed_at": None}
+
+            account_uuids = [uuid_mod.UUID(a.id) for a in accounts]
+            result = await session.execute(
+                select(func.max(CampaignSnapshotModel.updated_at)).where(
+                    CampaignSnapshotModel.account_id.in_(account_uuids)
+                )
+            )
+            last_refreshed = result.scalar_one_or_none()
+    finally:
+        await engine.dispose()
+
+    return {"last_refreshed_at": last_refreshed.isoformat() if last_refreshed else None}
+
+
 @router.get("/{user_id}/audit-log", response_model=list[AuditLogResponse])
 async def list_audit_log(
     user_id: str,

@@ -840,7 +840,7 @@ def execute_recommendation_task(
 
     from celery import Task  # type: ignore[import-untyped]
 
-    from adcopilot.domain.exceptions import GoogleAdsAuthError
+    from adcopilot.domain.exceptions import CampaignNotFoundError, GoogleAdsAuthError
 
     assert isinstance(self, Task)
     try:
@@ -851,6 +851,14 @@ def execute_recommendation_task(
             asyncio.run(_handle_auth_failure(rec_id))
         except Exception:
             logger.exception("failed to handle auth failure", rec_id=rec_id)
+        raise
+    except CampaignNotFoundError as exc:
+        # Permanent: the campaign was removed. Retrying can't help — mark FAILED
+        # immediately with a human-readable message instead of burning retries.
+        try:
+            asyncio.run(_handle_execution_failure(rec_id, str(exc)))
+        except Exception:
+            logger.exception("failed to handle missing-campaign failure", rec_id=rec_id)
         raise
     except Exception as exc:
         if self.request.retries < self.max_retries:

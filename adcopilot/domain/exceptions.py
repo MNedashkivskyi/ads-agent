@@ -22,6 +22,14 @@ class GoogleAdsUnavailable(AdCopilotError):
     pass
 
 
+class CampaignNotFoundError(AdCopilotError):
+    """Raised when a recommendation targets a campaign that no longer exists.
+
+    This is a permanent condition (the campaign was removed or is otherwise
+    gone on Google's side), so execution must fail terminally without retrying.
+    """
+
+
 class GoogleAdsTokenNotApproved(AdCopilotError):
     """Raised when the developer token is in test mode or pending approval.
 

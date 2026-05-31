@@ -6,8 +6,19 @@ from __future__ import annotations
 class FakeGoogleAdsMutations:
     """Records mutation calls without hitting the Google Ads API."""
 
-    def __init__(self) -> None:
+    def __init__(self, missing_campaign_ids: set[int] | None = None) -> None:
         self.calls: list[dict[str, object]] = []
+        # Campaign ids that should be reported as non-existent / removed.
+        self._missing_campaign_ids: set[int] = missing_campaign_ids or set()
+
+    async def campaign_exists(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+    ) -> bool:
+        self.calls.append({"method": "campaign_exists", "campaign_id": campaign_id})
+        return campaign_id not in self._missing_campaign_ids
 
     async def pause_keyword(
         self,

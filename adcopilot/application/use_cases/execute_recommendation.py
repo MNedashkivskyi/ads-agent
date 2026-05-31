@@ -17,6 +17,7 @@ from adcopilot.application.ports.repositories import (
     OAuthCredentialsRepository,
 )
 from adcopilot.domain.audit_log import AuditLog
+from adcopilot.domain.exceptions import CampaignNotFoundError
 from adcopilot.domain.recommendation import (
     RecommendationId,
     RecommendationKind,
@@ -138,6 +139,24 @@ class ExecuteRecommendationUseCase:
         credentials = await self._credentials_repo.get(rec.account_id)
         if credentials is None:
             raise ValueError(f"No OAuth credentials for account {rec.account_id}")
+
+        # Pre-flight guard: never mutate a campaign that no longer exists.
+        # The recommendation snapshot can be stale (the campaign may have been
+        # removed in Google Ads after detection ran), which would otherwise fail
+        # mid-mutation with "operation is not allowed for removed resources".
+        campaign_id = rec.target.get("campaign_id")
+        if campaign_id:
+            exists = await self._mutations.campaign_exists(
+                refresh_token=credentials.refresh_token,
+                customer_id=account.customer_id,
+                campaign_id=int(campaign_id),
+            )
+            if not exists:
+                raise CampaignNotFoundError(
+                    f"Campaign {campaign_id} no longer exists or has been removed. "
+                    "This recommendation is out of date — refresh recommendations to "
+                    "get up-to-date suggestions."
+                )
 
         # One span per executor so the Sentry waterfall shows which action
         # dominated the latency (pause_keyword vs adjust_budget etc.).
