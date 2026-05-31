@@ -11,7 +11,7 @@ from adcopilot.application.detection.base import DetectionContext, HistoricalSta
 from adcopilot.application.detection.engine import RuleEngine
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
 from adcopilot.application.ports.repositories import GoogleAdsAccountRepository
-from adcopilot.application.ports.snapshot_repository import SnapshotRepository
+from adcopilot.application.ports.snapshot_repository import SnapshotData, SnapshotRepository
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.recommendation import RecommendationSeverity
 
@@ -63,6 +63,13 @@ class RunDetectionUseCase:
 
         # 2. Load current snapshot data
         snapshot = await self._snapshot_repo.load_snapshot(account_id, snapshot_date)
+
+        # 2b. Drop campaigns that have been removed in Google Ads (and all their
+        #     child entities). The snapshot still records them with status
+        #     REMOVED, but detection must never produce recommendations for a
+        #     deleted campaign. Combined with the rule engine's reconciliation
+        #     pass, any previously-created recs for these campaigns are expired.
+        snapshot = _exclude_removed_campaigns(snapshot)
 
         # 3. Load 7-day-ago snapshots for trend-based rules (Modules 1 & 2).
         #    These are best-effort — if no data exists the lists stay empty and
@@ -168,6 +175,39 @@ class RunDetectionUseCase:
             by_severity=counts,
         )
         return counts
+
+
+def _exclude_removed_campaigns(snapshot: SnapshotData) -> SnapshotData:
+    """Return the snapshot with REMOVED campaigns and their children stripped.
+
+    A campaign deleted in Google Ads is still returned by the snapshot query
+    (with status REMOVED) so its row is kept up to date, but it must not drive
+    any recommendations. We also drop the ad groups, keywords, search terms,
+    ads and negative keywords that belong to those campaigns so no child-level
+    rule fires on a dead campaign either.
+    """
+    removed_ids = {
+        c.campaign_id for c in snapshot.campaigns if (c.status or "").upper() == "REMOVED"
+    }
+    if not removed_ids:
+        return snapshot
+
+    live_ad_groups = [ag for ag in snapshot.ad_groups if ag.campaign_id not in removed_ids]
+    live_ag_ids = {ag.ad_group_id for ag in live_ad_groups}
+
+    snapshot.campaigns = [c for c in snapshot.campaigns if c.campaign_id not in removed_ids]
+    snapshot.ad_groups = live_ad_groups
+    snapshot.keywords = [k for k in snapshot.keywords if k.ad_group_id in live_ag_ids]
+    snapshot.search_terms = [s for s in snapshot.search_terms if s.ad_group_id in live_ag_ids]
+    snapshot.ads = [a for a in snapshot.ads if a.ad_group_id in live_ag_ids]
+    snapshot.negative_keywords = [
+        n
+        for n in snapshot.negative_keywords
+        if n.campaign_id not in removed_ids and (n.ad_group_id == 0 or n.ad_group_id in live_ag_ids)
+    ]
+
+    logger.info("excluded removed campaigns from detection", removed_campaigns=len(removed_ids))
+    return snapshot
 
 
 async def _load_targeting_performance(
