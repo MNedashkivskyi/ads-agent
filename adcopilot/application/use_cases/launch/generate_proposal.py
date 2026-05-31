@@ -248,7 +248,7 @@ class GenerateCampaignProposalUseCase:
                 brief_id=brief.id,
                 error=str(exc)[:300],
             )
-            proposal = self._polish_template_fallback(brief)
+            proposal = build_proposal_from_template(brief)
             logger.info(
                 "proposal_generation_succeeded",
                 brief_id=brief.id,
@@ -322,7 +322,7 @@ class GenerateCampaignProposalUseCase:
                 brief_id=brief.id,
                 error=str(exc)[:300],
             )
-            proposal = self._polish_template_fallback(brief)
+            proposal = build_proposal_from_template(brief)
             logger.info(
                 "proposal_generation_succeeded",
                 brief_id=brief.id,
@@ -331,21 +331,6 @@ class GenerateCampaignProposalUseCase:
             )
 
         return proposal
-
-    def _polish_template_fallback(self, brief: CampaignBrief) -> CampaignProposal:
-        """Build a Polish placeholder proposal when the LLM path is unavailable.
-
-        Routes through the Polish vertical-template assembler (the YAML
-        ``generic`` template) rather than the legacy English templates, so a
-        fallback never emits English copy — which both looks broken and breaks
-        the Polish-output rule. Only if no YAML template is available do we drop
-        to the legacy English template as an absolute last resort.
-        """
-        if self._template_repo is not None:
-            tmpl = self._template_repo.get_template("generic")
-            if tmpl is not None:
-                return self._assembler.assemble(tmpl, brief)
-        return build_proposal_from_template(brief)
 
     # ------------------------------------------------------------------
     # Hybrid pipeline (template structure + LLM ad copy)
