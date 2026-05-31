@@ -426,13 +426,13 @@ class CampaignWriter:
                 for i, hl in enumerate(_headlines):
                     asset = client.get_type("AdTextAsset")
                     asset.text = hl
-                    # Pin ONLY the first headline (the emotional hook) to
-                    # position 1, so the attention-grabbing line is always shown
-                    # first. The remaining headlines stay unpinned so Google can
-                    # mix them freely — over-pinning (e.g. all of H1-H3) forces
-                    # "Poor" Ad Strength and throttles impressions.
-                    if i == 0:
-                        asset.pinned_field = client.enums.ServedAssetFieldTypeEnum.HEADLINE_1
+                    # Pin first 3 headlines to positions 1-3
+                    if i < 3:
+                        asset.pinned_field = getattr(
+                            client.enums.ServedAssetFieldTypeEnum,
+                            f"HEADLINE_{i + 1}",
+                            client.enums.ServedAssetFieldTypeEnum.UNSPECIFIED,
+                        )
                     rsa.headlines.append(asset)
 
                 for desc in _descriptions:
