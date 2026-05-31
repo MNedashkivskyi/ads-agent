@@ -1054,15 +1054,30 @@ async def _run_generate_campaign(
         # nothing is held open during the LLM calls below.
 
         if not settings.LLM_API_KEY:
-            # Template-only path (fast, no LLM calls, no idle-connection risk)
-            from adcopilot.domain.launch.templates import build_proposal_from_template
+            # Template-only path (fast, no LLM calls, no idle-connection risk).
+            # Prefer the Polish vertical-template assembler over the legacy
+            # English templates so copy is always Polish even without the LLM.
+            from adcopilot.application.services.template_proposal_assembler import (
+                TemplateProposalAssembler,
+            )
+            from adcopilot.infrastructure.vertical_templates.yaml_adapter import (
+                YamlVerticalTemplateAdapter,
+            )
 
-            proposal = build_proposal_from_template(brief)
+            _yaml_tmpl = YamlVerticalTemplateAdapter().get_template("generic")
+            if _yaml_tmpl is not None:
+                proposal = TemplateProposalAssembler().assemble(_yaml_tmpl, brief)
+                _via = "template_no_llm_pl"
+            else:
+                from adcopilot.domain.launch.templates import build_proposal_from_template
+
+                proposal = build_proposal_from_template(brief)
+                _via = "template_no_llm"
             logger.info(
                 "proposal_generation_succeeded",
                 brief_id=brief.id,
                 proposal_id=proposal.id,
-                via="template_no_llm",
+                via=_via,
             )
         else:
             # \u2500\u2500 Step 2: LLM pipeline \u2014 no DB connection held \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500

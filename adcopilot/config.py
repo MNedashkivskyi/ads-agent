@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,7 +26,14 @@ class Settings(BaseSettings):
     # Example (Railway):  https://ads-agent-dev.up.railway.app/oauth/google/callback
     # Example (local):    http://localhost:8000/oauth/google/callback
     OAUTH_REDIRECT_URI: str = "http://localhost:8000/oauth/google/callback"
-    LLM_API_KEY: str | None = None
+    # Anthropic API key for Claude. Accept either LLM_API_KEY (legacy) or
+    # ANTHROPIC_API_KEY (the name provisioned at the Railway project level).
+    # Without this set, proposal generation silently falls back to template
+    # copy instead of running the LLM, so the alias matters in production.
+    LLM_API_KEY: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("LLM_API_KEY", "ANTHROPIC_API_KEY"),
+    )
     PAGESPEED_API_KEY: str | None = None
 
     # Comma-separated list of user UUIDs that have admin access to /api/admin/* endpoints.
