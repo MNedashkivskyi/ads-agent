@@ -150,6 +150,34 @@ def test_execute_recommendation_task_calls_handle_failure_when_retries_exhausted
     mock_handle.assert_awaited_once_with("rec-abc", "permanent failure")
 
 
+def test_execute_recommendation_task_campaign_removed_is_terminal_without_raising() -> None:
+    """A removed campaign is an expected terminal condition: the task marks the
+    rec FAILED and returns cleanly instead of raising (which would log a
+    misleading traceback and trip the task_failure/Sentry path)."""
+    from adcopilot.domain.exceptions import CampaignNotFoundError
+    from adcopilot.interfaces.worker.tasks import execute_recommendation_task
+
+    exc = CampaignNotFoundError("Campaign 123 no longer exists or has been removed.")
+
+    with (
+        patch(
+            "adcopilot.interfaces.worker.tasks._run_execute_recommendation",
+            new_callable=AsyncMock,
+            side_effect=exc,
+        ),
+        patch(
+            "adcopilot.interfaces.worker.tasks._handle_execution_failure",
+            new_callable=AsyncMock,
+        ) as mock_handle,
+    ):
+        result = execute_recommendation_task.apply(args=["rec-removed"])
+
+    assert result.successful()  # no exception propagated
+    assert result.result["status"] == "failed"
+    assert "no longer exists" in result.result["reason"]
+    mock_handle.assert_awaited_once_with("rec-removed", str(exc))
+
+
 def test_execute_recommendation_task_handle_failure_exception_is_swallowed() -> None:
     """If _handle_execution_failure raises, the original exc is still propagated."""
     task_self = _make_bound_task(max_retries=3, current_retry=3)

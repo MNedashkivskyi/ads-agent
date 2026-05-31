@@ -853,13 +853,18 @@ def execute_recommendation_task(
             logger.exception("failed to handle auth failure", rec_id=rec_id)
         raise
     except CampaignNotFoundError as exc:
-        # Permanent: the campaign was removed. Retrying can't help — mark FAILED
-        # immediately with a human-readable message instead of burning retries.
+        # Expected, terminal business condition: the recommendation is stale and
+        # the campaign was removed in Google Ads. Mark FAILED and finish the task
+        # cleanly. Re-raising would log a misleading "task raised unexpected"
+        # traceback and trip the task_failure → Sentry path for a non-bug.
+        logger.warning(
+            "recommendation skipped — campaign removed", rec_id=rec_id, error=str(exc)
+        )
         try:
             asyncio.run(_handle_execution_failure(rec_id, str(exc)))
         except Exception:
             logger.exception("failed to handle missing-campaign failure", rec_id=rec_id)
-        raise
+        return {"rec_id": rec_id, "status": "failed", "reason": str(exc)}
     except Exception as exc:
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc) from exc
