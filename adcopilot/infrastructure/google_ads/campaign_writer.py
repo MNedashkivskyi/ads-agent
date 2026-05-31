@@ -20,6 +20,7 @@ Every successful mutation writes an AuditLog entry with the full payload.
 
 from __future__ import annotations
 
+import unicodedata
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -49,6 +50,7 @@ from adcopilot.domain.launch.entities import (
 from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
 from adcopilot.domain.recommendation import RecommendationId
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
+from adcopilot.infrastructure.google_ads.error_messages import is_duplicate_campaign_name
 
 logger = structlog.get_logger(__name__)
 
@@ -67,6 +69,32 @@ def _wrap_exc(operation: str, exc: Exception) -> Exception:
     if is_google_auth_error(exc):
         return GoogleAdsAuthError(str(exc))
     return GoogleAdsUnavailable(f"{operation} failed: {exc}")
+
+
+# Google Ads rejects budget amounts that are not a multiple of the minimum
+# billable unit (10,000 micros = 0.01 of the account currency).
+_BUDGET_MIN_UNIT_MICROS = 10_000
+
+# How many times to retry campaign creation with a disambiguating suffix when
+# the chosen name collides with an existing active/paused campaign.
+_MAX_CAMPAIGN_NAME_ATTEMPTS = 6
+
+
+def _round_to_budget_unit(micros: int) -> int:
+    """Round a micros amount to the nearest Google Ads minimum billable unit."""
+    return round(micros / _BUDGET_MIN_UNIT_MICROS) * _BUDGET_MIN_UNIT_MICROS
+
+
+def _sanitize_ad_text(text: str) -> str:
+    """Strip gimmicky symbols Google Ads prohibits under the SYMBOLS policy.
+
+    Removes Unicode "Symbol, other" (So) characters — stars (★ ☆), bullets,
+    arrows, check marks, emoji — that cause PROHIBITED policy findings, while
+    keeping letters, digits, currency symbols and ordinary punctuation. Any
+    whitespace left behind by removed symbols is collapsed.
+    """
+    cleaned = "".join(ch for ch in text if unicodedata.category(ch) != "So")
+    return " ".join(cleaned.split())
 
 
 class CampaignWriter:
@@ -105,6 +133,61 @@ class CampaignWriter:
         )
         await self._audit.save(log)
 
+    def _mutate_campaign_with_unique_name(
+        self,
+        campaign_service: Any,
+        cid: str,
+        campaign_op: Any,
+        campaign: Any,
+        base_name: str,
+    ) -> str:
+        """Create the campaign, retrying with a numeric suffix on name clashes.
+
+        Google Ads requires a campaign name unique among the account's active
+        and paused campaigns. If ``base_name`` is taken (e.g. the user launched
+        a similar campaign before, or a previous attempt left one behind), retry
+        as "name (2)", "name (3)", … so a launch is never blocked purely by a
+        name collision. Returns the created campaign resource name.
+        """
+        last_exc: Exception | None = None
+        for attempt in range(_MAX_CAMPAIGN_NAME_ATTEMPTS):
+            campaign.name = base_name if attempt == 0 else f"{base_name} ({attempt + 1})"
+            try:
+                response = campaign_service.mutate_campaigns(
+                    customer_id=cid, operations=[campaign_op]
+                )
+                if attempt > 0:
+                    logger.info(
+                        "campaign_name_disambiguated",
+                        final_name=campaign.name,
+                        attempts=attempt + 1,
+                    )
+                return str(response.results[0].resource_name)
+            except Exception as exc:  # noqa: BLE001 — re-raised unless it's a name clash
+                if is_duplicate_campaign_name(exc) and attempt < _MAX_CAMPAIGN_NAME_ATTEMPTS - 1:
+                    last_exc = exc
+                    logger.warning("duplicate_campaign_name_retry", attempted_name=campaign.name)
+                    continue
+                raise
+        # Unreachable: the final attempt either succeeds or re-raises above.
+        raise last_exc  # type: ignore[misc]
+
+    def _safe_remove_budget(
+        self, client: Any, budget_service: Any, cid: str, budget_rn: str
+    ) -> None:
+        """Best-effort delete of a just-created budget after a campaign failure.
+
+        Prevents orphan budgets when the campaign cannot be created (the budget
+        is created first). Any error here is logged and swallowed.
+        """
+        try:
+            op = client.get_type("CampaignBudgetOperation")
+            op.remove = budget_rn
+            budget_service.mutate_campaign_budgets(customer_id=cid, operations=[op])
+            logger.info("orphan_budget_removed", budget_rn=budget_rn)
+        except Exception:  # noqa: BLE001 — cleanup must never mask the real error
+            logger.warning("orphan_budget_cleanup_failed", budget_rn=budget_rn)
+
     # ------------------------------------------------------------------
     # Step 1 — Campaign + Budget
     # ------------------------------------------------------------------
@@ -124,8 +207,8 @@ class CampaignWriter:
             budget_service = client.get_service("CampaignBudgetService")
             budget_op = client.get_type("CampaignBudgetOperation")
             budget = budget_op.create
-            budget.name = f"{proposal.campaign_name} Budget"
-            budget.amount_micros = proposal.daily_budget_micros
+            budget.name = f"{proposal.campaign_name} Budget – {uuid.uuid4().hex[:8]}"
+            budget.amount_micros = _round_to_budget_unit(proposal.daily_budget_micros)
             budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
 
             budget_response = budget_service.mutate_campaign_budgets(
@@ -141,6 +224,9 @@ class CampaignWriter:
             campaign.status = client.enums.CampaignStatusEnum.PAUSED
             campaign.campaign_budget = budget_rn
             campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
+            campaign.contains_eu_political_advertising = (
+                client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+            )
 
             strategy = proposal.bidding_strategy.upper().replace(" ", "_")
             _STRATEGY_MAP = {
@@ -152,7 +238,7 @@ class CampaignWriter:
             }
             field = _STRATEGY_MAP.get(strategy, "maximize_conversions")
             sub = getattr(campaign, field)
-            sub.CopyFrom(type(sub)())
+            client.copy_from(sub, type(sub)())
 
             # Geographic targeting
             geo_target = campaign.geo_target_type_setting
@@ -160,10 +246,15 @@ class CampaignWriter:
                 client.enums.PositiveGeoTargetTypeEnum.PRESENCE_OR_INTEREST
             )
 
-            campaign_response = campaign_service.mutate_campaigns(
-                customer_id=cid, operations=[campaign_op]
-            )
-            campaign_rn: str = campaign_response.results[0].resource_name
+            try:
+                campaign_rn: str = self._mutate_campaign_with_unique_name(
+                    campaign_service, cid, campaign_op, campaign, proposal.campaign_name
+                )
+            except Exception:
+                # Campaign creation failed for good — remove the orphan budget
+                # we created moments ago so it does not accumulate on the account.
+                self._safe_remove_budget(client, budget_service, cid, budget_rn)
+                raise
 
             logger.info(
                 "campaign_created",
@@ -328,7 +419,11 @@ class CampaignWriter:
                 ad.final_urls.append(adp.final_url)
 
                 rsa = ad.responsive_search_ad
-                for i, hl in enumerate(adp.headlines[:15]):
+                _headlines = [t for t in (_sanitize_ad_text(h) for h in adp.headlines[:15]) if t]
+                _descriptions = [
+                    t for t in (_sanitize_ad_text(d) for d in adp.descriptions[:4]) if t
+                ]
+                for i, hl in enumerate(_headlines):
                     asset = client.get_type("AdTextAsset")
                     asset.text = hl
                     # Pin first 3 headlines to positions 1-3
@@ -340,7 +435,7 @@ class CampaignWriter:
                         )
                     rsa.headlines.append(asset)
 
-                for i, desc in enumerate(adp.descriptions[:4]):  # noqa: B007
+                for desc in _descriptions:
                     asset = client.get_type("AdTextAsset")
                     asset.text = desc
                     rsa.descriptions.append(asset)
@@ -569,7 +664,16 @@ class CampaignWriter:
                 "SATURDAY": client.enums.DayOfWeekEnum.SATURDAY,
                 "SUNDAY": client.enums.DayOfWeekEnum.SUNDAY,
             }
-            _MINUTE_MAP = {0: 0, 15: 15, 30: 30, 45: 45}
+            # start_minute / end_minute are MinuteOfHour enums — assigning a
+            # raw integer 0 maps to UNSPECIFIED, which Google Ads rejects as a
+            # missing required field. Map quarter-hours to the proper enum.
+            _MINUTE_ENUM = client.enums.MinuteOfHourEnum
+            _MINUTE_MAP = {
+                0: _MINUTE_ENUM.ZERO,
+                15: _MINUTE_ENUM.FIFTEEN,
+                30: _MINUTE_ENUM.THIRTY,
+                45: _MINUTE_ENUM.FORTY_FIVE,
+            }
 
             ops: list[Any] = []
             for entry in schedule:
@@ -580,9 +684,9 @@ class CampaignWriter:
                 sched = criterion.ad_schedule
                 sched.day_of_week = _DAY_MAP[entry.day_of_week]
                 sched.start_hour = entry.start_hour
-                sched.start_minute = _MINUTE_MAP.get(entry.start_minute, 0)
+                sched.start_minute = _MINUTE_MAP.get(entry.start_minute, _MINUTE_ENUM.ZERO)
                 sched.end_hour = entry.end_hour
-                sched.end_minute = _MINUTE_MAP.get(entry.end_minute, 0)
+                sched.end_minute = _MINUTE_MAP.get(entry.end_minute, _MINUTE_ENUM.ZERO)
                 ops.append(op)
 
             response = cc_service.mutate_campaign_criteria(customer_id=cid, operations=ops)
@@ -633,8 +737,8 @@ class CampaignWriter:
             budget_service = client.get_service("CampaignBudgetService")
             budget_op = client.get_type("CampaignBudgetOperation")
             budget = budget_op.create
-            budget.name = f"{proposal.brand_campaign_name} Budget"
-            budget.amount_micros = proposal.brand_daily_budget_micros
+            budget.name = f"{proposal.brand_campaign_name} Budget – {uuid.uuid4().hex[:8]}"
+            budget.amount_micros = _round_to_budget_unit(proposal.brand_daily_budget_micros)
             budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
             budget_response = budget_service.mutate_campaign_budgets(
                 customer_id=cid, operations=[budget_op]
@@ -649,11 +753,17 @@ class CampaignWriter:
             campaign.status = client.enums.CampaignStatusEnum.PAUSED
             campaign.campaign_budget = budget_rn
             campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.SEARCH
-            campaign.target_spend.CopyFrom(type(campaign.target_spend)())
-            campaign_response = campaign_service.mutate_campaigns(
-                customer_id=cid, operations=[campaign_op]
+            campaign.contains_eu_political_advertising = (
+                client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
             )
-            campaign_rn: str = campaign_response.results[0].resource_name
+            client.copy_from(campaign.target_spend, type(campaign.target_spend)())
+            try:
+                campaign_rn: str = self._mutate_campaign_with_unique_name(
+                    campaign_service, cid, campaign_op, campaign, proposal.brand_campaign_name
+                )
+            except Exception:
+                self._safe_remove_budget(client, budget_service, cid, budget_rn)
+                raise
 
             # Ad group
             ag_service = client.get_service("AdGroupService")
@@ -752,7 +862,7 @@ class CampaignWriter:
                     criterion.negative = False
                     criterion.bid_modifier = 1.0
                     criterion.user_interest.user_interest_category = (
-                        f"userinterests/{signal.segment_id}"
+                        f"customers/{cid}/userInterests/{signal.segment_id}"
                     )
                     ops.append(op)
 
@@ -802,8 +912,8 @@ class CampaignWriter:
             budget_service = client.get_service("CampaignBudgetService")
             budget_op = client.get_type("CampaignBudgetOperation")
             budget = budget_op.create
-            budget.name = f"{proposal.campaign_name} Budget"
-            budget.amount_micros = proposal.daily_budget_micros
+            budget.name = f"{proposal.campaign_name} Budget – {uuid.uuid4().hex[:8]}"
+            budget.amount_micros = _round_to_budget_unit(proposal.daily_budget_micros)
             budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
 
             budget_resp = budget_service.mutate_campaign_budgets(
@@ -817,6 +927,9 @@ class CampaignWriter:
             campaign = campaign_op.create
             campaign.name = proposal.campaign_name
             campaign.advertising_channel_type = client.enums.AdvertisingChannelTypeEnum.DISPLAY
+            campaign.contains_eu_political_advertising = (
+                client.enums.EuPoliticalAdvertisingStatusEnum.DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING
+            )
             campaign.status = client.enums.CampaignStatusEnum.PAUSED
             campaign.campaign_budget = budget_rn
             campaign.bidding_strategy_type = (
@@ -962,7 +1075,7 @@ class CampaignWriter:
             campaign.status = client.enums.CampaignStatusEnum.ENABLED
             from google.protobuf import field_mask_pb2
 
-            op.update_mask.CopyFrom(field_mask_pb2.FieldMask(paths=["status"]))
+            client.copy_from(op.update_mask, field_mask_pb2.FieldMask(paths=["status"]))
             campaign_service.mutate_campaigns(customer_id=cid, operations=[op])
 
             logger.info(

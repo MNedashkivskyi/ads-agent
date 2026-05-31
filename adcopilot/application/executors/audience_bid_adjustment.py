@@ -49,10 +49,10 @@ async def execute_audience_bid_adjustment(
         campaign_criterion.bid_modifier = new_bid_modifier
 
         operation = google_ads_client.get_type("CampaignCriterionOperation")
-        operation.update.CopyFrom(campaign_criterion)
+        google_ads_client.copy_from(operation.update, campaign_criterion)
         field_mask = google_ads_client.get_type("FieldMask")
         field_mask.paths.append("bid_modifier")
-        operation.update_mask.CopyFrom(field_mask)
+        google_ads_client.copy_from(operation.update_mask, field_mask)
 
         response = campaign_criterion_service.mutate_campaign_criteria(
             customer_id=account_id,

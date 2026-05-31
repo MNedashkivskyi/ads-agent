@@ -1,13 +1,12 @@
 """Add website_url column to launch_briefs.
 
-The shared database was stamped at revision ``0056`` by an earlier deploy of
-the website_url feature. To keep every branch cut from ``master`` aligned with
-the live database (and able to boot), this idempotent migration is carried on
-``master`` as the canonical 0056.
-
-The upgrade uses ``ADD COLUMN IF NOT EXISTS`` so it is a safe no-op on the
-already-migrated database and correct on a fresh one. The column is nullable
-and unused by code on branches that have not adopted the website_url feature.
+This branch does not use the website_url application feature (it lives on
+``fix/launch-critical-bugs``), but the shared database was already stamped at
+revision ``0056`` by an earlier deploy. Alembic must be able to locate the
+revision to boot, so the script is carried here too. The upgrade is idempotent
+(IF NOT EXISTS), making it a safe no-op on the already-migrated database and
+still correct on a fresh one. The nullable column is unused by this branch's
+ORM model, so leaving it in place is harmless.
 
 Revision ID: 0056
 Revises: 0055
