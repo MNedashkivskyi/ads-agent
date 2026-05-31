@@ -854,17 +854,19 @@ def execute_recommendation_task(
         raise
     except CampaignNotFoundError as exc:
         # Expected, terminal business condition: the recommendation is stale and
-        # the campaign was removed in Google Ads. Mark FAILED and finish the task
-        # cleanly. Re-raising would log a misleading "task raised unexpected"
-        # traceback and trip the task_failure → Sentry path for a non-bug.
+        # the campaign was removed in Google Ads. There is nothing to retry, so
+        # mark it (and any siblings targeting the same removed campaign) EXPIRED
+        # and finish the task cleanly. Re-raising would log a misleading "task
+        # raised unexpected" traceback and trip the task_failure → Sentry path.
         logger.warning(
-            "recommendation skipped — campaign removed", rec_id=rec_id, error=str(exc)
+            "recommendation expired — campaign removed", rec_id=rec_id, error=str(exc)
         )
+        expired = 0
         try:
-            asyncio.run(_handle_execution_failure(rec_id, str(exc)))
+            expired = asyncio.run(_expire_recs_for_removed_campaign(rec_id))
         except Exception:
-            logger.exception("failed to handle missing-campaign failure", rec_id=rec_id)
-        return {"rec_id": rec_id, "status": "failed", "reason": str(exc)}
+            logger.exception("failed to expire recs for removed campaign", rec_id=rec_id)
+        return {"rec_id": rec_id, "status": "expired", "reason": str(exc), "expired": expired}
     except Exception as exc:
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc) from exc
@@ -990,6 +992,50 @@ async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
                 error=error_message,
             )
             # TODO(phase-1): send execution failed notification via new notifier
+    finally:
+        await engine.dispose()
+
+
+async def _expire_recs_for_removed_campaign(rec_id: str) -> int:
+    """Expire a stale rec (and siblings) whose target campaign was removed.
+
+    Returns the number of recommendations expired. Keeping the list "actual"
+    this way avoids re-running full detection just to drop dead suggestions.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            rec_repo = SqlRecommendationRepository(session)
+            rec = await rec_repo.get(RecommendationId(rec_id))
+            if rec is None:
+                logger.error("recommendation not found during expiry", rec_id=rec_id)
+                return 0
+
+            campaign_id = rec.target.get("campaign_id")
+            if campaign_id is None:
+                # No campaign target — just expire this one rec.
+                await rec_repo.update_status(
+                    RecommendationId(rec_id), RecommendationStatus.EXPIRED
+                )
+                return 1
+
+            expired = await rec_repo.expire_open_for_campaign(rec.account_id, int(campaign_id))
+            logger.info(
+                "expired recommendations for removed campaign",
+                rec_id=rec_id,
+                campaign_id=campaign_id,
+                expired=expired,
+            )
+            return expired
     finally:
         await engine.dispose()
 

@@ -105,6 +105,37 @@ class SqlRecommendationRepository:
         if m:
             m.status = status.value
 
+    async def expire_open_for_campaign(self, account_id: AccountId, campaign_id: int) -> int:
+        """Mark every still-open rec targeting a (removed) campaign EXPIRED.
+
+        "Open" means PENDING / FAILED / APPROVED — i.e. anything the user could
+        still act on or retry. Used to self-heal the list when a campaign is
+        found to no longer exist, without re-running full detection. Returns the
+        number of recommendations expired.
+        """
+        from sqlalchemy import update
+
+        stmt = (
+            update(RecommendationModel)
+            .where(
+                RecommendationModel.account_id == uuid.UUID(account_id),
+                RecommendationModel.target["campaign_id"].astext == str(campaign_id),
+                RecommendationModel.status.in_(
+                    [
+                        RecommendationStatus.PENDING.value,
+                        RecommendationStatus.FAILED.value,
+                        RecommendationStatus.APPROVED.value,
+                    ]
+                ),
+            )
+            .values(
+                status=RecommendationStatus.EXPIRED.value,
+                updated_at=datetime.now(tz=UTC),
+            )
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount or 0
+
     async def update_explanation(self, rec_id: RecommendationId, explanation: str) -> None:
         result = await self._session.execute(
             select(RecommendationModel).where(RecommendationModel.id == uuid.UUID(rec_id))

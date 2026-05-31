@@ -150,9 +150,9 @@ def test_execute_recommendation_task_calls_handle_failure_when_retries_exhausted
     mock_handle.assert_awaited_once_with("rec-abc", "permanent failure")
 
 
-def test_execute_recommendation_task_campaign_removed_is_terminal_without_raising() -> None:
-    """A removed campaign is an expected terminal condition: the task marks the
-    rec FAILED and returns cleanly instead of raising (which would log a
+def test_execute_recommendation_task_campaign_removed_expires_without_raising() -> None:
+    """A removed campaign is an expected terminal condition: the task expires the
+    stale rec(s) and returns cleanly instead of raising (which would log a
     misleading traceback and trip the task_failure/Sentry path)."""
     from adcopilot.domain.exceptions import CampaignNotFoundError
     from adcopilot.interfaces.worker.tasks import execute_recommendation_task
@@ -166,16 +166,18 @@ def test_execute_recommendation_task_campaign_removed_is_terminal_without_raisin
             side_effect=exc,
         ),
         patch(
-            "adcopilot.interfaces.worker.tasks._handle_execution_failure",
+            "adcopilot.interfaces.worker.tasks._expire_recs_for_removed_campaign",
             new_callable=AsyncMock,
-        ) as mock_handle,
+            return_value=2,
+        ) as mock_expire,
     ):
         result = execute_recommendation_task.apply(args=["rec-removed"])
 
     assert result.successful()  # no exception propagated
-    assert result.result["status"] == "failed"
+    assert result.result["status"] == "expired"
+    assert result.result["expired"] == 2
     assert "no longer exists" in result.result["reason"]
-    mock_handle.assert_awaited_once_with("rec-removed", str(exc))
+    mock_expire.assert_awaited_once_with("rec-removed")
 
 
 def test_execute_recommendation_task_handle_failure_exception_is_swallowed() -> None:
