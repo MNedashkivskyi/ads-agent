@@ -16,6 +16,34 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["conversion-tracking"])
 
 
+async def _latest_final_urls_json(session, account_id) -> str:
+    """Return the most recent ad ``final_urls`` JSON for an account.
+
+    Platform detection, GTM container generation and partner requests must all
+    read from the SAME source — ``ad_snapshots.final_urls_json`` — so the
+    detected platform stays consistent across the wizard. (Earlier code queried
+    ``keyword_snapshots.final_urls``, a column that does not exist.)
+    """
+    import uuid
+
+    from sqlalchemy import desc, select
+
+    from adcopilot.infrastructure.db.models import AdSnapshotModel
+
+    acct_uuid = account_id if isinstance(account_id, uuid.UUID) else uuid.UUID(str(account_id))
+    stmt = (
+        select(AdSnapshotModel.final_urls_json)
+        .where(
+            AdSnapshotModel.account_id == acct_uuid,
+            AdSnapshotModel.final_urls_json.isnot(None),
+        )
+        .order_by(desc(AdSnapshotModel.snapshot_date))
+        .limit(1)
+    )
+    row = (await session.execute(stmt)).scalar_one_or_none()
+    return row or "[]"
+
+
 class ConversionActionStatusResponse(BaseModel):
     action_id: int
     name: str
@@ -163,7 +191,6 @@ async def get_platform_detection(
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    from sqlalchemy import desc, select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.application.use_cases.detect_website_platform import (
@@ -171,7 +198,6 @@ async def get_platform_detection(
     )
     from adcopilot.domain.conversion_tracking.installation_guides import get_guide
     from adcopilot.domain.entities import UserId
-    from adcopilot.infrastructure.db.models import AdSnapshotModel
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
@@ -185,24 +211,10 @@ async def get_platform_detection(
                 raise HTTPException(status_code=404, detail="No Google Ads accounts found")
 
             account = accounts[0]
-            import uuid
-
-            acct_uuid = uuid.UUID(str(account.id))
-
-            stmt = (
-                select(AdSnapshotModel.final_urls_json)
-                .where(
-                    AdSnapshotModel.account_id == acct_uuid,
-                    AdSnapshotModel.final_urls_json.isnot(None),
-                )
-                .order_by(desc(AdSnapshotModel.snapshot_date))
-                .limit(1)
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
+            final_urls_json = await _latest_final_urls_json(session, account.id)
     finally:
         await engine.dispose()
 
-    final_urls_json = row or "[]"
     platform = await detect_platform_from_final_urls(final_urls_json)
     guide = get_guide(platform)
 
@@ -323,43 +335,55 @@ async def get_gtm_container(
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    from sqlalchemy import select, text
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.application.use_cases.detect_website_platform import (
         detect_platform_from_final_urls,
     )
     from adcopilot.application.use_cases.generate_gtm_container import generate_gtm_container
-    from adcopilot.domain.entities import UserId
-    from adcopilot.infrastructure.db.models import KeywordSnapshotModel
+    from adcopilot.domain.entities import AccountId, UserId
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
+    )
+    from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
 
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with AsyncSession(engine) as session:
             account_repo = SqlGoogleAdsAccountRepository(session)
+            credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
             accounts = await account_repo.list_for_user(UserId(user_id))
             if not accounts:
                 raise HTTPException(status_code=404, detail="No accounts found")
             account = accounts[0]
-
-            stmt = (
-                select(KeywordSnapshotModel.final_urls)
-                .where(KeywordSnapshotModel.account_id == account.id)
-                .order_by(text("snapshot_date DESC"))
-                .limit(1)
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
+            final_urls_json = await _latest_final_urls_json(session, account.id)
+            credentials = await credentials_repo.get(AccountId(account.id))
     finally:
         await engine.dispose()
 
-    final_urls_json = row or "[]"
     platform = await detect_platform_from_final_urls(final_urls_json)
+
+    # Prefer the account's real conversion tag (AW-<id>/<label>); fall back to
+    # placeholders the user fills in manually only if it can't be retrieved.
+    resolved_id = conversion_id
+    resolved_label = conversion_label
+    if not resolved_id and credentials is not None:
+        try:
+            tag = await GoogleAdsQueriesAdapter(settings).get_primary_conversion_tag(
+                credentials.refresh_token, account.customer_id
+            )
+        except Exception as exc:  # noqa: BLE001 — tag retrieval is best-effort
+            logger.warning("gtm_container.tag_lookup_failed", error=str(exc))
+            tag = None
+        if tag is not None:
+            resolved_id, resolved_label = tag
+
     container = generate_gtm_container(
-        conversion_id=conversion_id or "AW-XXXXXXXXX/YYYYYYYYYYYYYYY",
-        conversion_label=conversion_label or "YYYYYYYYYYYYYYY",
+        conversion_id=resolved_id or "AW-XXXXXXXXX",
+        conversion_label=resolved_label or "YYYYYYYYYYYYYYY",
         platform=platform,
     )
     return GTMContainerResponse(
@@ -477,7 +501,6 @@ async def request_implementation_endpoint(
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    from sqlalchemy import select, text
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.application.use_cases.detect_website_platform import (
@@ -485,7 +508,6 @@ async def request_implementation_endpoint(
     )
     from adcopilot.application.use_cases.request_implementation import request_implementation
     from adcopilot.domain.entities import UserId
-    from adcopilot.infrastructure.db.models import KeywordSnapshotModel
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
@@ -499,14 +521,8 @@ async def request_implementation_endpoint(
                 raise HTTPException(status_code=404, detail="No accounts found")
             account = accounts[0]
 
-            stmt = (
-                select(KeywordSnapshotModel.final_urls)
-                .where(KeywordSnapshotModel.account_id == account.id)
-                .order_by(text("snapshot_date DESC"))
-                .limit(1)
-            )
-            row = (await session.execute(stmt)).scalar_one_or_none()
-            platform = await detect_platform_from_final_urls(row or "[]")
+            final_urls_json = await _latest_final_urls_json(session, account.id)
+            platform = await detect_platform_from_final_urls(final_urls_json)
 
             try:
                 req = await request_implementation(

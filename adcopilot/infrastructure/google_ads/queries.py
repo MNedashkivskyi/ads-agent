@@ -261,6 +261,46 @@ async def list_conversion_actions(
         raise _wrap_exc(exc) from exc
 
 
+async def get_primary_conversion_tag(
+    refresh_token: str,
+    customer_id: str,
+    settings: Settings,
+) -> tuple[str, str] | None:
+    """Return ``(conversion_id, conversion_label)`` for the account's primary tag.
+
+    Reads the ``tag_snippets`` of ENABLED conversion actions and parses the
+    gtag ``send_to`` target (``AW-<id>/<label>``) so a generated GTM container
+    points at a real conversion action. Returns ``None`` when no ENABLED action
+    exposes a tag snippet.
+    """
+    from adcopilot.domain.conversion_tracking.tag_parsing import parse_conversion_send_to
+
+    cid = customer_id.replace("-", "")
+    query = """
+        SELECT
+            conversion_action.id,
+            conversion_action.status,
+            conversion_action.tag_snippets
+        FROM conversion_action
+        WHERE conversion_action.status = 'ENABLED'
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                for snippet in row.conversion_action.tag_snippets:
+                    parsed = parse_conversion_send_to(snippet.event_snippet)
+                    if parsed is not None:
+                        return parsed
+        return None
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
 async def list_recent_search_terms(
     refresh_token: str,
     customer_id: str,
