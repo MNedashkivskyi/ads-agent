@@ -538,7 +538,9 @@ class TestRule6LandingPage:
 
     def test_http_url_fails(self):
         """HTTP (non-HTTPS) URL fails Rule 6."""
-        url = "http://example.com"
+        # Use a non-placeholder host: bare example.com is skipped as a template
+        # placeholder (see _PLACEHOLDER_HOSTS), which would bypass Rule 6.
+        url = "http://mojafirma.pl"
         ctx = ValidationContext(
             landing_page_results={
                 url: LandingPageCheckResult(
