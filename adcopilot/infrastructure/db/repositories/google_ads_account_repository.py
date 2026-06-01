@@ -54,8 +54,18 @@ class SqlGoogleAdsAccountRepository:
         return _model_to_domain(model) if model else None
 
     async def list_for_user(self, user_id: UserId) -> list[GoogleAdsAccount]:
+        # Deterministic ordering (oldest connection first, id as tiebreak) so
+        # callers that use accounts[0] as the "primary" account always resolve
+        # to the same account across requests. Without an explicit ORDER BY,
+        # Postgres row order is arbitrary, which made the displayed account and
+        # the account targeted by mutations diverge for multi-account users.
         result = await self._session.execute(
-            select(GoogleAdsAccountModel).where(GoogleAdsAccountModel.user_id == uuid.UUID(user_id))
+            select(GoogleAdsAccountModel)
+            .where(GoogleAdsAccountModel.user_id == uuid.UUID(user_id))
+            .order_by(
+                GoogleAdsAccountModel.connected_at.asc(),
+                GoogleAdsAccountModel.id.asc(),
+            )
         )
         return [_model_to_domain(m) for m in result.scalars().all()]
 
