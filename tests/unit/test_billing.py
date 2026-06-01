@@ -126,6 +126,9 @@ async def test_oauth_callback_enforces_starter_account_limit() -> None:
 
     starter_user = _make_user(plan=PlanTier.STARTER)
     existing_account = MagicMock()
+    # A genuine (non-reauth) connection — otherwise the callback treats it as a
+    # reconnect and skips the per-plan limit check (oauth.py is_reauth guard).
+    existing_account.needs_reauth = False
 
     mock_user_repo = MagicMock()
     mock_user_repo.ensure_exists = AsyncMock(return_value=starter_user)
