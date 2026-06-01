@@ -255,6 +255,61 @@ async def test_execute_calls_mutation_and_returns_result() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Campaign-existence pre-flight guard
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_execute_checks_campaign_exists_before_mutating() -> None:
+    """When the rec targets a campaign, existence is verified before the mutation."""
+    rec = _rec(
+        RecommendationKind.PAUSE_KEYWORD,
+        target={"campaign_id": 500, "ad_group_id": 10, "criterion_id": 99},
+    )
+    uc, mutations = _make_use_case(rec)
+    await uc.execute(rec.id)
+
+    methods = [c["method"] for c in mutations.calls]
+    assert methods[0] == "campaign_exists"
+    assert "pause_keyword" in methods
+    uc._rec_repo.update_status.assert_awaited_once_with(rec.id, RecommendationStatus.EXECUTED)
+
+
+@pytest.mark.asyncio
+async def test_execute_raises_when_campaign_removed_and_skips_mutation() -> None:
+    """A removed/missing campaign fails terminally without running the executor."""
+    from adcopilot.domain.exceptions import CampaignNotFoundError
+
+    rec = _rec(
+        RecommendationKind.PAUSE_KEYWORD,
+        target={"campaign_id": 500, "ad_group_id": 10, "criterion_id": 99},
+    )
+    mutations = FakeGoogleAdsMutations(missing_campaign_ids={500})
+    uc, mutations = _make_use_case(rec, mutations=mutations)
+
+    with pytest.raises(CampaignNotFoundError, match="no longer exists"):
+        await uc.execute(rec.id)
+
+    methods = [c["method"] for c in mutations.calls]
+    assert methods == ["campaign_exists"]  # executor never ran
+    uc._rec_repo.update_status.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_execute_without_campaign_target_skips_existence_check() -> None:
+    """Recs that don't target a campaign don't trigger an extra API call."""
+    rec = _rec(
+        RecommendationKind.PAUSE_KEYWORD,
+        target={"ad_group_id": 10, "criterion_id": 99},
+    )
+    uc, mutations = _make_use_case(rec)
+    await uc.execute(rec.id)
+
+    methods = [c["method"] for c in mutations.calls]
+    assert "campaign_exists" not in methods
+
+
+# ---------------------------------------------------------------------------
 # ChangeMatchTypeExecutor
 # ---------------------------------------------------------------------------
 

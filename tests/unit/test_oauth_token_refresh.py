@@ -127,7 +127,7 @@ def _make_bound_task(max_retries: int = 3, current_retry: int = 0) -> MagicMock:
     return task_self
 
 
-def _run_task_body(task_self: MagicMock, rec_id: str) -> None:
+def _run_task_body(task_self: MagicMock, rec_id: str) -> object:
     """Replicate the execute_recommendation_task body for isolated unit testing."""
     import asyncio
     import contextlib
@@ -142,9 +142,10 @@ def _run_task_body(task_self: MagicMock, rec_id: str) -> None:
     try:
         asyncio.run(_run_execute_recommendation(rec_id))
     except GoogleAdsAuthError:
+        # Terminal, non-retriable: handle and finish cleanly (no re-raise).
         with contextlib.suppress(Exception):
             asyncio.run(_handle_auth_failure(rec_id))
-        raise
+        return {"rec_id": rec_id, "status": "failed", "reason": "needs_reauth"}
     except Exception as exc:
         if task_self.request.retries < task_self.max_retries:
             raise task_self.retry(exc=exc) from exc
@@ -155,7 +156,7 @@ def _run_task_body(task_self: MagicMock, rec_id: str) -> None:
 
 
 def test_auth_error_is_not_retried() -> None:
-    """GoogleAdsAuthError must propagate immediately without calling self.retry()."""
+    """GoogleAdsAuthError is handled terminally without calling self.retry()."""
     task_self = _make_bound_task(max_retries=3, current_retry=0)
     auth_exc = GoogleAdsAuthError("invalid_grant")
 
@@ -169,15 +170,15 @@ def test_auth_error_is_not_retried() -> None:
             "adcopilot.interfaces.worker.tasks._handle_auth_failure",
             new_callable=AsyncMock,
         ),
-        pytest.raises(GoogleAdsAuthError),
     ):
-        _run_task_body(task_self, "rec-1")
+        result = _run_task_body(task_self, "rec-1")
 
+    assert result["reason"] == "needs_reauth"
     task_self.retry.assert_not_called()
 
 
 def test_auth_error_calls_handle_auth_failure() -> None:
-    """GoogleAdsAuthError must trigger _handle_auth_failure."""
+    """GoogleAdsAuthError must trigger _handle_auth_failure and finish cleanly."""
     task_self = _make_bound_task(max_retries=3, current_retry=0)
 
     with (
@@ -190,10 +191,33 @@ def test_auth_error_calls_handle_auth_failure() -> None:
             "adcopilot.interfaces.worker.tasks._handle_auth_failure",
             new_callable=AsyncMock,
         ) as mock_handle,
-        pytest.raises(GoogleAdsAuthError),
     ):
-        _run_task_body(task_self, "rec-auth")
+        result = _run_task_body(task_self, "rec-auth")
 
+    assert result["status"] == "failed"
+    mock_handle.assert_awaited_once_with("rec-auth")
+
+
+def test_auth_error_real_task_is_terminal_without_raising() -> None:
+    """The real Celery task (not the replica) handles an expired token cleanly:
+    no exception propagates, so Celery doesn't log a misleading traceback."""
+    from adcopilot.interfaces.worker.tasks import execute_recommendation_task
+
+    with (
+        patch(
+            "adcopilot.interfaces.worker.tasks._run_execute_recommendation",
+            new_callable=AsyncMock,
+            side_effect=GoogleAdsAuthError("invalid_grant: Token has been expired or revoked."),
+        ),
+        patch(
+            "adcopilot.interfaces.worker.tasks._handle_auth_failure",
+            new_callable=AsyncMock,
+        ) as mock_handle,
+    ):
+        result = execute_recommendation_task.apply(args=["rec-auth"])
+
+    assert result.successful()
+    assert result.result["reason"] == "needs_reauth"
     mock_handle.assert_awaited_once_with("rec-auth")
 
 

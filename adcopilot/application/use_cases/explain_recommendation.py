@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import string
+
 import structlog
 
 from adcopilot.application.detection.templates import (
@@ -14,6 +16,31 @@ from adcopilot.application.ports.recommendation_repository import Recommendation
 from adcopilot.domain.recommendation import RecommendationId
 
 logger = structlog.get_logger(__name__)
+
+
+class _SafeFormatter(string.Formatter):
+    """Formatter that tolerates missing keys and bad format specs.
+
+    Missing placeholders resolve to an empty string instead of raising
+    ``KeyError`` — this prevents un-substituted tokens like ``{campaign_name}``
+    (or the raw prompt template) from leaking into the LLM input and, in turn,
+    into the user-facing explanation.
+    """
+
+    def get_value(self, key: object, args: object, kwargs: object) -> object:  # type: ignore[override]
+        if isinstance(key, str):
+            return kwargs.get(key, "")  # type: ignore[union-attr]
+        return super().get_value(key, args, kwargs)  # type: ignore[arg-type]
+
+    def format_field(self, value: object, format_spec: str) -> str:
+        try:
+            return super().format_field(value, format_spec)
+        except (ValueError, TypeError):
+            # e.g. ``{roas:.1f}`` when roas is missing (empty string)
+            return str(value)
+
+
+_FORMATTER = _SafeFormatter()
 
 
 def _build_prompt(template: str, evidence: dict[str, object], savings: str) -> str:
@@ -39,11 +66,7 @@ def _build_prompt(template: str, evidence: dict[str, object], savings: str) -> s
     # Also merge all evidence keys directly for maximum flexibility
     fmt.update({k: v for k, v in evidence.items() if k not in fmt})
 
-    try:
-        return template.format(**fmt)
-    except (KeyError, ValueError):
-        # Last-resort: return the template with savings injected literally
-        return f"{template}\n\nEstimated savings: {savings}"
+    return _FORMATTER.format(template, **fmt)
 
 
 class ExplainRecommendationUseCase:

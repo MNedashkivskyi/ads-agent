@@ -138,6 +138,41 @@ async def test_engine_one_rec_rule_saves_and_returns() -> None:
 
 
 @pytest.mark.asyncio
+async def test_engine_reconciles_stale_pending_when_campaigns_present() -> None:
+    """When real campaign data exists, the engine expires PENDING recs that the
+    current run no longer detects, keeping only currently-actual candidate keys."""
+    rec = _make_rec()
+    repo = MagicMock()
+    repo.list_active_dedup_keys = AsyncMock(return_value=set())
+    repo.save = AsyncMock()
+    repo.expire_pending_not_matching = AsyncMock(return_value=3)
+
+    ctx = _make_ctx()
+    object.__setattr__(ctx, "campaigns", [MagicMock()])  # non-empty → reconcile
+
+    engine = RuleEngine(rules=[_OneRecRule(rec)], rec_repo=repo)
+    await engine.run(ctx)
+
+    repo.expire_pending_not_matching.assert_awaited_once()
+    _account_id, keep_keys = repo.expire_pending_not_matching.await_args.args
+    assert (rec.kind.value, rec.target_hash) in keep_keys
+
+
+@pytest.mark.asyncio
+async def test_engine_skips_reconcile_when_no_campaign_data() -> None:
+    """An empty/failed snapshot (no campaigns) must not expire anything."""
+    repo = MagicMock()
+    repo.list_active_dedup_keys = AsyncMock(return_value=set())
+    repo.save = AsyncMock()
+    repo.expire_pending_not_matching = AsyncMock(return_value=0)
+
+    engine = RuleEngine(rules=[_EmptyRule()], rec_repo=repo)
+    await engine.run(_make_ctx())  # campaigns=[]
+
+    repo.expire_pending_not_matching.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_engine_dedup_skips_existing_pending() -> None:
     """If (kind, target_hash) already exists, engine skips the new rec."""
     rec = _make_rec()

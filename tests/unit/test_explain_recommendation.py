@@ -161,6 +161,26 @@ async def test_explain_missing_evidence_keys_do_not_crash() -> None:
 
 
 @pytest.mark.asyncio
+async def test_explain_missing_keys_do_not_leak_placeholders_into_prompt() -> None:
+    """Un-substituted placeholders must never reach the LLM prompt.
+
+    Regression: a template with missing evidence keys previously fell back to
+    dumping the raw template (including ``{campaign_name}``) into the prompt,
+    which the LLM echoed verbatim into the user-facing explanation.
+    """
+    llm = FakeLLMClient(default="ok")
+    rec = _rec(RecommendationKind.ORPHANED_CAMPAIGN, evidence={})
+    repo = _repo(rec)
+    uc = ExplainRecommendationUseCase(llm=llm, repo=repo)
+
+    await uc.execute(rec.id, language="pl")
+
+    user_prompt = llm.calls[0]["user"]
+    assert "{" not in str(user_prompt)
+    assert "}" not in str(user_prompt)
+
+
+@pytest.mark.asyncio
 async def test_explain_raises_if_recommendation_not_found() -> None:
     """ValueError raised when recommendation_id not found."""
     llm = FakeLLMClient()

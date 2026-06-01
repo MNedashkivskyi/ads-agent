@@ -30,6 +30,35 @@ class GoogleAdsMutationsAdapter:
     def _build_client(self, refresh_token: str) -> Any:
         return self._client._build_client(refresh_token)
 
+    async def campaign_exists(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+    ) -> bool:
+        """Return True if the campaign exists and is not REMOVED.
+
+        Used as a pre-flight guard before any mutation so we never attempt to
+        modify a campaign that has been deleted on Google's side (which would
+        otherwise fail with "operation is not allowed for removed resources").
+        """
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            ga_service = client.get_service("GoogleAdsService")
+            query = (
+                f"SELECT campaign.id FROM campaign "
+                f"WHERE campaign.id = {campaign_id} "
+                f"AND campaign.status != 'REMOVED' "
+                f"LIMIT 1"
+            )
+            response = ga_service.search(customer_id=cid, query=query)
+            return any(True for _ in response)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("campaign_exists", exc) from exc
+
     async def pause_keyword(
         self,
         refresh_token: str,
@@ -254,6 +283,7 @@ class GoogleAdsMutationsAdapter:
                   AND ad_group_criterion.negative = TRUE
                   AND ad_group_criterion.keyword.text = '{keyword_text}'
                   AND ad_group_criterion.keyword.match_type = '{match_type}'
+                  AND ad_group_criterion.status != 'REMOVED'
                 LIMIT 1
             """
             response = ga_service.search(customer_id=customer_id.replace("-", ""), query=query)
@@ -571,7 +601,8 @@ class GoogleAdsMutationsAdapter:
                 f"SELECT campaign_criterion.resource_name FROM campaign_criterion "
                 f"WHERE campaign_criterion.campaign = 'customers/{cid}/campaigns/{campaign_id}' "
                 f"AND campaign_criterion.type = 'DEVICE' "
-                f"AND campaign_criterion.device.type = 'MOBILE'"
+                f"AND campaign_criterion.device.type = 'MOBILE' "
+                f"AND campaign_criterion.status != 'REMOVED'"
             )
             response = ga_service.search(customer_id=cid, query=query)
             ops = []
@@ -606,7 +637,8 @@ class GoogleAdsMutationsAdapter:
                 f"SELECT campaign_criterion.resource_name FROM campaign_criterion "
                 f"WHERE campaign_criterion.campaign = 'customers/{cid}/campaigns/{campaign_id}' "
                 f"AND campaign_criterion.negative = TRUE "
-                f"AND campaign_criterion.keyword.text = '{keyword_text}'"
+                f"AND campaign_criterion.keyword.text = '{keyword_text}' "
+                f"AND campaign_criterion.status != 'REMOVED'"
             )
             response = ga_service.search(customer_id=cid, query=query)
             ops = []
@@ -741,7 +773,8 @@ class GoogleAdsMutationsAdapter:
                 f"SELECT campaign_criterion.resource_name FROM campaign_criterion "
                 f"WHERE campaign_criterion.campaign = 'customers/{cid}/campaigns/{campaign_id}' "
                 f"AND campaign_criterion.type = 'AD_SCHEDULE' "
-                f"AND campaign_criterion.ad_schedule.start_hour = {hour_of_day}"
+                f"AND campaign_criterion.ad_schedule.start_hour = {hour_of_day} "
+                f"AND campaign_criterion.status != 'REMOVED'"
             )
             response = ga_service.search(customer_id=cid, query=query)
             ops = []
@@ -809,7 +842,8 @@ class GoogleAdsMutationsAdapter:
                 f"SELECT campaign_criterion.resource_name FROM campaign_criterion "
                 f"WHERE campaign_criterion.campaign = 'customers/{cid}/campaigns/{campaign_id}' "
                 f"AND campaign_criterion.negative = TRUE "
-                f"AND campaign_criterion.location.geo_target_constant = '{location_rn}'"
+                f"AND campaign_criterion.location.geo_target_constant = '{location_rn}' "
+                f"AND campaign_criterion.status != 'REMOVED'"
             )
             response = ga_service.search(customer_id=cid, query=query)
             ops = []

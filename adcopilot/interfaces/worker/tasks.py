@@ -28,6 +28,27 @@ def _redis_client() -> Redis:  # type: ignore[type-arg]
     return Redis.from_url(settings.REDIS_URL)
 
 
+def select_customers_to_link(
+    customer_ids: list[str],
+    existing_customer_ids: set[str],
+    slots_remaining: int,
+) -> list[str]:
+    """Decide which Google Ads customers to (re)link, preserving plan limits.
+
+    Customers the user has *already* linked are reauths (the OAuth session
+    expired): re-linking refreshes their tokens and clears ``needs_reauth``.
+    They never consume a quota slot, so they are always included.  Genuinely
+    *new* customers are only linked while quota slots remain.  Order is
+    preserved within each group; reauths come first.
+
+    This is the single source of truth for the quota decision in
+    ``link_google_ads_accounts_task`` and is unit-tested in isolation.
+    """
+    reauth_ids = [cid for cid in customer_ids if cid in existing_customer_ids]
+    new_ids = [cid for cid in customer_ids if cid not in existing_customer_ids]
+    return reauth_ids + new_ids[: max(slots_remaining, 0)]
+
+
 # ---------------------------------------------------------------------------
 # Google Ads account-linking task (dispatched from the OAuth callback so the
 # blocking gRPC calls never touch the FastAPI event loop).
@@ -124,15 +145,13 @@ async def _async_link_google_ads_accounts(
 
             existing_accounts = await acc_repo.list_for_user(UserId(user_id))
             account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
+            # Customers this user has already linked.  Re-linking one of these
+            # is a *reauth* (the OAuth session expired): it refreshes the stored
+            # tokens and clears needs_reauth, and must always be allowed because
+            # it does not consume a new quota slot.  Only genuinely new customers
+            # count against the plan limit.
+            existing_by_customer = {a.customer_id: a for a in existing_accounts}
             slots_remaining = account_limit - len(existing_accounts)
-            if slots_remaining <= 0:
-                logger.warning(
-                    "account limit reached in oauth linking task",
-                    user_id=user_id,
-                    plan=user.plan.value,
-                )
-                redis.delete(pending_key)
-                return {"success": False, "error": "account_limit_reached"}
 
             # --- call Google Ads API (runs in a thread pool inside asyncio.run) ---
             ads_client = GoogleAdsClientAdapter(settings)
@@ -148,14 +167,31 @@ async def _async_link_google_ads_accounts(
                 redis.delete(pending_key)
                 return {"success": False, "error": str(exc)}
 
-            for customer_id in customer_ids[:slots_remaining]:
+            # Reauth of already-linked customers first (never quota-limited),
+            # then new customers up to the remaining slots.
+            customers_to_link = select_customers_to_link(
+                customer_ids, set(existing_by_customer), slots_remaining
+            )
+            if not customers_to_link:
+                logger.warning(
+                    "account limit reached in oauth linking task",
+                    user_id=user_id,
+                    plan=user.plan.value,
+                )
+                redis.delete(pending_key)
+                return {"success": False, "error": "account_limit_reached"}
+
+            for customer_id in customers_to_link:
                 account_id = AccountId(
                     str(uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}"))
                 )
-                descriptive_name = ""
-                currency = ""
-                timezone = ""
-                is_manager = False
+                prior = existing_by_customer.get(customer_id)
+                # On reauth, fall back to the previously stored profile fields so
+                # a transient get_customer_info failure can't blank out a name.
+                descriptive_name = prior.descriptive_name if prior else ""
+                currency = prior.currency if prior else ""
+                timezone = prior.timezone if prior else ""
+                is_manager = prior.is_manager if prior else False
                 try:
                     info = await ads_client.get_customer_info(refresh_token, customer_id)
                     descriptive_name = info.descriptive_name
@@ -333,6 +369,8 @@ async def _run_snapshot(settings: object, account_id: object, snap_date: date) -
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with AsyncSession(engine) as session, session.begin():
+            from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+
             use_case = SnapshotAccountUseCase(
                 ads_client=GoogleAdsQueriesAdapter(settings),
                 snapshot_repo=SqlSnapshotRepository(session),
@@ -340,6 +378,7 @@ async def _run_snapshot(settings: object, account_id: object, snap_date: date) -
                     session, settings.TOKEN_ENCRYPTION_KEY
                 ),
                 account_repo=SqlGoogleAdsAccountRepository(session),
+                web_notifier=SqlWebNotifier(session),
             )
             result = await use_case.execute(AccountId(str(account_id)), snap_date)
             _save_run(session, result)
@@ -840,18 +879,42 @@ def execute_recommendation_task(
 
     from celery import Task  # type: ignore[import-untyped]
 
-    from adcopilot.domain.exceptions import GoogleAdsAuthError
+    from adcopilot.domain.exceptions import CampaignNotFoundError, GoogleAdsAuthError
 
     assert isinstance(self, Task)
     try:
         return asyncio.run(_run_execute_recommendation(rec_id))
-    except GoogleAdsAuthError:
-        # Permanent auth failure — mark rec FAILED, set needs_reauth, notify user.
+    except GoogleAdsAuthError as exc:
+        # Expected, terminal condition: the user's Google OAuth token expired or
+        # was revoked. Retrying can't help — mark the rec FAILED and flag the
+        # account needs_reauth (so the UI can prompt a reconnect), then finish
+        # the task cleanly. Re-raising would log a misleading "task raised
+        # unexpected" traceback and trip the task_failure → Sentry path.
+        logger.warning(
+            "recommendation needs reauth — token expired/revoked",
+            rec_id=rec_id,
+            error=str(exc),
+        )
         try:
             asyncio.run(_handle_auth_failure(rec_id))
         except Exception:
             logger.exception("failed to handle auth failure", rec_id=rec_id)
-        raise
+        return {"rec_id": rec_id, "status": "failed", "reason": "needs_reauth"}
+    except CampaignNotFoundError as exc:
+        # Expected, terminal business condition: the recommendation is stale and
+        # the campaign was removed in Google Ads. There is nothing to retry, so
+        # mark it (and any siblings targeting the same removed campaign) EXPIRED
+        # and finish the task cleanly. Re-raising would log a misleading "task
+        # raised unexpected" traceback and trip the task_failure → Sentry path.
+        logger.warning(
+            "recommendation expired — campaign removed", rec_id=rec_id, error=str(exc)
+        )
+        expired = 0
+        try:
+            expired = asyncio.run(_expire_recs_for_removed_campaign(rec_id))
+        except Exception:
+            logger.exception("failed to expire recs for removed campaign", rec_id=rec_id)
+        return {"rec_id": rec_id, "status": "expired", "reason": str(exc), "expired": expired}
     except Exception as exc:
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc) from exc
@@ -937,6 +1000,7 @@ async def _handle_auth_failure(rec_id: str) -> None:
 
             # Persist needs_reauth flag so the account is excluded from future
             # nightly snapshots until the user reconnects.
+            was_flagged = account.needs_reauth
             updated_account = dataclasses.replace(account, needs_reauth=True)
             await account_repo.save(updated_account)
             logger.warning(
@@ -944,7 +1008,23 @@ async def _handle_auth_failure(rec_id: str) -> None:
                 account_id=account.id,
                 rec_id=rec_id,
             )
-            # TODO(phase-1): send reauth notification via new notifier
+            # Notify the user (bell) on the first transition so they know their
+            # operations are paused; dedup avoids re-notifying on every retry.
+            if not was_flagged:
+                from adcopilot.application.services.reauth_notification import (
+                    build_reauth_notification,
+                )
+                from adcopilot.infrastructure.notifications.web_notifier_adapter import (
+                    SqlWebNotifier,
+                )
+
+                title, body, metadata = build_reauth_notification(account)
+                await SqlWebNotifier(session).send_reauth_required(
+                    user_id=str(account.user_id),
+                    title=title,
+                    body=body,
+                    metadata=metadata,
+                )
     finally:
         await engine.dispose()
 
@@ -977,6 +1057,50 @@ async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
                 error=error_message,
             )
             # TODO(phase-1): send execution failed notification via new notifier
+    finally:
+        await engine.dispose()
+
+
+async def _expire_recs_for_removed_campaign(rec_id: str) -> int:
+    """Expire a stale rec (and siblings) whose target campaign was removed.
+
+    Returns the number of recommendations expired. Keeping the list "actual"
+    this way avoids re-running full detection just to drop dead suggestions.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            rec_repo = SqlRecommendationRepository(session)
+            rec = await rec_repo.get(RecommendationId(rec_id))
+            if rec is None:
+                logger.error("recommendation not found during expiry", rec_id=rec_id)
+                return 0
+
+            campaign_id = rec.target.get("campaign_id")
+            if campaign_id is None:
+                # No campaign target — just expire this one rec.
+                await rec_repo.update_status(
+                    RecommendationId(rec_id), RecommendationStatus.EXPIRED
+                )
+                return 1
+
+            expired = await rec_repo.expire_open_for_campaign(rec.account_id, int(campaign_id))
+            logger.info(
+                "expired recommendations for removed campaign",
+                rec_id=rec_id,
+                campaign_id=campaign_id,
+                expired=expired,
+            )
+            return expired
     finally:
         await engine.dispose()
 
@@ -2026,8 +2150,25 @@ async def _run_anomaly_detection_all_accounts(settings: object) -> dict[str, obj
                     _acct_repo = SqlGoogleAdsAccountRepository(session)
                     import dataclasses
 
+                    was_flagged = acct.needs_reauth
                     updated = dataclasses.replace(acct, needs_reauth=True)
                     await _acct_repo.save(updated)
+                    # One-time bell notification on the first transition.
+                    if not was_flagged:
+                        from adcopilot.application.services.reauth_notification import (
+                            build_reauth_notification,
+                        )
+                        from adcopilot.infrastructure.notifications.web_notifier_adapter import (
+                            SqlWebNotifier,
+                        )
+
+                        title, body, metadata = build_reauth_notification(acct)
+                        await SqlWebNotifier(session).send_reauth_required(
+                            user_id=str(acct.user_id),
+                            title=title,
+                            body=body,
+                            metadata=metadata,
+                        )
                 accounts_errored += 1
             except Exception:
                 logger.exception("anomaly_detection.failed", account_id=str(acct.id))
