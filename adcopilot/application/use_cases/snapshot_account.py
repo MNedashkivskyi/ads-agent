@@ -15,6 +15,8 @@ from adcopilot.application.ports.repositories import (
     OAuthCredentialsRepository,
 )
 from adcopilot.application.ports.snapshot_repository import SnapshotRepository
+from adcopilot.application.ports.web_notifier import WebNotifier
+from adcopilot.application.services.reauth_notification import build_reauth_notification
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.exceptions import GoogleAdsAuthError
 
@@ -43,11 +45,13 @@ class SnapshotAccountUseCase:
         snapshot_repo: SnapshotRepository,
         credentials_repo: OAuthCredentialsRepository,
         account_repo: GoogleAdsAccountRepository,
+        web_notifier: WebNotifier | None = None,
     ) -> None:
         self._ads_client = ads_client
         self._snapshot_repo = snapshot_repo
         self._credentials_repo = credentials_repo
         self._account_repo = account_repo
+        self._web_notifier = web_notifier
 
     async def execute(self, account_id: AccountId, snapshot_date: date) -> SnapshotResult:
         from adcopilot.observability import set_account_context
@@ -60,6 +64,20 @@ class SnapshotAccountUseCase:
             txn.set_tag("account_id", account_id)
             txn.set_tag("snapshot_date", snapshot_date.isoformat())
             return await self._execute_inner(account_id, snapshot_date)
+
+    async def _mark_needs_reauth(self, account) -> None:  # type: ignore[no-untyped-def]
+        """Flag the account for reauth and emit a one-time REAUTH_REQUIRED
+        notification on the False→True transition."""
+        was_flagged = account.needs_reauth
+        await self._account_repo.save(dataclasses.replace(account, needs_reauth=True))
+        if self._web_notifier is not None and not was_flagged:
+            title, body, metadata = build_reauth_notification(account)
+            await self._web_notifier.send_reauth_required(
+                user_id=str(account.user_id),
+                title=title,
+                body=body,
+                metadata=metadata,
+            )
 
     async def _execute_inner(self, account_id: AccountId, snapshot_date: date) -> SnapshotResult:
         start = time.monotonic()
@@ -154,9 +172,10 @@ class SnapshotAccountUseCase:
                 account_id=account_id,
                 error=str(exc),
             )
-            # Mark account as needing re-auth
-            updated_account = dataclasses.replace(account, needs_reauth=True)
-            await self._account_repo.save(updated_account)
+            # Mark account as needing re-auth.  Notify the user only on the
+            # first transition into the needs_reauth state so repeated nightly
+            # failures don't spam the bell until they reconnect.
+            await self._mark_needs_reauth(account)
             return SnapshotResult(
                 account_id=account_id,
                 snapshot_date=snapshot_date,

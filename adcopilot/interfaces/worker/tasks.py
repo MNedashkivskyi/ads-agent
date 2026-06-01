@@ -369,6 +369,8 @@ async def _run_snapshot(settings: object, account_id: object, snap_date: date) -
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with AsyncSession(engine) as session, session.begin():
+            from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+
             use_case = SnapshotAccountUseCase(
                 ads_client=GoogleAdsQueriesAdapter(settings),
                 snapshot_repo=SqlSnapshotRepository(session),
@@ -376,6 +378,7 @@ async def _run_snapshot(settings: object, account_id: object, snap_date: date) -
                     session, settings.TOKEN_ENCRYPTION_KEY
                 ),
                 account_repo=SqlGoogleAdsAccountRepository(session),
+                web_notifier=SqlWebNotifier(session),
             )
             result = await use_case.execute(AccountId(str(account_id)), snap_date)
             _save_run(session, result)
@@ -997,6 +1000,7 @@ async def _handle_auth_failure(rec_id: str) -> None:
 
             # Persist needs_reauth flag so the account is excluded from future
             # nightly snapshots until the user reconnects.
+            was_flagged = account.needs_reauth
             updated_account = dataclasses.replace(account, needs_reauth=True)
             await account_repo.save(updated_account)
             logger.warning(
@@ -1004,7 +1008,23 @@ async def _handle_auth_failure(rec_id: str) -> None:
                 account_id=account.id,
                 rec_id=rec_id,
             )
-            # TODO(phase-1): send reauth notification via new notifier
+            # Notify the user (bell) on the first transition so they know their
+            # operations are paused; dedup avoids re-notifying on every retry.
+            if not was_flagged:
+                from adcopilot.application.services.reauth_notification import (
+                    build_reauth_notification,
+                )
+                from adcopilot.infrastructure.notifications.web_notifier_adapter import (
+                    SqlWebNotifier,
+                )
+
+                title, body, metadata = build_reauth_notification(account)
+                await SqlWebNotifier(session).send_reauth_required(
+                    user_id=str(account.user_id),
+                    title=title,
+                    body=body,
+                    metadata=metadata,
+                )
     finally:
         await engine.dispose()
 
@@ -2130,8 +2150,25 @@ async def _run_anomaly_detection_all_accounts(settings: object) -> dict[str, obj
                     _acct_repo = SqlGoogleAdsAccountRepository(session)
                     import dataclasses
 
+                    was_flagged = acct.needs_reauth
                     updated = dataclasses.replace(acct, needs_reauth=True)
                     await _acct_repo.save(updated)
+                    # One-time bell notification on the first transition.
+                    if not was_flagged:
+                        from adcopilot.application.services.reauth_notification import (
+                            build_reauth_notification,
+                        )
+                        from adcopilot.infrastructure.notifications.web_notifier_adapter import (
+                            SqlWebNotifier,
+                        )
+
+                        title, body, metadata = build_reauth_notification(acct)
+                        await SqlWebNotifier(session).send_reauth_required(
+                            user_id=str(acct.user_id),
+                            title=title,
+                            body=body,
+                            metadata=metadata,
+                        )
                 accounts_errored += 1
             except Exception:
                 logger.exception("anomaly_detection.failed", account_id=str(acct.id))
