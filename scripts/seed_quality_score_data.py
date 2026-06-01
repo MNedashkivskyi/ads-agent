@@ -223,7 +223,15 @@ async def main() -> None:
     from adcopilot.config import get_settings
 
     settings = get_settings()
-    engine = create_async_engine(settings.DATABASE_URL)
+    # Railway/Heroku hand out a plain ``postgresql://`` URL, which SQLAlchemy
+    # maps to the (sync) psycopg2 driver. This script uses an async engine, so
+    # normalize the scheme to asyncpg if no async driver was specified.
+    db_url = settings.DATABASE_URL
+    if db_url.startswith("postgresql://"):
+        db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    elif db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+    engine = create_async_engine(db_url)
     try:
         async with AsyncSession(engine) as session:
             account_id = await _resolve_account_id(session, args)
