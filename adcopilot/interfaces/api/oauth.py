@@ -72,6 +72,7 @@ async def oauth_google_start(
     user_id: str,
     settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(_get_db_session)],
+    reauth: bool = False,
 ) -> RedirectResponse:
     """Redirects the browser directly to Google's OAuth consent screen.
 
@@ -79,6 +80,14 @@ async def oauth_google_start(
     users who have already reached their quota get an immediate error
     redirect instead of completing the consent flow only to be rejected
     in the callback.
+
+    ``reauth=1`` is sent by the "Reauth" button when an already-linked
+    account's OAuth session has expired.  In that case the account already
+    occupies a quota slot, so the per-plan limit check is skipped — the
+    user is reconnecting an existing account, not adding a new one.  The
+    worker (``link_google_ads_accounts_task``) still enforces the limit
+    for any genuinely *new* customer that comes back from Google, so this
+    cannot be abused to exceed the plan limit.
     """
     if not settings.GOOGLE_ADS_CLIENT_ID:
         raise HTTPException(status_code=503, detail="Google OAuth not configured")
@@ -92,7 +101,7 @@ async def oauth_google_start(
     existing_accounts = await acc_repo.list_for_user(UserId(user_id))
     account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
 
-    if len(existing_accounts) >= account_limit:
+    if not reauth and len(existing_accounts) >= account_limit:
         logger.warning(
             "oauth.start.quota_exceeded",
             user_id=user_id,
@@ -205,10 +214,17 @@ async def oauth_google_callback(
 
     # Enforce per-plan account limits *before* queuing the task so the user
     # gets an immediate error rather than a silent no-op from the worker.
+    #
+    # A reauth (reconnecting an account whose session expired) does not add a
+    # new account, so it must not be blocked here: such a user is already at
+    # quota by definition.  We detect that case by the presence of an existing
+    # account flagged ``needs_reauth`` and defer to the worker, which upserts
+    # the existing customer and only consumes a slot for genuinely new ones.
     acc_repo = SqlGoogleAdsAccountRepository(session)
     existing_accounts = await acc_repo.list_for_user(UserId(user_id))
     account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
-    if len(existing_accounts) >= account_limit:
+    is_reauth = any(a.needs_reauth for a in existing_accounts)
+    if not is_reauth and len(existing_accounts) >= account_limit:
         raise HTTPException(
             status_code=402,
             detail=f"Account limit reached for {user.plan.value} plan ({account_limit} max). Upgrade to add more accounts.",

@@ -28,6 +28,27 @@ def _redis_client() -> Redis:  # type: ignore[type-arg]
     return Redis.from_url(settings.REDIS_URL)
 
 
+def select_customers_to_link(
+    customer_ids: list[str],
+    existing_customer_ids: set[str],
+    slots_remaining: int,
+) -> list[str]:
+    """Decide which Google Ads customers to (re)link, preserving plan limits.
+
+    Customers the user has *already* linked are reauths (the OAuth session
+    expired): re-linking refreshes their tokens and clears ``needs_reauth``.
+    They never consume a quota slot, so they are always included.  Genuinely
+    *new* customers are only linked while quota slots remain.  Order is
+    preserved within each group; reauths come first.
+
+    This is the single source of truth for the quota decision in
+    ``link_google_ads_accounts_task`` and is unit-tested in isolation.
+    """
+    reauth_ids = [cid for cid in customer_ids if cid in existing_customer_ids]
+    new_ids = [cid for cid in customer_ids if cid not in existing_customer_ids]
+    return reauth_ids + new_ids[: max(slots_remaining, 0)]
+
+
 # ---------------------------------------------------------------------------
 # Google Ads account-linking task (dispatched from the OAuth callback so the
 # blocking gRPC calls never touch the FastAPI event loop).
@@ -124,15 +145,13 @@ async def _async_link_google_ads_accounts(
 
             existing_accounts = await acc_repo.list_for_user(UserId(user_id))
             account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
+            # Customers this user has already linked.  Re-linking one of these
+            # is a *reauth* (the OAuth session expired): it refreshes the stored
+            # tokens and clears needs_reauth, and must always be allowed because
+            # it does not consume a new quota slot.  Only genuinely new customers
+            # count against the plan limit.
+            existing_by_customer = {a.customer_id: a for a in existing_accounts}
             slots_remaining = account_limit - len(existing_accounts)
-            if slots_remaining <= 0:
-                logger.warning(
-                    "account limit reached in oauth linking task",
-                    user_id=user_id,
-                    plan=user.plan.value,
-                )
-                redis.delete(pending_key)
-                return {"success": False, "error": "account_limit_reached"}
 
             # --- call Google Ads API (runs in a thread pool inside asyncio.run) ---
             ads_client = GoogleAdsClientAdapter(settings)
@@ -148,14 +167,31 @@ async def _async_link_google_ads_accounts(
                 redis.delete(pending_key)
                 return {"success": False, "error": str(exc)}
 
-            for customer_id in customer_ids[:slots_remaining]:
+            # Reauth of already-linked customers first (never quota-limited),
+            # then new customers up to the remaining slots.
+            customers_to_link = select_customers_to_link(
+                customer_ids, set(existing_by_customer), slots_remaining
+            )
+            if not customers_to_link:
+                logger.warning(
+                    "account limit reached in oauth linking task",
+                    user_id=user_id,
+                    plan=user.plan.value,
+                )
+                redis.delete(pending_key)
+                return {"success": False, "error": "account_limit_reached"}
+
+            for customer_id in customers_to_link:
                 account_id = AccountId(
                     str(uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}"))
                 )
-                descriptive_name = ""
-                currency = ""
-                timezone = ""
-                is_manager = False
+                prior = existing_by_customer.get(customer_id)
+                # On reauth, fall back to the previously stored profile fields so
+                # a transient get_customer_info failure can't blank out a name.
+                descriptive_name = prior.descriptive_name if prior else ""
+                currency = prior.currency if prior else ""
+                timezone = prior.timezone if prior else ""
+                is_manager = prior.is_manager if prior else False
                 try:
                     info = await ads_client.get_customer_info(refresh_token, customer_id)
                     descriptive_name = info.descriptive_name
