@@ -141,6 +141,13 @@ class GoogleAdsQueriesAdapter:
     ) -> list[ConversionActionSnapshot]:
         return await queries.list_conversion_actions(refresh_token, customer_id, self._settings)
 
+    async def get_primary_conversion_tag(
+        self, refresh_token: str, customer_id: str
+    ) -> tuple[str, str] | None:
+        return await queries.get_primary_conversion_tag(
+            refresh_token, customer_id, self._settings
+        )
+
     async def list_recent_search_terms(
         self,
         refresh_token: str,
