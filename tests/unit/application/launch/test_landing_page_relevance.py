@@ -20,7 +20,9 @@ from adcopilot.domain.launch.entities import (
     MatchType,
 )
 
-_URL = "https://example.com/"
+# Non-placeholder host: bare example.com is skipped as a template placeholder
+# (see _PLACEHOLDER_HOSTS), which would bypass the Rule 6b relevance check.
+_URL = "https://kancelaria-example.pl/"
 _NOW = datetime(2024, 1, 1, tzinfo=UTC)
 
 

@@ -108,7 +108,7 @@ class TemplateProposalAssembler:
         structured_snippets = self._build_structured_snippets(template)
         cpc_micros = _estimate_cpc_micros(tier, template)
 
-        return CampaignProposal(
+        proposal = CampaignProposal(
             id=CampaignProposalId(str(uuid.uuid4())),
             brief_id=brief.id,
             campaign_name=f"{template.display_name} | {city}",
@@ -126,6 +126,22 @@ class TemplateProposalAssembler:
             ),
             generated_at=datetime.now(UTC),
         )
+
+        # Budget post-processing must match the LLM path (generate_proposal):
+        # scale the daily budget by the Polish seasonal multiplier and the
+        # voivodeship purchasing-power index. #203 added these to the validator
+        # and the LLM path but missed the template assembler, so template
+        # proposals for high-income regions (e.g. Warszawa, pp=1.50) were
+        # rejected by Rule 1 (budget). Reusing the same helpers keeps both
+        # generation paths identical.
+        from adcopilot.application.use_cases.launch.generate_proposal import (
+            _apply_purchasing_power,
+            _apply_seasonal_multiplier,
+        )
+
+        proposal, _ = _apply_seasonal_multiplier(proposal, template.vertical_id)
+        proposal = _apply_purchasing_power(proposal, brief.location)
+        return proposal
 
     # ------------------------------------------------------------------
     # Internal helpers
