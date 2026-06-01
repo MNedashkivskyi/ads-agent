@@ -160,6 +160,7 @@ async def test_rule_engine_skips_snoozed_recommendation() -> None:
     ctx = MagicMock(spec=DetectionContext)
     ctx.account = MagicMock()
     ctx.account.id = _ACCOUNT_ID
+    ctx.campaigns = []  # no snapshot data here → engine skips stale-rec reconciliation
 
     engine = RuleEngine(rules=[mock_rule], rec_repo=rec_repo, snooze_repo=snooze)
     new_recs = await engine.run(ctx)
@@ -183,6 +184,7 @@ async def test_rule_engine_persists_non_snoozed_recommendation() -> None:
     ctx = MagicMock(spec=DetectionContext)
     ctx.account = MagicMock()
     ctx.account.id = _ACCOUNT_ID
+    ctx.campaigns = []  # no snapshot data here → engine skips stale-rec reconciliation
 
     engine = RuleEngine(rules=[mock_rule], rec_repo=rec_repo, snooze_repo=snooze)
     new_recs = await engine.run(ctx)
@@ -203,6 +205,7 @@ async def test_rule_engine_without_snooze_repo_still_works() -> None:
     ctx = MagicMock(spec=DetectionContext)
     ctx.account = MagicMock()
     ctx.account.id = _ACCOUNT_ID
+    ctx.campaigns = []  # no snapshot data here → engine skips stale-rec reconciliation
 
     engine = RuleEngine(rules=[mock_rule], rec_repo=rec_repo, snooze_repo=None)
     new_recs = await engine.run(ctx)
