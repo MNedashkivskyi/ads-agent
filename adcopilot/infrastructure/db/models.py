@@ -32,6 +32,8 @@ __all__ = [
     "CampaignExtensionSnapshotModel",
     "CampaignSnapshotModel",
     "ConversionActionSnapshotModel",
+    "ConversionOutcomeModel",
+    "ConversionUploadModel",
     "DayOfWeekPerformanceSnapshotModel",
     "DevicePerformanceSnapshotModel",
     "DigestSentLogModel",
@@ -1220,6 +1222,61 @@ class PerformanceReportModel(Base):
     report_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     summary_pl: Mapped[str | None] = mapped_column(Text, nullable=True)
     pdf_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ConversionOutcomeModel(Base):
+    """A captured real-world outcome (lead/sale) destined for Google Ads import."""
+
+    __tablename__ = "conversion_outcomes"
+    __table_args__ = (
+        Index("ix_conversion_outcomes_account_status", "account_id", "status"),
+        Index("ix_conversion_outcomes_upload", "account_id", "upload_status"),
+        sa.UniqueConstraint(
+            "account_id", "external_id", name="uq_conversion_outcomes_account_external"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    gclid: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    gbraid: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    wbraid: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    hashed_email: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    hashed_phone: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    conversion_action_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    value: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    currency_code: Mapped[str] = mapped_column(String(3), nullable=False, default="PLN")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="NEW")
+    upload_status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING")
+    occurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class ConversionUploadModel(Base):
+    """Audit row for one upload attempt (batch) to Google Ads."""
+
+    __tablename__ = "conversion_uploads"
+    __table_args__ = (Index("ix_conversion_uploads_account_created", "account_id", "created_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    outcome_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    validate_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    succeeded: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
