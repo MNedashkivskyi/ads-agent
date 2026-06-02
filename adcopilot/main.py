@@ -57,6 +57,7 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.notifications import router as notifications_router
     from adcopilot.interfaces.api.oauth import router as oauth_router
     from adcopilot.interfaces.api.pmax import router as pmax_router
+    from adcopilot.interfaces.api.measurement import router as measurement_router
     from adcopilot.interfaces.api.proposal_editor import router as proposal_editor_router
     from adcopilot.interfaces.api.qa import router as qa_router
     from adcopilot.interfaces.api.qs_improvement import router as qs_improvement_router
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
     application.include_router(pmax_router)
     application.include_router(quality_score_router)
     application.include_router(qs_improvement_router)
+    application.include_router(measurement_router)
     application.include_router(audiences_router)
     application.include_router(reports_router)
     application.include_router(account_structure_router)

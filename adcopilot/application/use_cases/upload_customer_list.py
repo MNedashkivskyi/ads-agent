@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 import io
 from dataclasses import dataclass
 
 import structlog
 
+from adcopilot.infrastructure.hashing import hash_email
+
 logger = structlog.get_logger(__name__)
-
-
-def _sha256(email: str) -> str:
-    normalized = email.strip().lower()
-    return hashlib.sha256(normalized.encode()).hexdigest()
 
 
 def parse_and_hash_csv(csv_bytes: bytes, email_column: str = "email") -> list[str]:
@@ -34,9 +30,9 @@ def parse_and_hash_csv(csv_bytes: bytes, email_column: str = "email") -> list[st
 
     hashes: list[str] = []
     for row in reader:
-        raw = (row.get(col) or "").strip()
-        if "@" in raw:
-            hashes.append(_sha256(raw))
+        hashed = hash_email(row.get(col))
+        if hashed is not None:
+            hashes.append(hashed)
 
     return hashes
 

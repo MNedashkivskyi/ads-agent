@@ -122,6 +122,13 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.weekly_conversion_tracking_reminders_task",
                     "schedule": crontab(hour=10, minute=0, day_of_week="sunday"),
                 },
+                "offline-conversion-uploads": {
+                    # Every 6 hours — upload WON offline conversions (leads that
+                    # closed) to Google Ads so Smart Bidding learns from real
+                    # outcomes. One partial-failure batch per account (rate-limited).
+                    "task": "adcopilot.interfaces.worker.tasks.upload_offline_conversions_task",
+                    "schedule": crontab(minute=0, hour="*/6"),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},

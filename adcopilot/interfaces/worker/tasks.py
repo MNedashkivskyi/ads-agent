@@ -3504,3 +3504,132 @@ async def _run_weekly_conversion_tracking_reminders() -> dict[str, object]:
         sent=sent,
     )
     return {"checked": checked, "sent": sent}
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.upload_offline_conversions_task")  # type: ignore[untyped-decorator]
+def upload_offline_conversions_task() -> dict[str, object]:
+    """Batched, rate-limited upload of WON offline conversions to Google Ads.
+
+    Runs on a schedule (not per-request). For each account that has uploadable
+    outcomes (WON + not-yet-uploaded), uploads them in a single partial-failure
+    batch via the measurement port. Real upload (validate_only=False); the use
+    case marks outcomes UPLOADED/FAILED and writes an audit row.
+    """
+    import asyncio
+
+    from adcopilot.config import get_settings
+
+    settings = get_settings()
+
+    async def _run() -> dict[str, object]:
+        import uuid
+
+        from sqlalchemy import and_, or_, select
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+        from adcopilot.application.use_cases.upload_conversion_adjustments import (
+            upload_conversion_adjustments,
+        )
+        from adcopilot.application.use_cases.upload_offline_conversions import (
+            upload_offline_conversions,
+        )
+        from adcopilot.domain.entities import AccountId
+        from adcopilot.infrastructure.db.models import ConversionOutcomeModel
+        from adcopilot.infrastructure.db.repositories.conversion_outcome_repository import (
+            ConversionOutcomeRepository,
+            ConversionUploadRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+            SqlGoogleAdsAccountRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+            SqlOAuthCredentialsRepository,
+        )
+        from adcopilot.infrastructure.google_ads.measurement_mutations_adapter import (
+            GoogleAdsMeasurementUploadAdapter,
+        )
+
+        engine = create_async_engine(settings.DATABASE_URL)
+        accounts_processed = 0
+        total_succeeded = 0
+        total_failed = 0
+        try:
+            # Distinct accounts with WON outcomes not yet uploaded OR an uploaded
+            # outcome with a pending adjustment (restate/retract).
+            async with AsyncSession(engine) as session:
+                rows = await session.execute(
+                    select(ConversionOutcomeModel.account_id)
+                    .where(
+                        or_(
+                            and_(
+                                ConversionOutcomeModel.status == "WON",
+                                ConversionOutcomeModel.upload_status.in_(("PENDING", "FAILED")),
+                            ),
+                            and_(
+                                ConversionOutcomeModel.pending_adjustment.isnot(None),
+                                ConversionOutcomeModel.upload_status == "UPLOADED",
+                            ),
+                        )
+                    )
+                    .distinct()
+                )
+                account_ids = [str(r[0]) for r in rows.all()]
+
+            uploader = GoogleAdsMeasurementUploadAdapter(settings)
+            for account_id in account_ids:
+                try:
+                    async with AsyncSession(engine) as session, session.begin():
+                        account_repo = SqlGoogleAdsAccountRepository(session)
+                        credentials_repo = SqlOAuthCredentialsRepository(
+                            session, settings.TOKEN_ENCRYPTION_KEY
+                        )
+                        account = await account_repo.get(AccountId(account_id))
+                        if account is None:
+                            continue
+                        credentials = await credentials_repo.get(AccountId(account_id))
+                        if credentials is None:
+                            continue
+                        result = await upload_offline_conversions(
+                            account_id=account_id,
+                            customer_id=account.customer_id,
+                            refresh_token=credentials.refresh_token,
+                            outcome_repo=ConversionOutcomeRepository(session),
+                            upload_repo=ConversionUploadRepository(session),
+                            uploader=uploader,
+                            validate_only=False,
+                        )
+                        # Flush any pending restate/retract corrections too.
+                        adj_result = await upload_conversion_adjustments(
+                            account_id=account_id,
+                            customer_id=account.customer_id,
+                            refresh_token=credentials.refresh_token,
+                            outcome_repo=ConversionOutcomeRepository(session),
+                            upload_repo=ConversionUploadRepository(session),
+                            uploader=uploader,
+                            validate_only=False,
+                        )
+                    accounts_processed += 1
+                    total_succeeded += result.succeeded + adj_result.succeeded
+                    total_failed += result.failed + adj_result.failed
+                except Exception as exc:  # noqa: BLE001 — isolate per-account failures
+                    logger.warning(
+                        "offline_conversion_upload_account_failed",
+                        account_id=account_id,
+                        error=str(exc),
+                    )
+        finally:
+            await engine.dispose()
+
+        logger.info(
+            "offline_conversion_upload_task_done",
+            accounts=accounts_processed,
+            succeeded=total_succeeded,
+            failed=total_failed,
+        )
+        return {
+            "accounts": accounts_processed,
+            "succeeded": total_succeeded,
+            "failed": total_failed,
+        }
+
+    return asyncio.run(_run())

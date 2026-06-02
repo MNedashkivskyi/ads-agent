@@ -103,6 +103,74 @@ def _fetch_sync(
         return []
 
 
+@dataclass
+class GA4ConversionTotals:
+    conversions: float
+    total_revenue: float
+
+
+async def fetch_conversion_totals(
+    property_id: str,
+    refresh_token: str,
+    client_id: str,
+    client_secret: str,
+    start_date: date,
+    end_date: date,
+) -> GA4ConversionTotals:
+    """Fetch GA4 conversions + revenue totals over a date range (best-effort)."""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(
+        None,
+        _fetch_conversions_sync,
+        property_id,
+        refresh_token,
+        client_id,
+        client_secret,
+        start_date,
+        end_date,
+    )
+
+
+def _fetch_conversions_sync(
+    property_id: str,
+    refresh_token: str,
+    client_id: str,
+    client_secret: str,
+    start_date: date,
+    end_date: date,
+) -> GA4ConversionTotals:
+    try:
+        from google.analytics.data_v1beta import BetaAnalyticsDataClient
+        from google.analytics.data_v1beta.types import DateRange, Metric, RunReportRequest
+        from google.oauth2.credentials import Credentials
+
+        creds = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+        client = BetaAnalyticsDataClient(credentials=creds)
+        request = RunReportRequest(
+            property=f"properties/{property_id}",
+            metrics=[Metric(name="conversions"), Metric(name="totalRevenue")],
+            date_ranges=[
+                DateRange(start_date=start_date.isoformat(), end_date=end_date.isoformat())
+            ],
+        )
+        response = client.run_report(request)
+        conversions = 0.0
+        revenue = 0.0
+        for row in response.rows:
+            conversions += _float_or_none(row.metric_values[0].value) or 0.0
+            revenue += _float_or_none(row.metric_values[1].value) or 0.0
+        return GA4ConversionTotals(conversions=conversions, total_revenue=revenue)
+    except Exception as exc:
+        logger.warning("ga4_conversions_fetch_failed", error=str(exc))
+        return GA4ConversionTotals(conversions=0.0, total_revenue=0.0)
+
+
 def _float_or_none(val: str) -> float | None:
     try:
         return float(val) if val else None
