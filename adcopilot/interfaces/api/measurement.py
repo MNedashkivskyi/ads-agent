@@ -626,3 +626,100 @@ async def put_business_context(
         currency_code=econ.currency_code,
         is_configured=econ.is_configured(),
     )
+
+
+class ReconciliationResponse(BaseModel):
+    ga4_linked: bool
+    ga4_conversions: float
+    ads_conversions: float
+    discrepancy_pct: float
+    verdict: str
+
+
+@router.get("/{user_id}/measurement/reconciliation", response_model=ReconciliationResponse)
+async def get_reconciliation(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ReconciliationResponse:
+    """Compare GA4 conversions vs Google Ads conversions over the last 30 days."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    import base64
+    import hashlib
+    import uuid
+    from datetime import UTC, datetime, timedelta
+
+    from cryptography.fernet import Fernet
+    from sqlalchemy import func, select
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.reconcile_conversions import reconcile_conversions
+    from adcopilot.infrastructure.db.models import CampaignSnapshotModel, GA4CredentialsModel
+
+    today = datetime.now(UTC).date()
+    start = today - timedelta(days=30)
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            account, _ = await _resolve_account(session, user_id)
+            acct_uuid = uuid.UUID(str(account.id))
+
+            # Google Ads conversions: sum campaign snapshot conversions over 30d.
+            ads_conversions = (
+                await session.execute(
+                    select(func.coalesce(func.sum(CampaignSnapshotModel.conversions), 0.0)).where(
+                        CampaignSnapshotModel.account_id == acct_uuid,
+                        CampaignSnapshotModel.snapshot_date >= start,
+                    )
+                )
+            ).scalar_one()
+
+            creds = (
+                await session.execute(
+                    select(GA4CredentialsModel).where(GA4CredentialsModel.account_id == acct_uuid)
+                )
+            ).scalar_one_or_none()
+
+            if creds is None or not creds.property_id:
+                result = reconcile_conversions(
+                    ga4_conversions=0.0, ads_conversions=float(ads_conversions)
+                )
+                return ReconciliationResponse(
+                    ga4_linked=False,
+                    ga4_conversions=0.0,
+                    ads_conversions=float(ads_conversions),
+                    discrepancy_pct=result.discrepancy_pct,
+                    verdict=result.verdict.value,
+                )
+
+            key = base64.urlsafe_b64encode(
+                hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest()
+            )
+            refresh_token = Fernet(key).decrypt(creds.refresh_token_enc.encode()).decode()
+            property_id = creds.property_id
+    finally:
+        await engine.dispose()
+
+    from adcopilot.infrastructure.ga4.queries_adapter import fetch_conversion_totals
+
+    ga4 = await fetch_conversion_totals(
+        property_id=property_id,
+        refresh_token=refresh_token,
+        client_id=settings.GOOGLE_ADS_CLIENT_ID or "",
+        client_secret=settings.GOOGLE_ADS_CLIENT_SECRET or "",
+        start_date=start,
+        end_date=today,
+    )
+    result = reconcile_conversions(
+        ga4_conversions=ga4.conversions, ads_conversions=float(ads_conversions)
+    )
+    return ReconciliationResponse(
+        ga4_linked=True,
+        ga4_conversions=ga4.conversions,
+        ads_conversions=float(ads_conversions),
+        discrepancy_pct=result.discrepancy_pct,
+        verdict=result.verdict.value,
+    )
