@@ -114,7 +114,6 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
     {
         # Module 0 — requires human action outside the system
         RecommendationKind.FIX_DISAPPROVED_AD,
-        RecommendationKind.ADD_AD_VARIATION,
         RecommendationKind.ENABLE_CONVERSION_TRACKING,
         # Module 1 — trend alerts (informational)
         RecommendationKind.CTR_DECLINE,
@@ -123,11 +122,9 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         RecommendationKind.IMPRESSION_SHARE_EROSION,
         RecommendationKind.SPEND_ACCELERATION,
         RecommendationKind.QUALITY_SCORE_DETERIORATION,
-        # Module 2 — ad copy insights (informational; AD_FATIGUE/WEAK_RSA_STRENGTH now executable)
-        RecommendationKind.AD_KEYWORD_MISMATCH,
-        RecommendationKind.MISSING_CTA,
-        RecommendationKind.REDUNDANT_HEADLINES,
-        RecommendationKind.GENERIC_DESCRIPTION,
+        # Module 2 — ad copy: all now executable via AdCopyRefreshExecutor
+        # (AD_FATIGUE, WEAK_RSA_STRENGTH, ADD_AD_VARIATION, AD_KEYWORD_MISMATCH,
+        # MISSING_CTA, REDUNDANT_HEADLINES, GENERIC_DESCRIPTION) — none here.
         # Module 3 — structural issues (informational)
         RecommendationKind.OVERSTUFFED_AD_GROUP,
         RecommendationKind.KEYWORD_CANNIBALIZATION,
