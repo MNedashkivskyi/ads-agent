@@ -37,6 +37,13 @@ class UploadStatus(str, Enum):
     SKIPPED = "SKIPPED"  # e.g. LOST outcomes are not uploaded
 
 
+class AdjustmentType(str, Enum):
+    """A correction to an already-uploaded conversion."""
+
+    RESTATEMENT = "RESTATEMENT"  # change the conversion value
+    RETRACTION = "RETRACTION"  # cancel the conversion (e.g. lead later lost)
+
+
 # Only WON outcomes carry a positive conversion worth uploading.
 UPLOADABLE_STATUSES = frozenset({OutcomeStatus.WON})
 
@@ -63,6 +70,9 @@ class ConversionOutcome:
     last_error: str | None = None
     # Client-side identifier for idempotency / dedup (e.g. CRM lead id).
     external_id: str | None = None
+    # A pending correction to an already-uploaded conversion (Phase 2b).
+    pending_adjustment: str | None = None  # AdjustmentType value or None
+    adjusted_at: datetime | None = None
     id: uuid.UUID = field(default_factory=uuid.uuid4)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
@@ -101,6 +111,34 @@ class ConversionOutcome:
     def mark_lost(self) -> None:
         self.status = OutcomeStatus.LOST
         self.upload_status = UploadStatus.SKIPPED
+        self.updated_at = datetime.now(UTC)
+
+    # --- Phase 2b: adjustments to an already-uploaded conversion -----------
+
+    def restate(self, new_value: float) -> None:
+        """Change the value of an already-uploaded WON conversion."""
+        if new_value < 0:
+            raise ValueError("Conversion value cannot be negative")
+        if self.upload_status is not UploadStatus.UPLOADED or self.status is not OutcomeStatus.WON:
+            raise ValueError("Only an uploaded WON conversion can be restated")
+        self.value = new_value
+        self.pending_adjustment = AdjustmentType.RESTATEMENT.value
+        self.updated_at = datetime.now(UTC)
+
+    def retract(self) -> None:
+        """Cancel an already-uploaded conversion (lead later lost / refunded)."""
+        if self.upload_status is not UploadStatus.UPLOADED:
+            raise ValueError("Only an uploaded conversion can be retracted")
+        self.status = OutcomeStatus.LOST
+        self.pending_adjustment = AdjustmentType.RETRACTION.value
+        self.updated_at = datetime.now(UTC)
+
+    def needs_adjustment(self) -> bool:
+        return self.pending_adjustment is not None
+
+    def mark_adjusted(self) -> None:
+        self.pending_adjustment = None
+        self.adjusted_at = datetime.now(UTC)
         self.updated_at = datetime.now(UTC)
 
 

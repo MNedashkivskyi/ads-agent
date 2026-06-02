@@ -1255,6 +1255,8 @@ class ConversionOutcomeModel(Base):
     uploaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    pending_adjustment: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    adjusted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

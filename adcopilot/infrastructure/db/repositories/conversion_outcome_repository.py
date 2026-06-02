@@ -36,6 +36,8 @@ def _to_domain(m: ConversionOutcomeModel) -> ConversionOutcome:
         uploaded_at=m.uploaded_at,
         last_error=m.last_error,
         external_id=m.external_id,
+        pending_adjustment=m.pending_adjustment,
+        adjusted_at=m.adjusted_at,
         created_at=m.created_at,
         updated_at=m.updated_at,
     )
@@ -59,6 +61,8 @@ def _to_values(o: ConversionOutcome) -> dict:
         "uploaded_at": o.uploaded_at,
         "last_error": o.last_error,
         "external_id": o.external_id,
+        "pending_adjustment": o.pending_adjustment,
+        "adjusted_at": o.adjusted_at,
         "updated_at": o.updated_at,
     }
 
@@ -120,6 +124,23 @@ class ConversionOutcomeRepository:
                 ),
             )
             .order_by(ConversionOutcomeModel.occurred_at.asc())
+            .limit(limit)
+        )
+        rows = (await self._session.execute(stmt)).scalars().all()
+        return [_to_domain(r) for r in rows]
+
+    async def list_needing_adjustment(
+        self, account_id: str, *, limit: int = 500
+    ) -> list[ConversionOutcome]:
+        """Uploaded conversions with a pending restate/retract correction."""
+        stmt = (
+            select(ConversionOutcomeModel)
+            .where(
+                ConversionOutcomeModel.account_id == uuid.UUID(account_id),
+                ConversionOutcomeModel.pending_adjustment.isnot(None),
+                ConversionOutcomeModel.upload_status == UploadStatus.UPLOADED.value,
+            )
+            .order_by(ConversionOutcomeModel.updated_at.asc())
             .limit(limit)
         )
         rows = (await self._session.execute(stmt)).scalars().all()

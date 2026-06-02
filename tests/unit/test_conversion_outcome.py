@@ -51,6 +51,33 @@ def test_negative_value_rejected() -> None:
         o.mark_won(value=-1.0, occurred_at=datetime(2026, 6, 1, tzinfo=UTC))
 
 
+def test_restate_only_after_upload() -> None:
+    o = _new()
+    o.mark_won(value=100.0, occurred_at=datetime(2026, 6, 1, tzinfo=UTC))
+    # Not uploaded yet -> cannot restate.
+    with pytest.raises(ValueError):
+        o.restate(200.0)
+    o.upload_status = UploadStatus.UPLOADED
+    o.restate(200.0)
+    assert o.value == 200.0
+    assert o.needs_adjustment() is True
+    assert o.pending_adjustment == "RESTATEMENT"
+    o.mark_adjusted()
+    assert o.needs_adjustment() is False
+    assert o.adjusted_at is not None
+
+
+def test_retract_only_after_upload() -> None:
+    o = _new()
+    o.mark_won(value=100.0, occurred_at=datetime(2026, 6, 1, tzinfo=UTC))
+    with pytest.raises(ValueError):
+        o.retract()
+    o.upload_status = UploadStatus.UPLOADED
+    o.retract()
+    assert o.status is OutcomeStatus.LOST
+    assert o.pending_adjustment == "RETRACTION"
+
+
 def test_hashed_identifier_alone_satisfies_attribution() -> None:
     o = ConversionOutcome(account_id="acc-1", hashed_email="abc123")
     o.mark_won(value=5.0, occurred_at=datetime(2026, 6, 1, tzinfo=UTC))
