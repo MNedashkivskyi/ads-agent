@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.bidding import BiddingMode, bidding_mode_for
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -43,8 +44,20 @@ class BroadMatchBleedingRule:
         for st in ctx.search_terms:
             st_by_ad_group.setdefault(st.ad_group_id, []).append(st)
 
+        # ad_group_id -> campaign_id, to resolve the campaign's bidding mode.
+        campaign_of_ad_group: dict[int, int] = {
+            ag.ad_group_id: ag.campaign_id for ag in ctx.ad_groups
+        }
+
         for kw in ctx.keywords:
             if kw.match_type.upper() != "BROAD":
+                continue
+
+            # Under Smart Bidding, broad match + good signals is Google's
+            # recommended path — don't push users back to phrase/exact. Wasteful
+            # terms are still mined as negatives by rule_01 (wasted search term).
+            campaign_id = campaign_of_ad_group.get(kw.ad_group_id, 0)
+            if bidding_mode_for(ctx.campaigns, campaign_id) is BiddingMode.SMART:
                 continue
 
             triggered = st_by_ad_group.get(kw.ad_group_id, [])

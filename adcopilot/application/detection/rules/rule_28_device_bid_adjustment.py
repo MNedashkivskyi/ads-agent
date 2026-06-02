@@ -12,6 +12,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.bidding import BiddingMode, bidding_mode_for
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -60,6 +61,11 @@ class DeviceBidAdjustmentRule:
             mobile_cpa = mobile_cost / mobile_conv
 
             if mobile_cpa <= _CPA_RATIO_THRESHOLD * desktop_cpa:
+                continue
+
+            # Smart Bidding ignores manual device bid adjustments — it already
+            # optimizes per-device. Emitting this would be noise/counterproductive.
+            if bidding_mode_for(ctx.campaigns, campaign_id) is BiddingMode.SMART:
                 continue
 
             # Find campaign name for context.
