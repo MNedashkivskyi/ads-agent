@@ -91,6 +91,14 @@ class RecommendationSeverity(Enum):
     LOW = "LOW"  # nice to have
 
 
+class Confidence(Enum):
+    """How much data backs a recommendation (data sufficiency)."""
+
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    LOW = "LOW"
+
+
 class RecommendationStatus(Enum):
     PENDING = "PENDING"
     APPROVED = "APPROVED"
@@ -154,6 +162,20 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
 )
 
 
+def confidence_from_volume(
+    *, impressions: int = 0, clicks: int = 0, conversions: float = 0.0
+) -> Confidence:
+    """Grade a finding's confidence by how much data backs it.
+
+    More signal (conversions > clicks > impressions) → higher confidence.
+    """
+    if conversions >= 5 or clicks >= 100 or impressions >= 5000:
+        return Confidence.HIGH
+    if conversions >= 1 or clicks >= 20 or impressions >= 500:
+        return Confidence.MEDIUM
+    return Confidence.LOW
+
+
 def compute_target_hash(target: dict[str, Any]) -> str:
     """Stable SHA-256 hex digest of the target dict for deduplication."""
     serialised = json.dumps(target, sort_keys=True, separators=(",", ":"), default=str)
@@ -178,6 +200,7 @@ class Recommendation:
     status: RecommendationStatus
     explanation: str | None = None
     target_hash: str = field(default="")
+    confidence: Confidence = Confidence.MEDIUM
 
     def __post_init__(self) -> None:
         if not self.target_hash:

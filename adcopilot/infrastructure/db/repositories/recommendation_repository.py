@@ -13,6 +13,7 @@ from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
     RecommendationKind,
+    Confidence,
     RecommendationSeverity,
     RecommendationStatus,
 )
@@ -25,6 +26,7 @@ def _model_to_domain(m: RecommendationModel) -> Recommendation:
         account_id=AccountId(str(m.account_id)),
         kind=RecommendationKind(m.kind),
         severity=RecommendationSeverity(m.severity),
+        confidence=Confidence(getattr(m, "confidence", None) or "MEDIUM"),
         status=RecommendationStatus(m.status),
         target=dict(m.target),
         payload=dict(m.payload),
@@ -86,6 +88,7 @@ class SqlRecommendationRepository:
         m.account_id = uuid.UUID(rec.account_id)
         m.kind = rec.kind.value
         m.severity = rec.severity.value
+        m.confidence = rec.confidence.value
         m.status = rec.status.value
         m.target = rec.target
         m.payload = rec.payload

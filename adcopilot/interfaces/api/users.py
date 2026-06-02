@@ -64,6 +64,7 @@ class RecommendationResponse(BaseModel):
     account_id: str
     kind: str
     severity: str
+    confidence: str = "MEDIUM"
     status: str
     estimated_monthly_savings_micros: int
     explanation: str | None
@@ -551,6 +552,7 @@ async def list_recommendations(
             account_id=str(r.account_id),
             kind=r.kind,
             severity=r.severity,
+            confidence=getattr(r, "confidence", None) or "MEDIUM",
             status=r.status,
             estimated_monthly_savings_micros=r.estimated_monthly_savings_micros,
             explanation=r.explanation,
