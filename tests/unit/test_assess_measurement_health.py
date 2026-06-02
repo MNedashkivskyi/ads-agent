@@ -59,6 +59,16 @@ def test_ga4_link_flips_healthy_when_linked() -> None:
     assert _by_key(linked, "value_tracking").status is MeasurementStatus.NEEDS_ATTENTION
 
 
+def test_enhanced_conversions_healthy_when_enabled() -> None:
+    actions = [FakeAction("Formularz", "SUBMIT_LEAD_FORM", "ENABLED", 5.0)]
+
+    off = assess_measurement_health(actions, ga4_linked=False)
+    on = assess_measurement_health(actions, ga4_linked=False, enhanced_conversions_enabled=True)
+
+    assert _by_key(off, "enhanced_conversions").status is MeasurementStatus.NEEDS_ATTENTION
+    assert _by_key(on, "enhanced_conversions").status is MeasurementStatus.HEALTHY
+
+
 def test_actions_present_but_none_receiving_needs_attention() -> None:
     actions = [FakeAction("Stara akcja", "DEFAULT", "ENABLED", 0.0)]
 

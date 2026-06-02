@@ -261,6 +261,38 @@ async def list_conversion_actions(
         raise _wrap_exc(exc) from exc
 
 
+async def get_enhanced_conversions_for_leads_enabled(
+    refresh_token: str,
+    customer_id: str,
+    settings: Settings,
+) -> bool:
+    """Whether the account has Enhanced Conversions for Leads enabled.
+
+    Best-effort: returns False on any error so the diagnostic degrades to
+    "needs attention" rather than failing the whole report.
+    """
+    cid = customer_id.replace("-", "")
+    query = (
+        "SELECT customer.conversion_tracking_setting."
+        "enhanced_conversions_for_leads_enabled FROM customer LIMIT 1"
+    )
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                return bool(
+                    row.customer.conversion_tracking_setting.enhanced_conversions_for_leads_enabled
+                )
+        return False
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:  # noqa: BLE001 — diagnostic must not hard-fail
+        logger.warning("enhanced_conversions_flag_failed", error=str(exc))
+        return False
+
+
 async def get_primary_conversion_tag(
     refresh_token: str,
     customer_id: str,

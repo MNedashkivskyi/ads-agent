@@ -127,6 +127,9 @@ async def get_measurement_health(
             snapshots = await google_ads.list_conversion_actions(
                 credentials.refresh_token, account.customer_id
             )
+            enhanced_enabled = await google_ads.get_enhanced_conversions_for_leads_enabled(
+                credentials.refresh_token, account.customer_id
+            )
 
             ga4_linked = (
                 await session.execute(
@@ -136,7 +139,11 @@ async def get_measurement_health(
                 )
             ).scalar_one_or_none() is not None
 
-            report = assess_measurement_health(snapshots, ga4_linked=ga4_linked)
+            report = assess_measurement_health(
+                snapshots,
+                ga4_linked=ga4_linked,
+                enhanced_conversions_enabled=enhanced_enabled,
+            )
     finally:
         await engine.dispose()
 

@@ -116,6 +116,21 @@ async def test_failure_marks_failed_for_retry() -> None:
 
 
 @pytest.mark.asyncio
+async def test_hashed_only_outcome_uploads_as_enhanced_conversion() -> None:
+    # Phase 3 (Enhanced Conversions for Leads): a web lead with no click id but a
+    # hashed email must still upload, carrying the hashed identifier and no gclid.
+    o = ConversionOutcome(
+        account_id="acc-1", hashed_email="abc123", conversion_action_id=11, external_id="e1"
+    )
+    o.mark_won(value=50.0, occurred_at=datetime(2026, 6, 1, tzinfo=UTC))
+    res, repo, uploads, uploader = await _run([o], UploadResult.build(received=1, succeeded=1))
+    conv = uploader.calls[0][0][0]
+    assert conv.hashed_email == "abc123"
+    assert conv.gclid is None
+    assert res.succeeded == 1
+
+
+@pytest.mark.asyncio
 async def test_nothing_uploadable_skips_call() -> None:
     res, repo, uploads, uploader = await _run([], UploadResult.build(received=0, succeeded=0))
     assert res.received == 0

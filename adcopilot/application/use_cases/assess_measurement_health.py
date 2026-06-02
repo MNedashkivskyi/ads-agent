@@ -61,6 +61,7 @@ def assess_measurement_health(
     conversion_actions: Sequence[object],
     *,
     ga4_linked: bool,
+    enhanced_conversions_enabled: bool = False,
 ) -> MeasurementHealthReport:
     """Build a MeasurementHealthReport from conversion-action snapshots + GA4 link.
 
@@ -150,16 +151,27 @@ def assess_measurement_health(
             )
         )
 
-    # 3) enhanced_conversions — verified in Phase 3.
-    subscores.append(
-        _sub(
-            "enhanced_conversions",
-            "Konwersje rozszerzone",
-            MeasurementStatus.MISSING if not summaries else MeasurementStatus.NEEDS_ATTENTION,
-            "Włącz konwersje rozszerzone (hashowane dane first-party) dla lepszego dopasowania "
-            "i odzyskania konwersji utraconych przez ograniczenia plików cookie.",
+    # 3) enhanced_conversions — driven by the account setting (Phase 3).
+    if enhanced_conversions_enabled:
+        subscores.append(
+            _sub(
+                "enhanced_conversions",
+                "Konwersje rozszerzone",
+                MeasurementStatus.HEALTHY,
+                "Konwersje rozszerzone dla leadów są włączone — dane first-party poprawiają "
+                "dopasowanie i odzyskują konwersje utracone przez ograniczenia cookies.",
+            )
         )
-    )
+    else:
+        subscores.append(
+            _sub(
+                "enhanced_conversions",
+                "Konwersje rozszerzone",
+                MeasurementStatus.MISSING if not summaries else MeasurementStatus.NEEDS_ATTENTION,
+                "Włącz konwersje rozszerzone (hashowane dane first-party) dla lepszego dopasowania "
+                "i odzyskania konwersji utraconych przez ograniczenia plików cookie.",
+            )
+        )
 
     # 4) consent_mode_v2 — verified in Phase 4.
     subscores.append(
