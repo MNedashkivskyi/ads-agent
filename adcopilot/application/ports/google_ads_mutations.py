@@ -188,6 +188,15 @@ class GoogleAdsMutationsPort(Protocol):
         target_cpa_micros: int,
     ) -> None: ...
 
+    async def set_conversion_action_value(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        conversion_action_id: int,
+        value: float,
+        currency_code: str,
+    ) -> None: ...
+
     async def remove_campaign_negative_keyword(
         self,
         refresh_token: str,

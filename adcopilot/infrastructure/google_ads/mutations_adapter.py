@@ -718,6 +718,54 @@ class GoogleAdsMutationsAdapter:
         except Exception as exc:
             raise _wrap_mutation_exc("set_target_cpa", exc) from exc
 
+    async def set_conversion_action_value(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        conversion_action_id: int,
+        value: float,
+        currency_code: str,
+    ) -> None:
+        """Set a default conversion value (+ always-use-default) on a conversion
+        action, so the account can bid on value (tROAS) even when the tag sends
+        no per-conversion value."""
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            ca_service = client.get_service("ConversionActionService")
+            op = client.get_type("ConversionActionOperation")
+            conversion_action = op.update
+            conversion_action.resource_name = ca_service.conversion_action_path(
+                cid, conversion_action_id
+            )
+            conversion_action.value_settings.default_value = float(value)
+            conversion_action.value_settings.default_currency_code = currency_code
+            conversion_action.value_settings.always_use_default_value = True
+            from google.protobuf import field_mask_pb2
+
+            client.copy_from(
+                op.update_mask,
+                field_mask_pb2.FieldMask(
+                    paths=[
+                        "value_settings.default_value",
+                        "value_settings.default_currency_code",
+                        "value_settings.always_use_default_value",
+                    ]
+                ),
+            )
+            ca_service.mutate_conversion_actions(customer_id=cid, operations=[op])
+            logger.info(
+                "conversion action value set",
+                customer_id=customer_id,
+                conversion_action_id=conversion_action_id,
+                value=value,
+                currency_code=currency_code,
+            )
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("set_conversion_action_value", exc) from exc
+
     async def set_ad_schedule_bid_modifier(
         self,
         refresh_token: str,

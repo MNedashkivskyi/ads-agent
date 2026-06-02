@@ -142,9 +142,9 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         RecommendationKind.IMPROVE_QUALITY_SCORE,
         RecommendationKind.DIVERSIFY_CHANNELS,
         # Module 6 — conversion tracking issues (informational)
+        # SET_CONVERSION_VALUE is now executable (SetConversionValueExecutor).
         RecommendationKind.UPGRADE_CONVERSION_ACTION,
         RecommendationKind.DEDUPLICATE_CONVERSIONS,
-        RecommendationKind.SET_CONVERSION_VALUE,
         # Module 7 — extension issues (ADD_SITELINKS/CALLOUTS/STRUCTURED_SNIPPETS are now executable)
         RecommendationKind.REFRESH_SITELINK,
         # Module 8 — landing page quality (informational, no Google Ads mutation)

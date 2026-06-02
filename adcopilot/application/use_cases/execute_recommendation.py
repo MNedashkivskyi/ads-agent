@@ -57,6 +57,7 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
     from adcopilot.application.executors.remove_redundant_match_type import (
         RemoveRedundantMatchTypeExecutor,
     )
+    from adcopilot.application.executors.set_conversion_value import SetConversionValueExecutor
     from adcopilot.config import get_settings
 
     execs: list[RecommendationExecutor] = [
@@ -78,6 +79,7 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
         AddCalloutsExecutor(),
         AddStructuredSnippetsExecutor(),
         PromoteSearchTermExecutor(),
+        SetConversionValueExecutor(),
     ]
     result = {e.kind: e for e in execs}
 
