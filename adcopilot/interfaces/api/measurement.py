@@ -64,9 +64,29 @@ class LeadResponse(BaseModel):
 
 
 class LeadWinRequest(BaseModel):
-    value: float
+    # Optional: if omitted, the value is derived from business economics.
+    value: float | None = None
     currency_code: str | None = None
     occurred_at: str | None = None  # ISO 8601; defaults to now (UTC)
+
+
+class BusinessContextRequest(BaseModel):
+    avg_order_value: float | None = None
+    profit_margin_pct: float | None = None
+    customer_ltv: float | None = None
+    target_roas: float | None = None
+    default_lead_value: float | None = None
+    currency_code: str = "PLN"
+
+
+class BusinessContextResponse(BaseModel):
+    avg_order_value: float | None
+    profit_margin_pct: float | None
+    customer_ltv: float | None
+    target_roas: float | None
+    default_lead_value: float | None
+    currency_code: str
+    is_configured: bool
 
 
 class UploadRequest(BaseModel):
@@ -195,11 +215,19 @@ async def get_measurement_health(
 
             consent_v2 = await _detect_consent_mode_v2(session, account.id)
 
+            from adcopilot.infrastructure.db.repositories.business_economics_repository import (
+                BusinessEconomicsRepository,
+            )
+
+            econ = await BusinessEconomicsRepository(session).get(str(account.id))
+            value_config = econ.is_configured() if econ else False
+
             report = assess_measurement_health(
                 snapshots,
                 ga4_linked=ga4_linked,
                 enhanced_conversions_enabled=enhanced_enabled,
                 consent_mode_v2_detected=consent_v2,
+                value_config_present=value_config,
             )
     finally:
         await engine.dispose()
@@ -389,6 +417,24 @@ async def win_lead(
             if outcome is None or outcome.account_id != str(account.id):
                 raise HTTPException(status_code=404, detail="Lead not found")
             from adcopilot.domain.conversion_outcome import OutcomeStatus, UploadStatus
+            from adcopilot.domain.value_derivation import derive_conversion_value
+            from adcopilot.infrastructure.db.repositories.business_economics_repository import (
+                BusinessEconomicsRepository,
+            )
+
+            # Resolve the value: explicit, else derived from business economics.
+            value = body.value
+            if value is None:
+                econ = await BusinessEconomicsRepository(session).get(str(account.id))
+                if econ is not None:
+                    # Lead-gen path: derive from default lead value / LTV.
+                    value = derive_conversion_value(econ, category="SUBMIT_LEAD_FORM")
+            if value is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Podaj wartość konwersji lub skonfiguruj ekonomię biznesu "
+                    "(domyślną wartość leada).",
+                )
 
             try:
                 # If the conversion was already uploaded, a value change is a
@@ -397,10 +443,10 @@ async def win_lead(
                     outcome.upload_status is UploadStatus.UPLOADED
                     and outcome.status is OutcomeStatus.WON
                 ):
-                    outcome.restate(body.value)
+                    outcome.restate(value)
                 else:
                     outcome.mark_won(
-                        value=body.value, occurred_at=occurred, currency_code=body.currency_code
+                        value=value, occurred_at=occurred, currency_code=body.currency_code
                     )
             except ValueError as e:
                 raise HTTPException(status_code=422, detail=str(e)) from e
@@ -499,4 +545,84 @@ async def upload_leads(
         failed=result.failed,
         errors=result.errors,
         validate_only=result.validate_only,
+    )
+
+
+@router.get("/{user_id}/measurement/business-context", response_model=BusinessContextResponse)
+async def get_business_context(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> BusinessContextResponse:
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.domain.business_economics import BusinessEconomics
+    from adcopilot.infrastructure.db.repositories.business_economics_repository import (
+        BusinessEconomicsRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            account, _ = await _resolve_account(session, user_id)
+            econ = await BusinessEconomicsRepository(session).get(str(account.id))
+            if econ is None:
+                econ = BusinessEconomics(account_id=str(account.id))
+    finally:
+        await engine.dispose()
+    return BusinessContextResponse(
+        avg_order_value=econ.avg_order_value,
+        profit_margin_pct=econ.profit_margin_pct,
+        customer_ltv=econ.customer_ltv,
+        target_roas=econ.target_roas,
+        default_lead_value=econ.default_lead_value,
+        currency_code=econ.currency_code,
+        is_configured=econ.is_configured(),
+    )
+
+
+@router.put("/{user_id}/measurement/business-context", response_model=BusinessContextResponse)
+async def put_business_context(
+    user_id: str,
+    body: BusinessContextRequest,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> BusinessContextResponse:
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.domain.business_economics import BusinessEconomics
+    from adcopilot.infrastructure.db.repositories.business_economics_repository import (
+        BusinessEconomicsRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            account, _ = await _resolve_account(session, user_id)
+            econ = BusinessEconomics(
+                account_id=str(account.id),
+                avg_order_value=body.avg_order_value,
+                profit_margin_pct=body.profit_margin_pct,
+                customer_ltv=body.customer_ltv,
+                target_roas=body.target_roas,
+                default_lead_value=body.default_lead_value,
+                currency_code=body.currency_code,
+            )
+            await BusinessEconomicsRepository(session).upsert(econ)
+    finally:
+        await engine.dispose()
+    return BusinessContextResponse(
+        avg_order_value=econ.avg_order_value,
+        profit_margin_pct=econ.profit_margin_pct,
+        customer_ltv=econ.customer_ltv,
+        target_roas=econ.target_roas,
+        default_lead_value=econ.default_lead_value,
+        currency_code=econ.currency_code,
+        is_configured=econ.is_configured(),
     )

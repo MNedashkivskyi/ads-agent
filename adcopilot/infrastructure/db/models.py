@@ -29,6 +29,7 @@ __all__ = [
     "AudiencePerformanceSnapshotModel",
     "AuditLogModel",
     "Base",
+    "BusinessEconomicsModel",
     "CampaignExtensionSnapshotModel",
     "CampaignSnapshotModel",
     "ConversionActionSnapshotModel",
@@ -1260,6 +1261,25 @@ class ConversionOutcomeModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class BusinessEconomicsModel(Base):
+    """Per-account unit economics for value-based bidding (Phase 5)."""
+
+    __tablename__ = "business_economics"
+
+    account_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True
+    )
+    avg_order_value: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    profit_margin_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
+    customer_ltv: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    target_roas: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
+    default_lead_value: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    currency_code: Mapped[str] = mapped_column(String(3), nullable=False, default="PLN")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

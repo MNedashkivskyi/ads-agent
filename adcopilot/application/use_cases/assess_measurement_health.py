@@ -63,6 +63,7 @@ def assess_measurement_health(
     ga4_linked: bool,
     enhanced_conversions_enabled: bool = False,
     consent_mode_v2_detected: bool = False,
+    value_config_present: bool = False,
 ) -> MeasurementHealthReport:
     """Build a MeasurementHealthReport from conversion-action snapshots + GA4 link.
 
@@ -121,7 +122,7 @@ def assess_measurement_health(
             )
         )
 
-    # 2) value_tracking — full value verification lands in Phase 5; Phase 0 flags it.
+    # 2) value_tracking — HEALTHY once business economics are configured (Phase 5).
     if not summaries:
         subscores.append(
             _sub(
@@ -129,6 +130,16 @@ def assess_measurement_health(
                 "Śledzenie wartości",
                 MeasurementStatus.MISSING,
                 "Brak konwersji, więc brak wartości. Po dodaniu śledzenia ustaw wartości konwersji.",
+            )
+        )
+    elif value_config_present:
+        subscores.append(
+            _sub(
+                "value_tracking",
+                "Śledzenie wartości",
+                MeasurementStatus.HEALTHY,
+                "Ekonomia biznesu jest skonfigurowana — konwersje mogą przekazywać wartość "
+                "(umożliwia strategię tROAS).",
             )
         )
     elif has_value_category:
