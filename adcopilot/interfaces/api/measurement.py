@@ -324,10 +324,20 @@ async def win_lead(
             outcome = await repo.get(uuid.UUID(outcome_id))
             if outcome is None or outcome.account_id != str(account.id):
                 raise HTTPException(status_code=404, detail="Lead not found")
+            from adcopilot.domain.conversion_outcome import OutcomeStatus, UploadStatus
+
             try:
-                outcome.mark_won(
-                    value=body.value, occurred_at=occurred, currency_code=body.currency_code
-                )
+                # If the conversion was already uploaded, a value change is a
+                # RESTATEMENT (correction), not a fresh win.
+                if (
+                    outcome.upload_status is UploadStatus.UPLOADED
+                    and outcome.status is OutcomeStatus.WON
+                ):
+                    outcome.restate(body.value)
+                else:
+                    outcome.mark_won(
+                        value=body.value, occurred_at=occurred, currency_code=body.currency_code
+                    )
             except ValueError as e:
                 raise HTTPException(status_code=422, detail=str(e)) from e
             await repo.save(outcome)
@@ -362,7 +372,13 @@ async def lose_lead(
             outcome = await repo.get(uuid.UUID(outcome_id))
             if outcome is None or outcome.account_id != str(account.id):
                 raise HTTPException(status_code=404, detail="Lead not found")
-            outcome.mark_lost()
+            from adcopilot.domain.conversion_outcome import UploadStatus
+
+            # An already-uploaded conversion that's now lost must be RETRACTED.
+            if outcome.upload_status is UploadStatus.UPLOADED:
+                outcome.retract()
+            else:
+                outcome.mark_lost()
             await repo.save(outcome)
     finally:
         await engine.dispose()

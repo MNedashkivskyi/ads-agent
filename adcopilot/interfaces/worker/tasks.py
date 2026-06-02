@@ -3524,9 +3524,12 @@ def upload_offline_conversions_task() -> dict[str, object]:
     async def _run() -> dict[str, object]:
         import uuid
 
-        from sqlalchemy import select
+        from sqlalchemy import and_, or_, select
         from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+        from adcopilot.application.use_cases.upload_conversion_adjustments import (
+            upload_conversion_adjustments,
+        )
         from adcopilot.application.use_cases.upload_offline_conversions import (
             upload_offline_conversions,
         )
@@ -3551,13 +3554,22 @@ def upload_offline_conversions_task() -> dict[str, object]:
         total_succeeded = 0
         total_failed = 0
         try:
-            # Distinct accounts with WON outcomes not yet successfully uploaded.
+            # Distinct accounts with WON outcomes not yet uploaded OR an uploaded
+            # outcome with a pending adjustment (restate/retract).
             async with AsyncSession(engine) as session:
                 rows = await session.execute(
                     select(ConversionOutcomeModel.account_id)
                     .where(
-                        ConversionOutcomeModel.status == "WON",
-                        ConversionOutcomeModel.upload_status.in_(("PENDING", "FAILED")),
+                        or_(
+                            and_(
+                                ConversionOutcomeModel.status == "WON",
+                                ConversionOutcomeModel.upload_status.in_(("PENDING", "FAILED")),
+                            ),
+                            and_(
+                                ConversionOutcomeModel.pending_adjustment.isnot(None),
+                                ConversionOutcomeModel.upload_status == "UPLOADED",
+                            ),
+                        )
                     )
                     .distinct()
                 )
@@ -3586,9 +3598,19 @@ def upload_offline_conversions_task() -> dict[str, object]:
                             uploader=uploader,
                             validate_only=False,
                         )
+                        # Flush any pending restate/retract corrections too.
+                        adj_result = await upload_conversion_adjustments(
+                            account_id=account_id,
+                            customer_id=account.customer_id,
+                            refresh_token=credentials.refresh_token,
+                            outcome_repo=ConversionOutcomeRepository(session),
+                            upload_repo=ConversionUploadRepository(session),
+                            uploader=uploader,
+                            validate_only=False,
+                        )
                     accounts_processed += 1
-                    total_succeeded += result.succeeded
-                    total_failed += result.failed
+                    total_succeeded += result.succeeded + adj_result.succeeded
+                    total_failed += result.failed + adj_result.failed
                 except Exception as exc:  # noqa: BLE001 — isolate per-account failures
                     logger.warning(
                         "offline_conversion_upload_account_failed",

@@ -34,6 +34,22 @@ class OfflineConversion:
 
 
 @dataclass
+class ConversionAdjustment:
+    """A correction to an already-uploaded conversion (keyed by order_id).
+
+    ``adjustment_type`` is "RESTATEMENT" (change value) or "RETRACTION" (cancel).
+    ``restatement_value`` is required for restatements.
+    """
+
+    conversion_action_id: int
+    order_id: str
+    adjustment_type: str
+    adjustment_date_time: str
+    restatement_value: float | None = None
+    currency_code: str = "PLN"
+
+
+@dataclass
 class UploadResult:
     received: int
     succeeded: int
@@ -67,6 +83,15 @@ class MeasurementUploadPort(Protocol):
         refresh_token: str,
         customer_id: str,
         conversions: list[OfflineConversion],
+        *,
+        validate_only: bool = False,
+    ) -> UploadResult: ...
+
+    async def upload_conversion_adjustments(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        adjustments: list[ConversionAdjustment],
         *,
         validate_only: bool = False,
     ) -> UploadResult: ...

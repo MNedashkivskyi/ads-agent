@@ -57,6 +57,26 @@ def test_interpret_partial_failure_counts_and_surfaces_message() -> None:
     assert any("invalid gclid" in e for e in r.errors)
 
 
+def _adjustment_result():
+    # Adjustment results echo conversion_action + order_id (no gclid).
+    return SimpleNamespace(
+        conversion_action="customers/1/conversionActions/9",
+        gclid="",
+        gbraid="",
+        wbraid="",
+        order_id="crm-1",
+    )
+
+
+def test_interpret_handles_adjustment_results() -> None:
+    resp = SimpleNamespace(
+        results=[_adjustment_result(), _adjustment_result()],
+        partial_failure_error=SimpleNamespace(code=0, message="", details=[]),
+    )
+    r = Adapter._interpret(resp, received=2, validate_only=True)
+    assert (r.received, r.succeeded, r.failed) == (2, 2, 0)
+
+
 def test_interpret_no_results_no_error() -> None:
     resp = SimpleNamespace(results=[], partial_failure_error=SimpleNamespace(code=0, message="", details=[]))
     r = Adapter._interpret(resp, received=0, validate_only=False)

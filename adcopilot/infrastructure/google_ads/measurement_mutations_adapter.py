@@ -14,7 +14,11 @@ from typing import Any
 
 import structlog
 
-from adcopilot.application.ports.measurement import OfflineConversion, UploadResult
+from adcopilot.application.ports.measurement import (
+    ConversionAdjustment,
+    OfflineConversion,
+    UploadResult,
+)
 from adcopilot.config import Settings
 from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
@@ -154,3 +158,55 @@ class GoogleAdsMeasurementUploadAdapter:
             raise
         except Exception as exc:  # noqa: BLE001
             raise _wrap("upload_click_conversions", exc) from exc
+
+    def _build_adjustment(self, client: Any, cid: str, a: ConversionAdjustment) -> Any:
+        ca_service = client.get_service("ConversionActionService")
+        adjustment = client.get_type("ConversionAdjustment")
+        adjustment.conversion_action = ca_service.conversion_action_path(
+            cid, a.conversion_action_id
+        )
+        adjustment.adjustment_type = client.enums.ConversionAdjustmentTypeEnum[a.adjustment_type]
+        adjustment.order_id = a.order_id
+        adjustment.adjustment_date_time = a.adjustment_date_time
+        if a.adjustment_type == "RESTATEMENT" and a.restatement_value is not None:
+            adjustment.restatement_value.adjusted_value = float(a.restatement_value)
+            adjustment.restatement_value.currency_code = a.currency_code
+        return adjustment
+
+    async def upload_conversion_adjustments(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        adjustments: list[ConversionAdjustment],
+        *,
+        validate_only: bool = False,
+    ) -> UploadResult:
+        received = len(adjustments)
+        if received == 0:
+            return UploadResult.build(received=0, succeeded=0, validate_only=validate_only)
+        try:
+            client = self._build_client(refresh_token)
+            service = client.get_service("ConversionAdjustmentUploadService")
+            cid = customer_id.replace("-", "")
+            request = client.get_type("UploadConversionAdjustmentsRequest")
+            request.customer_id = cid
+            request.conversion_adjustments.extend(
+                self._build_adjustment(client, cid, a) for a in adjustments
+            )
+            request.partial_failure = True
+            request.validate_only = validate_only
+            response = service.upload_conversion_adjustments(request=request)
+            result = self._interpret(response, received, validate_only)
+            logger.info(
+                "conversion_adjustments_uploaded",
+                customer_id=customer_id,
+                received=result.received,
+                succeeded=result.succeeded,
+                failed=result.failed,
+                validate_only=validate_only,
+            )
+            return result
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise _wrap("upload_conversion_adjustments", exc) from exc
