@@ -69,6 +69,16 @@ def test_enhanced_conversions_healthy_when_enabled() -> None:
     assert _by_key(on, "enhanced_conversions").status is MeasurementStatus.HEALTHY
 
 
+def test_consent_mode_v2_healthy_when_detected() -> None:
+    actions = [FakeAction("Formularz", "SUBMIT_LEAD_FORM", "ENABLED", 5.0)]
+
+    off = assess_measurement_health(actions, ga4_linked=False)
+    on = assess_measurement_health(actions, ga4_linked=False, consent_mode_v2_detected=True)
+
+    assert _by_key(off, "consent_mode_v2").status is MeasurementStatus.NEEDS_ATTENTION
+    assert _by_key(on, "consent_mode_v2").status is MeasurementStatus.HEALTHY
+
+
 def test_actions_present_but_none_receiving_needs_attention() -> None:
     actions = [FakeAction("Stara akcja", "DEFAULT", "ENABLED", 0.0)]
 

@@ -81,6 +81,60 @@ class UploadResultResponse(BaseModel):
     validate_only: bool
 
 
+class ConsentSnippetResponse(BaseModel):
+    snippet: str
+    instructions_pl: str
+
+
+@router.get("/{user_id}/measurement/consent-snippet", response_model=ConsentSnippetResponse)
+async def get_consent_snippet(
+    user_id: str,
+    current_user: CurrentUser,
+) -> ConsentSnippetResponse:
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    from adcopilot.domain.conversion_tracking.consent_mode import (
+        INSTRUCTIONS_PL,
+        consent_mode_v2_snippet,
+    )
+
+    return ConsentSnippetResponse(snippet=consent_mode_v2_snippet(), instructions_pl=INSTRUCTIONS_PL)
+
+
+async def _detect_consent_mode_v2(session, account_id) -> bool:
+    """Best-effort: fetch the account's landing page and detect Consent Mode v2."""
+    import json
+    import uuid
+
+    from sqlalchemy import desc, select
+
+    from adcopilot.infrastructure.consent_checker import fetch_measurement_signals
+    from adcopilot.infrastructure.db.models import AdSnapshotModel
+
+    acct_uuid = account_id if isinstance(account_id, uuid.UUID) else uuid.UUID(str(account_id))
+    row = (
+        await session.execute(
+            select(AdSnapshotModel.final_urls_json)
+            .where(
+                AdSnapshotModel.account_id == acct_uuid,
+                AdSnapshotModel.final_urls_json.isnot(None),
+            )
+            .order_by(desc(AdSnapshotModel.snapshot_date))
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if not row:
+        return False
+    try:
+        urls = json.loads(row) if isinstance(row, str) else row
+    except (ValueError, TypeError):
+        return False
+    if not urls:
+        return False
+    signals = await fetch_measurement_signals(urls[0])
+    return signals.consent_mode_v2
+
+
 @router.get("/{user_id}/measurement/health", response_model=MeasurementHealthResponse)
 async def get_measurement_health(
     user_id: str,
@@ -139,10 +193,13 @@ async def get_measurement_health(
                 )
             ).scalar_one_or_none() is not None
 
+            consent_v2 = await _detect_consent_mode_v2(session, account.id)
+
             report = assess_measurement_health(
                 snapshots,
                 ga4_linked=ga4_linked,
                 enhanced_conversions_enabled=enhanced_enabled,
+                consent_mode_v2_detected=consent_v2,
             )
     finally:
         await engine.dispose()

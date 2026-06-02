@@ -62,6 +62,7 @@ def assess_measurement_health(
     *,
     ga4_linked: bool,
     enhanced_conversions_enabled: bool = False,
+    consent_mode_v2_detected: bool = False,
 ) -> MeasurementHealthReport:
     """Build a MeasurementHealthReport from conversion-action snapshots + GA4 link.
 
@@ -173,16 +174,26 @@ def assess_measurement_health(
             )
         )
 
-    # 4) consent_mode_v2 — verified in Phase 4.
-    subscores.append(
-        _sub(
-            "consent_mode_v2",
-            "Tryb zgody v2",
-            MeasurementStatus.NEEDS_ATTENTION,
-            "Nie potwierdzono sygnałów Consent Mode v2 (ad_user_data, ad_personalization). "
-            "Jest wymagany w EOG — bez niego tracisz pomiar i remarketing.",
+    # 4) consent_mode_v2 — detected from the live site (Phase 4).
+    if consent_mode_v2_detected:
+        subscores.append(
+            _sub(
+                "consent_mode_v2",
+                "Tryb zgody v2",
+                MeasurementStatus.HEALTHY,
+                "Wykryto sygnały Consent Mode v2 (ad_user_data, ad_personalization) na stronie.",
+            )
         )
-    )
+    else:
+        subscores.append(
+            _sub(
+                "consent_mode_v2",
+                "Tryb zgody v2",
+                MeasurementStatus.NEEDS_ATTENTION,
+                "Nie wykryto sygnałów Consent Mode v2 (ad_user_data, ad_personalization). "
+                "Jest wymagany w EOG — bez niego tracisz pomiar i remarketing.",
+            )
+        )
 
     # 5) ga4_link — real signal.
     subscores.append(
