@@ -26,7 +26,10 @@ _COST_RATIO_THRESHOLD = 2.0
 
 
 class DeviceCampaignSplitRule:
-    kind = RecommendationKind.DEVICE_BID_ADJUSTMENT
+    # Advisory only: this suggests restructuring into a device-specific campaign,
+    # which is NOT a bid-modifier mutation — it must not map to the device-bid
+    # executor (that would apply the wrong action on approve).
+    kind = RecommendationKind.DEVICE_CAMPAIGN_SPLIT
     severity = RecommendationSeverity.MEDIUM
 
     def detect(self, ctx: DetectionContext) -> list[Recommendation]:

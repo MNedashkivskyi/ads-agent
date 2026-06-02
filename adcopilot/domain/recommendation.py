@@ -49,6 +49,7 @@ class RecommendationKind(Enum):
     MATCH_TYPE_REDUNDANCY = "MATCH_TYPE_REDUNDANCY"
     # Module 4 — Audience & targeting intelligence
     DEVICE_BID_ADJUSTMENT = "DEVICE_BID_ADJUSTMENT"
+    DEVICE_CAMPAIGN_SPLIT = "DEVICE_CAMPAIGN_SPLIT"  # advisory: suggest a device-specific campaign
     GEO_EXCLUSION = "GEO_EXCLUSION"
     AD_SCHEDULE_ADJUSTMENT = "AD_SCHEDULE_ADJUSTMENT"
     DAY_OF_WEEK_BID_ADJUSTMENT = "DAY_OF_WEEK_BID_ADJUSTMENT"
@@ -130,6 +131,9 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         RecommendationKind.KEYWORD_CANNIBALIZATION,
         RecommendationKind.ORPHANED_CAMPAIGN,
         # Module 4 — targeting insights (informational)
+        # DEVICE_CAMPAIGN_SPLIT is advisory: restructuring into a device-specific
+        # campaign is a human decision, not a bid-modifier mutation.
+        RecommendationKind.DEVICE_CAMPAIGN_SPLIT,
         RecommendationKind.DAY_OF_WEEK_BID_ADJUSTMENT,
         RecommendationKind.ADD_AUDIENCE_SIGNALS,
         RecommendationKind.AUDIENCE_BID_ADJUSTMENT,
