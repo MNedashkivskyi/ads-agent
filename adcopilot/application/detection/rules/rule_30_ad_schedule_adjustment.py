@@ -12,6 +12,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.bidding import BiddingMode, bidding_mode_for
 from adcopilot.domain.polish_market.calendar import is_polish_holiday
 from adcopilot.domain.recommendation import (
     Recommendation,
@@ -57,6 +58,11 @@ class AdScheduleAdjustmentRule:
             if total_cost < _MIN_COST_MICROS:
                 continue
             if convs[key] > 0:
+                continue
+
+            # Smart Bidding manages bids by hour automatically; manual ad-schedule
+            # bid adjustments are ignored — suppress for Smart Bidding campaigns.
+            if bidding_mode_for(ctx.campaigns, campaign_id) is BiddingMode.SMART:
                 continue
 
             campaign_name = str(campaign_id)

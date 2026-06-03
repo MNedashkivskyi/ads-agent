@@ -634,6 +634,7 @@ class RecommendationModel(Base):
     account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     kind: Mapped[str] = mapped_column(String(100), nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    confidence: Mapped[str] = mapped_column(String(20), nullable=False, default="MEDIUM")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING", index=True)
     target: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)

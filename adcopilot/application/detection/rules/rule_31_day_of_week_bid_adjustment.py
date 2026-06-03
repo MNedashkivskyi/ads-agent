@@ -12,6 +12,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.bidding import BiddingMode, bidding_mode_for
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -63,6 +64,11 @@ class DayOfWeekBidAdjustmentRule:
 
             day_cpa = total_cost / total_convs
             if day_cpa <= _CPA_EXCESS_RATIO * account_avg_cpa:
+                continue
+
+            # Smart Bidding sets intraday/day-of-week bids automatically; manual
+            # day-of-week adjustments are ignored — suppress for those campaigns.
+            if bidding_mode_for(ctx.campaigns, campaign_id) is BiddingMode.SMART:
                 continue
 
             campaign_name = str(campaign_id)

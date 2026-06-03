@@ -7,6 +7,7 @@ from collections import defaultdict
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.bidding import BiddingMode, bidding_mode_for
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -43,6 +44,10 @@ class MatchTypeRedundancyRule:
                 continue
 
             ag_name, campaign_id = ag_info.get(ad_group_id, ("", 0))
+            # Under Smart Bidding, keeping broad alongside exact/phrase is a valid
+            # (recommended) structure — "redundancy" is expected. Suppress.
+            if bidding_mode_for(ctx.campaigns, campaign_id) is BiddingMode.SMART:
+                continue
             target = {
                 "ad_group_id": ad_group_id,
                 "campaign_id": campaign_id,
