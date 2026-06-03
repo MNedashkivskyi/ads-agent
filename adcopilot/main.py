@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.digest import router as digest_router
     from adcopilot.interfaces.api.causal_experiments import router as causal_experiments_router
     from adcopilot.interfaces.api.experiments import router as experiments_router
+    from adcopilot.interfaces.api.spend_safety import router as spend_safety_router
     from adcopilot.interfaces.api.insights import router as insights_router
     from adcopilot.interfaces.api.landing_page import router as landing_page_router
     from adcopilot.interfaces.api.launch import api_router as launch_api_router
@@ -129,6 +130,7 @@ def create_app() -> FastAPI:
     application.include_router(proposal_editor_router)
     application.include_router(experiments_router)
     application.include_router(causal_experiments_router)
+    application.include_router(spend_safety_router)
     application.include_router(search_terms_router)
     application.include_router(ad_proposals_router)
     application.include_router(landing_page_router)
