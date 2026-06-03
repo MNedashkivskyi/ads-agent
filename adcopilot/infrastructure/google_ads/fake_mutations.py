@@ -369,6 +369,22 @@ class FakeGoogleAdsMutations:
             }
         )
 
+    async def set_target_roas(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        target_roas: float,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "set_target_roas",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "target_roas": target_roas,
+            }
+        )
+
     async def remove_campaign_negative_keyword(
         self,
         refresh_token: str,

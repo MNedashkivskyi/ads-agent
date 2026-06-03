@@ -743,6 +743,39 @@ class GoogleAdsMutationsAdapter:
         except Exception as exc:
             raise _wrap_mutation_exc("set_target_cpa", exc) from exc
 
+    async def set_target_roas(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+        target_roas: float,
+    ) -> None:
+        """Set a campaign's target ROAS (Performance Max / Shopping safe auto-fix)."""
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            campaign_service = client.get_service("CampaignService")
+            op = client.get_type("CampaignOperation")
+            campaign = op.update
+            campaign.resource_name = campaign_service.campaign_path(cid, campaign_id)
+            campaign.target_roas.target_roas = float(target_roas)
+            from google.protobuf import field_mask_pb2
+
+            client.copy_from(
+                op.update_mask, field_mask_pb2.FieldMask(paths=["target_roas.target_roas"])
+            )
+            campaign_service.mutate_campaigns(customer_id=cid, operations=[op])
+            logger.info(
+                "target ROAS set",
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                target_roas=target_roas,
+            )
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("set_target_roas", exc) from exc
+
     async def set_conversion_action_value(
         self,
         refresh_token: str,
