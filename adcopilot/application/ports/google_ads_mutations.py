@@ -48,6 +48,13 @@ class GoogleAdsMutationsPort(Protocol):
         new_budget_micros: int,
     ) -> None: ...
 
+    async def pause_campaign(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+    ) -> None: ...
+
     # --- Undo counterparts ---
 
     async def enable_keyword(
