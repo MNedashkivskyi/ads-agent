@@ -81,10 +81,20 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
     ]
     result = {e.kind: e for e in execs}
 
-    # Ad copy refresh — shared instance registered for both AD_FATIGUE and WEAK_RSA_STRENGTH
+    # Ad copy refresh — one shared executor that generates a fresh, stronger RSA
+    # in the ad group. Used for every "the ad copy is weak" signal; it does not
+    # delete the existing ad, so it's safe across all of these kinds.
     ad_copy_executor = AdCopyRefreshExecutor.from_settings(get_settings())
-    result[RecommendationKind.AD_FATIGUE] = ad_copy_executor
-    result[RecommendationKind.WEAK_RSA_STRENGTH] = ad_copy_executor
+    for _kind in (
+        RecommendationKind.AD_FATIGUE,
+        RecommendationKind.WEAK_RSA_STRENGTH,
+        RecommendationKind.ADD_AD_VARIATION,
+        RecommendationKind.AD_KEYWORD_MISMATCH,
+        RecommendationKind.MISSING_CTA,
+        RecommendationKind.REDUNDANT_HEADLINES,
+        RecommendationKind.GENERIC_DESCRIPTION,
+    ):
+        result[_kind] = ad_copy_executor
     return result
 
 
