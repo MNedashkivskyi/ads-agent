@@ -117,10 +117,13 @@ async def get_recommendations_impact(
     try:
         async with AsyncSession(engine) as session:
             from adcopilot.infrastructure.db.models import (
+                CampaignExperimentModel,
                 GoogleAdsAccountModel,
+                PerformanceBaselineModel,
                 PerformanceComparisonModel,
                 RecommendationModel,
             )
+            from adcopilot.domain.evidence_grading import grade_comparison
 
             acct_result = await session.execute(
                 select(GoogleAdsAccountModel.id).where(
@@ -150,9 +153,54 @@ async def get_recommendations_impact(
             )
             comparisons = {c.recommendation_id: c for c in cmp_result.scalars().all()}
 
+            # Baselines (for significance grading) keyed by baseline id.
+            baseline_ids = [c.baseline_id for c in comparisons.values()]
+            baselines: dict = {}
+            if baseline_ids:
+                bl_result = await session.execute(
+                    select(PerformanceBaselineModel).where(
+                        PerformanceBaselineModel.id.in_(baseline_ids)
+                    )
+                )
+                baselines = {b.id: b for b in bl_result.scalars().all()}
+
+            # Recs whose change was validated by a native experiment → CAUSAL grade.
+            exp_result = await session.execute(
+                select(CampaignExperimentModel.source_recommendation_id).where(
+                    CampaignExperimentModel.source_recommendation_id.in_(
+                        [str(r.id) for r in recs]
+                    ),
+                    CampaignExperimentModel.status.in_(("EVALUATED", "PROMOTED")),
+                )
+            )
+            causal_rec_ids = {row[0] for row in exp_result.all()}
+
             items = []
             for rec in recs:
                 cmp = comparisons.get(rec.id)
+                comparison_block = None
+                if cmp:
+                    baseline = baselines.get(cmp.baseline_id)
+                    grade = grade_comparison(
+                        baseline_conversions=baseline.conversions if baseline else 0.0,
+                        baseline_impressions=baseline.impressions if baseline else 0.0,
+                        current_conversions=cmp.current_conversions,
+                        current_impressions=cmp.current_impressions,
+                        has_causal_experiment=str(rec.id) in causal_rec_ids,
+                    )
+                    comparison_block = {
+                        "delta_cpa_pct": cmp.delta_cpa_pct,
+                        "delta_conversions_pct": cmp.delta_conversions_pct,
+                        "delta_ctr_pct": cmp.delta_ctr_pct,
+                        "verdict": cmp.verdict,
+                        "comparison_window_days": cmp.comparison_window_days,
+                        "compared_at": cmp.compared_at.isoformat(),
+                        # Honesty layer: grade the claim's evidence strength.
+                        "evidence_grade": grade.grade,
+                        "evidence_label": grade.label_pl,
+                        "evidence_caveat": grade.caveat_pl,
+                        "p_value": grade.p_value,
+                    }
                 items.append(
                     {
                         "recommendation_id": str(rec.id),
@@ -160,16 +208,7 @@ async def get_recommendations_impact(
                         "severity": rec.severity,
                         "estimated_monthly_savings_micros": rec.estimated_monthly_savings_micros,
                         "executed_at": rec.updated_at.isoformat() if rec.updated_at else None,
-                        "comparison": {
-                            "delta_cpa_pct": cmp.delta_cpa_pct,
-                            "delta_conversions_pct": cmp.delta_conversions_pct,
-                            "delta_ctr_pct": cmp.delta_ctr_pct,
-                            "verdict": cmp.verdict,
-                            "comparison_window_days": cmp.comparison_window_days,
-                            "compared_at": cmp.compared_at.isoformat(),
-                        }
-                        if cmp
-                        else None,
+                        "comparison": comparison_block,
                     }
                 )
             return {"user_id": user_id, "items": items}

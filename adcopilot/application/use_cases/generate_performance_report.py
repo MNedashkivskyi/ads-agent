@@ -112,6 +112,14 @@ async def generate_performance_report(
         "conversions": round(prev_conversions, 2),
         "ctr": round(prev_ctr * 100, 4),
         "cpa": round(prev_cpa, 2) if prev_cpa is not None else None,
+        # Honesty layer: a period-over-period comparison is observational, not causal —
+        # seasonality and auction dynamics move these numbers on their own.
+        "evidence_grade": "OBSERVATIONAL",
+        "evidence_note": (
+            "Porównanie okres do okresu ma charakter obserwacyjny — pokazuje zmianę, "
+            "ale nie dowodzi, że wynika ona z wprowadzonych zmian (wpływ sezonowości i aukcji). "
+            "Aby zmierzyć rzeczywisty wpływ konkretnej zmiany, uruchom eksperyment."
+        ),
     }
 
     # -----------------------------------------------------------------------
