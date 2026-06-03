@@ -16,6 +16,7 @@ import uuid
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.channel import is_search_campaign
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -41,6 +42,8 @@ class RelaxTargetCpaRule:
         recs: list[Recommendation] = []
 
         for c in ctx.campaigns:
+            if not is_search_campaign(c.channel_type):
+                continue  # PMax/Shopping tCPA handled by channel-aware rules
             if c.status != "ENABLED":
                 continue
             if c.bidding_strategy != "TARGET_CPA":

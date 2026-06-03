@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.channel import is_search_campaign
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -28,6 +29,8 @@ class BudgetCappedRule:
         recs: list[Recommendation] = []
 
         for campaign in ctx.campaigns:
+            if not is_search_campaign(campaign.channel_type):
+                continue  # PMax/Shopping budgets handled by channel-aware rules
             if campaign.budget_micros <= 0:
                 continue
 
