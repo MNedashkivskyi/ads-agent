@@ -480,6 +480,17 @@ async def _generate_explanations(
     if not settings.LLM_API_KEY:
         logger.warning("LLM_API_KEY not set — skipping explanation generation")
         return
+
+    # Load business context once so every explanation is anchored to economics.
+    from adcopilot.infrastructure.db.repositories.business_economics_repository import (
+        BusinessEconomicsRepository,
+    )
+
+    try:
+        business_context = await BusinessEconomicsRepository(session).get(str(account_id))
+    except Exception:
+        business_context = None
+
     llm = AnthropicClient(api_key=settings.LLM_API_KEY)
     try:
         use_case = ExplainRecommendationUseCase(llm=llm, repo=rec_repo)
@@ -487,7 +498,7 @@ async def _generate_explanations(
         explained = 0
         for rec in unexplained:
             try:
-                await use_case.execute(rec.id, language="pl")
+                await use_case.execute(rec.id, language="pl", business_context=business_context)
                 explained += 1
             except Exception:
                 logger.warning("explain_recommendation_failed", rec_id=str(rec.id))
