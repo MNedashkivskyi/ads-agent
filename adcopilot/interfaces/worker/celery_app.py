@@ -129,6 +129,13 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.upload_offline_conversions_task",
                     "schedule": crontab(minute=0, hour="*/6"),
                 },
+                "daily-campaign-experiment-evaluation": {
+                    # 6:30 AM UTC daily — after nightly snapshot. Poll RUNNING
+                    # native Google Ads experiments, compute causal verdicts, and
+                    # notify on conclusion (human-in-the-loop; no auto-promote).
+                    "task": "adcopilot.interfaces.worker.tasks.evaluate_campaign_experiments_task",
+                    "schedule": crontab(hour=6, minute=30),
+                },
             },
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},
