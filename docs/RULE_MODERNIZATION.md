@@ -23,8 +23,6 @@ Other manual-era surface (e.g. `rule_10_wrong_bidding_strategy`) already keys of
 All recommendations also carry a **confidence** level (LOW/MEDIUM/HIGH) graded by
 data sufficiency (`confidence_from_volume`), surfaced on the recommendations page.
 
----
-
 # Rule cleanup (executability)
 
 ## Now executable (P1)
