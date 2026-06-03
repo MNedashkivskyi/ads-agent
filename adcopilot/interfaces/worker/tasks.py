@@ -895,7 +895,11 @@ def execute_recommendation_task(
 
     from celery import Task  # type: ignore[import-untyped]
 
-    from adcopilot.domain.exceptions import CampaignNotFoundError, GoogleAdsAuthError
+    from adcopilot.domain.exceptions import (
+        CampaignNotFoundError,
+        GoogleAdsAuthError,
+        SpendGuardViolation,
+    )
 
     assert isinstance(self, Task)
     try:
@@ -931,6 +935,16 @@ def execute_recommendation_task(
         except Exception:
             logger.exception("failed to expire recs for removed campaign", rec_id=rec_id)
         return {"rec_id": rec_id, "status": "expired", "reason": str(exc), "expired": expired}
+    except SpendGuardViolation as exc:
+        # Terminal business condition: the action would breach a configured spend
+        # cap. Retrying can't help — mark FAILED and surface the Polish reason to
+        # the user (no silent failure). No Sentry noise.
+        logger.warning("recommendation blocked by spend guard", rec_id=rec_id, code=exc.code)
+        try:
+            asyncio.run(_handle_spend_guard_block(rec_id, str(exc)))
+        except Exception:
+            logger.exception("failed to handle spend-guard block", rec_id=rec_id)
+        return {"rec_id": rec_id, "status": "blocked", "reason": str(exc), "code": exc.code}
     except Exception as exc:
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc) from exc
@@ -959,12 +973,19 @@ async def _run_execute_recommendation(rec_id: str) -> dict[str, object]:
     from adcopilot.infrastructure.db.repositories.recommendation_repository import (
         SqlRecommendationRepository,
     )
+    from adcopilot.infrastructure.db.repositories.spend_safety_config_repository import (
+        SpendSafetyConfigRepository,
+    )
     from adcopilot.infrastructure.google_ads.mutations_adapter import GoogleAdsMutationsAdapter
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with AsyncSession(engine) as session, session.begin():
+
+            async def _spend_provider(account_id: str):
+                return await _account_spend_context_provider(session, account_id)
+
             use_case = ExecuteRecommendationUseCase(
                 rec_repo=SqlRecommendationRepository(session),
                 audit_log_repo=SqlAuditLogRepository(session),
@@ -973,6 +994,8 @@ async def _run_execute_recommendation(rec_id: str) -> dict[str, object]:
                     session, settings.TOKEN_ENCRYPTION_KEY
                 ),
                 mutations=GoogleAdsMutationsAdapter(settings),
+                spend_safety_repo=SpendSafetyConfigRepository(session),
+                account_spend_provider=_spend_provider,
             )
             result = await use_case.execute(RecommendationId(rec_id))
     finally:
@@ -1075,6 +1098,86 @@ async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
             # TODO(phase-1): send execution failed notification via new notifier
     finally:
         await engine.dispose()
+
+
+async def _handle_spend_guard_block(rec_id: str, reason_pl: str) -> None:
+    """Mark a spend-guard-blocked rec FAILED and notify the user (Polish, no silent failure)."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+    from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            rec_repo = SqlRecommendationRepository(session)
+            rec = await rec_repo.get(RecommendationId(rec_id))
+            if rec is None:
+                logger.error("rec not found during spend-guard handling", rec_id=rec_id)
+                return
+            await rec_repo.update_status(RecommendationId(rec_id), RecommendationStatus.FAILED)
+            account = await SqlGoogleAdsAccountRepository(session).get(AccountId(rec.account_id))
+            if account is not None:
+                await SqlWebNotifier(session).send_alert(
+                    user_id=str(account.user_id),
+                    title="Zmiana zablokowana przez bezpieczeństwo budżetu",
+                    body=(
+                        f"Akcja nie została wykonana, bo przekroczyłaby Twój limit wydatków. {reason_pl} "
+                        "Zmień limity w sekcji Bezpieczeństwo budżetu lub zatwierdź zmianę ręcznie."
+                    ),
+                )
+    finally:
+        await engine.dispose()
+
+
+async def _account_spend_context_provider(session, account_id: str):
+    """Build an AccountSpendContext (MTD + today spend) from campaign snapshots."""
+    import calendar
+    from datetime import date
+
+    from sqlalchemy import func, select
+
+    from adcopilot.domain.spend_guard import AccountSpendContext
+    from adcopilot.infrastructure.db.models import CampaignSnapshotModel
+
+    acct = uuid.UUID(account_id)
+    today = date.today()
+    month_start = today.replace(day=1)
+    days_in_month = calendar.monthrange(today.year, today.month)[1]
+
+    mtd = (
+        await session.execute(
+            select(func.coalesce(func.sum(CampaignSnapshotModel.cost_micros), 0)).where(
+                CampaignSnapshotModel.account_id == acct,
+                CampaignSnapshotModel.snapshot_date >= month_start,
+                CampaignSnapshotModel.snapshot_date <= today,
+            )
+        )
+    ).scalar_one()
+    today_spend = (
+        await session.execute(
+            select(func.coalesce(func.sum(CampaignSnapshotModel.cost_micros), 0)).where(
+                CampaignSnapshotModel.account_id == acct,
+                CampaignSnapshotModel.snapshot_date == today,
+            )
+        )
+    ).scalar_one()
+
+    return AccountSpendContext(
+        month_to_date_spend_micros=int(mtd or 0),
+        today_spend_micros=int(today_spend or 0),
+        days_elapsed=today.day,
+        days_in_month=days_in_month,
+    )
 
 
 async def _expire_recs_for_removed_campaign(rec_id: str) -> int:
