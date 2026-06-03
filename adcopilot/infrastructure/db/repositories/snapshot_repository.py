@@ -12,6 +12,7 @@ from adcopilot.domain.entities import AccountId
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
+    AssetGroupSnapshot,
     AudiencePerformanceSnapshot,
     CampaignExtensionSnapshot,
     CampaignSnapshot,
@@ -21,6 +22,7 @@ from adcopilot.domain.snapshot import (
     GeoPerformanceSnapshot,
     HourPerformanceSnapshot,
     KeywordSnapshot,
+    ListingGroupSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
     SitelinkPerformanceSnapshot,
@@ -29,6 +31,7 @@ from adcopilot.domain.snapshot import (
 from adcopilot.infrastructure.db.models import (
     AdGroupSnapshotModel,
     AdSnapshotModel,
+    AssetGroupSnapshotModel,
     AudiencePerformanceSnapshotModel,
     CampaignExtensionSnapshotModel,
     CampaignSnapshotModel,
@@ -38,6 +41,7 @@ from adcopilot.infrastructure.db.models import (
     GeoPerformanceSnapshotModel,
     HourPerformanceSnapshotModel,
     KeywordSnapshotModel,
+    ListingGroupSnapshotModel,
     NegativeKeywordSnapshotModel,
     SearchTermSnapshotModel,
     SitelinkPerformanceSnapshotModel,
@@ -145,6 +149,141 @@ class SqlSnapshotRepository:
             },
         )
         await self._session.execute(stmt)
+
+    # ------------------------------------------------------------------
+    # Asset groups + listing groups (Performance Max / Shopping)
+    # ------------------------------------------------------------------
+
+    async def upsert_asset_groups(
+        self, account_id: AccountId, snapshots: list[AssetGroupSnapshot]
+    ) -> None:
+        if not snapshots:
+            return
+        rows = [
+            {
+                "id": uuid.uuid4(),
+                "account_id": uuid.UUID(account_id),
+                "snapshot_date": s.snapshot_date,
+                "asset_group_id": s.asset_group_id,
+                "campaign_id": s.campaign_id,
+                "name": s.name,
+                "status": s.status,
+                "ad_strength": s.ad_strength,
+                "primary_status": s.primary_status,
+                "impressions": s.impressions,
+                "clicks": s.clicks,
+                "cost_micros": s.cost_micros,
+                "conversions": s.conversions,
+                "conv_value": s.conv_value,
+            }
+            for s in snapshots
+        ]
+        stmt = insert(AssetGroupSnapshotModel).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_asset_group_snapshots",
+            set_={
+                "name": stmt.excluded.name,
+                "status": stmt.excluded.status,
+                "ad_strength": stmt.excluded.ad_strength,
+                "primary_status": stmt.excluded.primary_status,
+                "campaign_id": stmt.excluded.campaign_id,
+                "impressions": stmt.excluded.impressions,
+                "clicks": stmt.excluded.clicks,
+                "cost_micros": stmt.excluded.cost_micros,
+                "conversions": stmt.excluded.conversions,
+                "conv_value": stmt.excluded.conv_value,
+                "updated_at": text("now()"),
+            },
+        )
+        await self._session.execute(stmt)
+
+    async def upsert_listing_groups(
+        self, account_id: AccountId, snapshots: list[ListingGroupSnapshot]
+    ) -> None:
+        if not snapshots:
+            return
+        rows = [
+            {
+                "id": uuid.uuid4(),
+                "account_id": uuid.UUID(account_id),
+                "snapshot_date": s.snapshot_date,
+                "asset_group_id": s.asset_group_id,
+                "campaign_id": s.campaign_id,
+                "listing_group_id": s.listing_group_id,
+                "dimension_type": s.dimension_type,
+                "case_value": s.case_value,
+                "is_catch_all": s.is_catch_all,
+            }
+            for s in snapshots
+        ]
+        stmt = insert(ListingGroupSnapshotModel).values(rows)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_listing_group_snapshots",
+            set_={
+                "asset_group_id": stmt.excluded.asset_group_id,
+                "campaign_id": stmt.excluded.campaign_id,
+                "dimension_type": stmt.excluded.dimension_type,
+                "case_value": stmt.excluded.case_value,
+                "is_catch_all": stmt.excluded.is_catch_all,
+                "updated_at": text("now()"),
+            },
+        )
+        await self._session.execute(stmt)
+
+    async def load_asset_groups(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[AssetGroupSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        result = await self._session.execute(
+            select(AssetGroupSnapshotModel).where(
+                AssetGroupSnapshotModel.account_id == acct_uuid,
+                AssetGroupSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        return [
+            AssetGroupSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                asset_group_id=m.asset_group_id,
+                campaign_id=m.campaign_id,
+                name=m.name,
+                status=m.status,
+                ad_strength=m.ad_strength,
+                primary_status=m.primary_status,
+                impressions=m.impressions,
+                clicks=m.clicks,
+                cost_micros=m.cost_micros,
+                conversions=m.conversions,
+                conv_value=m.conv_value,
+            )
+            for m in result.scalars().all()
+        ]
+
+    async def load_listing_groups(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[ListingGroupSnapshot]:
+        acct_uuid = uuid.UUID(account_id)
+        result = await self._session.execute(
+            select(ListingGroupSnapshotModel).where(
+                ListingGroupSnapshotModel.account_id == acct_uuid,
+                ListingGroupSnapshotModel.snapshot_date == snapshot_date,
+            )
+        )
+        return [
+            ListingGroupSnapshot(
+                id=SnapshotId(str(m.id)),
+                account_id=account_id,
+                snapshot_date=m.snapshot_date,
+                asset_group_id=m.asset_group_id,
+                campaign_id=m.campaign_id,
+                listing_group_id=m.listing_group_id,
+                dimension_type=m.dimension_type,
+                case_value=m.case_value,
+                is_catch_all=m.is_catch_all,
+            )
+            for m in result.scalars().all()
+        ]
 
     # ------------------------------------------------------------------
     # Keywords

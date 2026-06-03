@@ -13,6 +13,7 @@ from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
+    AssetGroupSnapshot,
     AudiencePerformanceSnapshot,
     CampaignExtensionSnapshot,
     CampaignSnapshot,
@@ -22,6 +23,7 @@ from adcopilot.domain.snapshot import (
     GeoPerformanceSnapshot,
     HourPerformanceSnapshot,
     KeywordSnapshot,
+    ListingGroupSnapshot,
     NegativeKeywordSnapshot,
     RemarketingListInfo,
     SearchTermSnapshot,
@@ -1286,3 +1288,129 @@ async def fetch_auction_insights(
         return results
 
     return await asyncio.get_event_loop().run_in_executor(None, _sync)
+
+
+async def query_asset_groups(
+    refresh_token: str,
+    customer_id: str,
+    snapshot_date: date,
+    settings: Settings,
+) -> list[AssetGroupSnapshot]:
+    """Fetch Performance Max / Shopping asset groups with ad strength + serving status.
+
+    Scoped to PMax/Shopping campaigns by the asset_group resource itself (asset
+    groups only exist on those channels).
+    """
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    date_str = snapshot_date.isoformat()
+    query = f"""
+        SELECT
+            asset_group.id,
+            asset_group.name,
+            asset_group.status,
+            asset_group.ad_strength,
+            asset_group.primary_status,
+            campaign.id,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions,
+            metrics.conversions_value
+        FROM asset_group
+        WHERE segments.date = '{date_str}'
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[AssetGroupSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                ag = row.asset_group
+                m = row.metrics
+                results.append(
+                    AssetGroupSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=snapshot_date,
+                        asset_group_id=ag.id,
+                        campaign_id=row.campaign.id,
+                        name=ag.name,
+                        status=ag.status.name,
+                        ad_strength=ag.ad_strength.name,
+                        primary_status=ag.primary_status.name,
+                        impressions=m.impressions,
+                        clicks=m.clicks,
+                        cost_micros=m.cost_micros,
+                        conversions=m.conversions,
+                        conv_value=m.conversions_value,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
+async def query_listing_group_filters(
+    refresh_token: str,
+    customer_id: str,
+    settings: Settings,
+) -> list[ListingGroupSnapshot]:
+    """Fetch asset-group listing-group filters (product segmentation nodes).
+
+    Used to detect PMax/Shopping campaigns that rely solely on a catch-all
+    listing group (no product segmentation). Configuration, not daily metrics.
+    """
+    cid = customer_id.replace("-", "")
+    account_id = AccountId(customer_id)
+    today = date.today()
+    query = """
+        SELECT
+            asset_group_listing_group_filter.id,
+            asset_group_listing_group_filter.type,
+            asset_group_listing_group_filter.case_value.product_category.category_id,
+            asset_group_listing_group_filter.case_value.product_brand.value,
+            asset_group.id,
+            campaign.id
+        FROM asset_group_listing_group_filter
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list[ListingGroupSnapshot] = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                f = row.asset_group_listing_group_filter
+                filter_type = f.type_.name
+                # A SUBDIVISION/UNIT_INCLUDED with no case value is the catch-all ("Everything else").
+                brand = f.case_value.product_brand.value or ""
+                category = str(f.case_value.product_category.category_id or "")
+                if brand:
+                    dimension_type, case_value = "PRODUCT_BRAND", brand
+                elif category:
+                    dimension_type, case_value = "PRODUCT_CATEGORY", category
+                else:
+                    dimension_type, case_value = "", ""
+                is_catch_all = not brand and not category
+                results.append(
+                    ListingGroupSnapshot(
+                        id=_make_id(),
+                        account_id=account_id,
+                        snapshot_date=today,
+                        asset_group_id=row.asset_group.id,
+                        campaign_id=row.campaign.id,
+                        listing_group_id=f.id,
+                        dimension_type=dimension_type,
+                        case_value=case_value,
+                        is_catch_all=is_catch_all,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc

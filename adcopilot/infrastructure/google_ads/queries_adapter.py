@@ -51,6 +51,18 @@ class GoogleAdsQueriesAdapter:
             refresh_token, customer_id, snapshot_date, self._settings
         )
 
+    async def query_asset_groups(
+        self, refresh_token: str, customer_id: str, snapshot_date: date
+    ) -> list:
+        return await queries.query_asset_groups(
+            refresh_token, customer_id, snapshot_date, self._settings
+        )
+
+    async def query_listing_group_filters(self, refresh_token: str, customer_id: str) -> list:
+        return await queries.query_listing_group_filters(
+            refresh_token, customer_id, self._settings
+        )
+
     async def query_keywords(
         self, refresh_token: str, customer_id: str, snapshot_date: date
     ) -> list[KeywordSnapshot]:

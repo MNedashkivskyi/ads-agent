@@ -343,3 +343,36 @@ async def test_run_detection_threads_spend_safety_config_into_context() -> None:
     ctx = engine.run.call_args.args[0]
     assert ctx.spend_safety_config is config
     assert ctx.spend_safety_config.monthly_spend_cap_micros == 5_000_000_000
+
+
+@pytest.mark.asyncio
+async def test_run_detection_threads_asset_and_listing_groups() -> None:
+    """PMax/Shopping asset + listing groups from the repo reach the DetectionContext."""
+    from adcopilot.application.ports.snapshot_repository import SnapshotData
+    from adcopilot.application.use_cases.run_detection import RunDetectionUseCase
+
+    account = _make_account()
+    account_repo = MagicMock()
+    account_repo.get = AsyncMock(return_value=account)
+
+    snapshot_repo = MagicMock()
+    snapshot_repo.load_snapshot = AsyncMock(
+        return_value=SnapshotData(campaigns=[], ad_groups=[], keywords=[], search_terms=[], ads=[])
+    )
+    snapshot_repo.load_asset_groups = AsyncMock(return_value=["AG"])
+    snapshot_repo.load_listing_groups = AsyncMock(return_value=["LG"])
+
+    engine = MagicMock()
+    engine.run = AsyncMock(return_value=[])
+
+    use_case = RunDetectionUseCase(
+        snapshot_repo=snapshot_repo,
+        rec_repo=MagicMock(),
+        rule_engine=engine,
+        account_repo=account_repo,
+    )
+    await use_case.execute(_ACCOUNT_ID, _SNAP_DATE)
+
+    ctx = engine.run.call_args.args[0]
+    assert ctx.asset_groups == ["AG"]
+    assert ctx.listing_groups == ["LG"]

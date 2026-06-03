@@ -150,6 +150,18 @@ class RunDetectionUseCase:
         except Exception:
             auction_insights = []
 
+        # 3h. Load PMax/Shopping asset groups + listing-group filters (best-effort)
+        try:
+            asset_groups = await self._snapshot_repo.load_asset_groups(account_id, snapshot_date)
+        except Exception:
+            asset_groups = []
+        try:
+            listing_groups = await self._snapshot_repo.load_listing_groups(
+                account_id, snapshot_date
+            )
+        except Exception:
+            listing_groups = []
+
         # 5. Build context
         ctx = DetectionContext(
             account=account,
@@ -178,6 +190,8 @@ class RunDetectionUseCase:
             auction_insights=auction_insights,
             business_economics=business_economics,
             spend_safety_config=spend_safety_config,
+            asset_groups=asset_groups,
+            listing_groups=listing_groups,
         )
 
         # 6. Run rule engine
