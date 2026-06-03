@@ -129,6 +129,13 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.upload_offline_conversions_task",
                     "schedule": crontab(minute=0, hour="*/6"),
                 },
+                "hourly-spend-cap-breach-check": {
+                    # Every hour at :20 — reactive spend-cap circuit-breaker.
+                    # Reads realized spend vs configured caps; notifies and, when
+                    # auto-pause is enabled, pauses the offending campaign/account.
+                    "task": "adcopilot.interfaces.worker.tasks.detect_spend_cap_breaches_task",
+                    "schedule": crontab(minute=20),
+                },
                 "daily-campaign-experiment-evaluation": {
                     # 6:30 AM UTC daily — after nightly snapshot. Poll RUNNING
                     # native Google Ads experiments, compute causal verdicts, and

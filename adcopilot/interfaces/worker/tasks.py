@@ -3853,3 +3853,203 @@ def evaluate_campaign_experiments_task() -> dict[str, object]:
         return {"evaluated": evaluated, "concluded": concluded}
 
     return asyncio.run(_run())
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.detect_spend_cap_breaches_task")  # type: ignore[untyped-decorator]
+def detect_spend_cap_breaches_task() -> dict[str, object]:
+    """Reactive spend-cap circuit-breaker (spend-safety system).
+
+    For each account that has opted in (configured caps), compares realized spend
+    against the caps, always notifies the user (Polish), and escalates BREACHes:
+    auto-pause when enabled (campaign → pause that campaign; account → panic-pause),
+    otherwise surface a human-approved pause proposal. Never auto-pauses unless the
+    account explicitly enabled it.
+    """
+    import asyncio
+
+    from adcopilot.config import get_settings
+
+    settings = get_settings()
+
+    async def _run() -> dict[str, object]:
+        import uuid as _uuid
+        from datetime import UTC, datetime
+
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+        from adcopilot.domain.alert import Alert, AlertId, AlertKind, AlertSeverity, AlertStatus
+        from adcopilot.domain.audit_log import AuditLog, AuditLogId
+        from adcopilot.domain.entities import AccountId
+        from adcopilot.domain.recommendation import RecommendationId
+        from adcopilot.domain.spend_breach import decide_escalation, detect_spend_cap_breaches
+        from adcopilot.infrastructure.db.repositories.alert_repository import SqlAlertRepository
+        from adcopilot.infrastructure.db.repositories.audit_log_repository import (
+            SqlAuditLogRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+            SqlGoogleAdsAccountRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+            SqlOAuthCredentialsRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.spend_safety_config_repository import (
+            SpendSafetyConfigRepository,
+        )
+        from adcopilot.infrastructure.google_ads.mutations_adapter import GoogleAdsMutationsAdapter
+        from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+
+        engine = create_async_engine(settings.DATABASE_URL)
+        accounts_checked = 0
+        breaches_found = 0
+        actions_taken = 0
+        try:
+            async with AsyncSession(engine) as session:
+                accounts = await SqlGoogleAdsAccountRepository(session).list_active()
+
+            for account in accounts:
+                try:
+                    async with AsyncSession(engine) as session, session.begin():
+                        config = await SpendSafetyConfigRepository(session).get(str(account.id))
+                        if config is None or not config.is_configured():
+                            continue
+                        accounts_checked += 1
+                        ctx = await _account_spend_context_provider(session, str(account.id))
+                        campaign_spend = await _campaign_today_spend(session, str(account.id))
+                        breaches = detect_spend_cap_breaches(
+                            config,
+                            account_mtd_spend_micros=ctx.month_to_date_spend_micros,
+                            account_today_spend_micros=ctx.today_spend_micros,
+                            days_elapsed=ctx.days_elapsed,
+                            days_in_month=ctx.days_in_month,
+                            campaign_spend=campaign_spend,
+                        )
+                        if not breaches:
+                            continue
+
+                        notifier = SqlWebNotifier(session)
+                        alert_repo = SqlAlertRepository(session)
+                        audit_repo = SqlAuditLogRepository(session)
+                        mutations = GoogleAdsMutationsAdapter(settings)
+                        creds = await SqlOAuthCredentialsRepository(
+                            session, settings.TOKEN_ENCRYPTION_KEY
+                        ).get(AccountId(str(account.id)))
+                        now = datetime.now(UTC)
+
+                        for breach in breaches:
+                            breaches_found += 1
+                            decision = decide_escalation(breach, config)
+                            body = _spend_breach_body_pl(breach, decision)
+                            await notifier.send_alert(
+                                user_id=str(account.user_id),
+                                title="Limit wydatków — ostrzeżenie",
+                                body=body,
+                            )
+                            await alert_repo.save(
+                                Alert(
+                                    id=AlertId(str(_uuid.uuid4())),
+                                    account_id=AccountId(str(account.id)),
+                                    kind=AlertKind.SPEND_CAP_BREACH,
+                                    severity=AlertSeverity.CRITICAL,
+                                    status=AlertStatus.OPEN,
+                                    payload={
+                                        "cap_type": breach.cap_type,
+                                        "scope": breach.scope,
+                                        "severity": breach.severity,
+                                        "current_micros": breach.current_micros,
+                                        "cap_micros": breach.cap_micros,
+                                        "campaign_id": breach.campaign_id,
+                                        "action": decision.action,
+                                    },
+                                    message=body,
+                                    created_at=now,
+                                )
+                            )
+
+                            if decision.action == "AUTO_PAUSE_CAMPAIGN" and creds is not None:
+                                await mutations.pause_campaign(
+                                    refresh_token=creds.refresh_token,
+                                    customer_id=account.customer_id,
+                                    campaign_id=int(decision.campaign_id),
+                                )
+                                await audit_repo.save(
+                                    AuditLog(
+                                        id=AuditLogId(str(_uuid.uuid4())),
+                                        recommendation_id=RecommendationId(
+                                            "00000000-0000-0000-0000-000000000000"
+                                        ),
+                                        account_id=AccountId(str(account.id)),
+                                        kind="SPEND_CAP_AUTO_PAUSE",
+                                        action="EXECUTE",
+                                        payload={"campaign_id": decision.campaign_id},
+                                        created_at=now,
+                                    )
+                                )
+                                actions_taken += 1
+
+                    # Account-level auto panic-pause runs as its own task (outside the
+                    # per-account transaction) to reuse the batched kill-switch.
+                    for breach in breaches:
+                        if decide_escalation(breach, config).action == "AUTO_PANIC_PAUSE_ACCOUNT":
+                            panic_pause_campaigns_task.delay(str(account.id))
+                            actions_taken += 1
+                            break
+                except Exception as exc:  # noqa: BLE001 — isolate per-account failures
+                    logger.warning(
+                        "spend_cap_breach_account_failed", account_id=str(account.id), error=str(exc)
+                    )
+        finally:
+            await engine.dispose()
+
+        logger.info(
+            "detect_spend_cap_breaches_task_done",
+            accounts=accounts_checked,
+            breaches=breaches_found,
+            actions=actions_taken,
+        )
+        return {"accounts": accounts_checked, "breaches": breaches_found, "actions": actions_taken}
+
+    return asyncio.run(_run())
+
+
+def _spend_breach_body_pl(breach, decision) -> str:
+    """Polish notification body for a spend-cap breach + escalation."""
+    cap_pln = breach.cap_micros / 1_000_000
+    cur_pln = breach.current_micros / 1_000_000
+    scope = {
+        "MONTHLY": "Miesięczne wydatki konta",
+        "DAILY": "Dzienne wydatki konta",
+        "CAMPAIGN_DAILY": f"Dzienne wydatki kampanii {breach.campaign_id}",
+    }.get(breach.cap_type, "Wydatki")
+    head = (
+        f"{scope}: {cur_pln:.2f} PLN wobec limitu {cap_pln:.2f} PLN "
+        f"({'przekroczono' if breach.is_breach else 'zbliżasz się do limitu'})."
+    )
+    tail = {
+        "AUTO_PAUSE_CAMPAIGN": " Kampania została automatycznie wstrzymana.",
+        "AUTO_PANIC_PAUSE_ACCOUNT": " Kampanie konta zostały automatycznie wstrzymane.",
+        "RECOMMEND_PAUSE": " Zatwierdź wstrzymanie kampanii, aby zatrzymać wydatki.",
+        "NOTIFY_ONLY": "",
+    }.get(decision.action, "")
+    return head + tail
+
+
+async def _campaign_today_spend(session, account_id: str):
+    """Return per-campaign spend for today (for per-campaign cap checks)."""
+    from datetime import date
+
+    from sqlalchemy import select
+
+    from adcopilot.domain.spend_breach import CampaignSpend
+    from adcopilot.infrastructure.db.models import CampaignSnapshotModel
+
+    rows = (
+        await session.execute(
+            select(
+                CampaignSnapshotModel.campaign_id, CampaignSnapshotModel.cost_micros
+            ).where(
+                CampaignSnapshotModel.account_id == uuid.UUID(account_id),
+                CampaignSnapshotModel.snapshot_date == date.today(),
+            )
+        )
+    ).all()
+    return [CampaignSpend(campaign_id=int(r[0]), today_spend_micros=int(r[1] or 0)) for r in rows]
