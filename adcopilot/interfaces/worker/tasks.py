@@ -435,6 +435,9 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
             from adcopilot.infrastructure.db.repositories.business_economics_repository import (
                 BusinessEconomicsRepository,
             )
+            from adcopilot.infrastructure.db.repositories.spend_safety_config_repository import (
+                SpendSafetyConfigRepository,
+            )
 
             use_case = RunDetectionUseCase(
                 snapshot_repo=snapshot_repo,
@@ -442,6 +445,7 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
                 rule_engine=rule_engine,
                 account_repo=SqlGoogleAdsAccountRepository(session),
                 economics_repo=BusinessEconomicsRepository(session),
+                spend_safety_repo=SpendSafetyConfigRepository(session),
             )
             await use_case.execute(AccountId(str(account_id)), snap_date)
             await _generate_explanations(session, settings, AccountId(str(account_id)))

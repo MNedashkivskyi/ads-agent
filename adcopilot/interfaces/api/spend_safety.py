@@ -84,6 +84,144 @@ async def get_spend_safety(
     return _to_response(config)
 
 
+class CapStatus(BaseModel):
+    cap_type: str  # MONTHLY | DAILY
+    cap_micros: int
+    current_micros: int
+    status: str  # WITHIN | WARNING | BREACH
+
+
+class BreachAlert(BaseModel):
+    cap_type: str
+    scope: str
+    severity: str
+    current_micros: int
+    cap_micros: int
+    campaign_id: int | None
+    created_at: str
+
+
+class SpendSafetyStatusResponse(BaseModel):
+    is_configured: bool
+    auto_pause_enabled: bool
+    caps: list[CapStatus]
+    recent_breaches: list[BreachAlert]
+
+
+@router.get("/{user_id}/spend-safety/status", response_model=SpendSafetyStatusResponse)
+async def get_spend_safety_status(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SpendSafetyStatusResponse:
+    """Current realized spend vs caps + recent breach alerts (for status chips)."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    import calendar
+    import uuid as _uuid
+    from datetime import date
+
+    from sqlalchemy import func, select
+
+    AsyncSession, create_async_engine, Repo, _resolve_account = _imports()
+    from adcopilot.domain.spend_breach import detect_spend_cap_breaches
+    from adcopilot.domain.spend_safety import SpendSafetyConfig
+    from adcopilot.infrastructure.db.models import AlertModel, CampaignSnapshotModel
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            account, _ = await _resolve_account(session, user_id)
+            config = await Repo(session).get(str(account.id)) or SpendSafetyConfig(
+                account_id=str(account.id)
+            )
+            acct = _uuid.UUID(str(account.id))
+            today = date.today()
+            month_start = today.replace(day=1)
+            days_in_month = calendar.monthrange(today.year, today.month)[1]
+
+            mtd = (
+                await session.execute(
+                    select(func.coalesce(func.sum(CampaignSnapshotModel.cost_micros), 0)).where(
+                        CampaignSnapshotModel.account_id == acct,
+                        CampaignSnapshotModel.snapshot_date >= month_start,
+                        CampaignSnapshotModel.snapshot_date <= today,
+                    )
+                )
+            ).scalar_one()
+            today_spend = (
+                await session.execute(
+                    select(func.coalesce(func.sum(CampaignSnapshotModel.cost_micros), 0)).where(
+                        CampaignSnapshotModel.account_id == acct,
+                        CampaignSnapshotModel.snapshot_date == today,
+                    )
+                )
+            ).scalar_one()
+
+            breaches = detect_spend_cap_breaches(
+                config,
+                account_mtd_spend_micros=int(mtd or 0),
+                account_today_spend_micros=int(today_spend or 0),
+                days_elapsed=today.day,
+                days_in_month=days_in_month,
+            )
+            by_type = {b.cap_type: b.severity for b in breaches}
+
+            caps: list[CapStatus] = []
+            if config.monthly_spend_cap_micros is not None:
+                caps.append(
+                    CapStatus(
+                        cap_type="MONTHLY",
+                        cap_micros=config.monthly_spend_cap_micros,
+                        current_micros=int(mtd or 0),
+                        status=by_type.get("MONTHLY", "WITHIN"),
+                    )
+                )
+            if config.daily_spend_cap_micros is not None:
+                caps.append(
+                    CapStatus(
+                        cap_type="DAILY",
+                        cap_micros=config.daily_spend_cap_micros,
+                        current_micros=int(today_spend or 0),
+                        status=by_type.get("DAILY", "WITHIN"),
+                    )
+                )
+
+            alert_rows = (
+                await session.execute(
+                    select(AlertModel)
+                    .where(
+                        AlertModel.account_id == acct,
+                        AlertModel.kind == "SPEND_CAP_BREACH",
+                    )
+                    .order_by(AlertModel.created_at.desc())
+                    .limit(10)
+                )
+            ).scalars().all()
+            recent = [
+                BreachAlert(
+                    cap_type=str(a.payload.get("cap_type", "")),
+                    scope=str(a.payload.get("scope", "")),
+                    severity=str(a.payload.get("severity", "")),
+                    current_micros=int(a.payload.get("current_micros", 0) or 0),
+                    cap_micros=int(a.payload.get("cap_micros", 0) or 0),
+                    campaign_id=a.payload.get("campaign_id"),
+                    created_at=a.created_at.isoformat() if a.created_at else "",
+                )
+                for a in alert_rows
+            ]
+    finally:
+        await engine.dispose()
+
+    return SpendSafetyStatusResponse(
+        is_configured=config.is_configured(),
+        auto_pause_enabled=config.auto_pause_enabled,
+        caps=caps,
+        recent_breaches=recent,
+    )
+
+
 @router.put("/{user_id}/spend-safety", response_model=SpendSafetyResponse)
 async def put_spend_safety(
     user_id: str,

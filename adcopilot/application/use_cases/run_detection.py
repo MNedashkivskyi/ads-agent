@@ -34,12 +34,14 @@ class RunDetectionUseCase:
         rule_engine: RuleEngine,
         account_repo: GoogleAdsAccountRepository,
         economics_repo: Any | None = None,
+        spend_safety_repo: Any | None = None,
     ) -> None:
         self._snapshot_repo = snapshot_repo
         self._rec_repo = rec_repo
         self._engine = rule_engine
         self._account_repo = account_repo
         self._economics_repo = economics_repo
+        self._spend_safety_repo = spend_safety_repo
 
     async def execute(self, account_id: AccountId, snapshot_date: date) -> dict[str, int]:
         """Run detection for one account on one snapshot date.
@@ -105,6 +107,13 @@ class RunDetectionUseCase:
         )
 
         # 3d-bis. Load business economics for value-based rules (rule 40, best-effort).
+        spend_safety_config = None
+        if self._spend_safety_repo is not None:
+            try:
+                spend_safety_config = await self._spend_safety_repo.get(str(account_id))
+            except Exception:
+                spend_safety_config = None
+
         business_economics = None
         if self._economics_repo is not None:
             try:
@@ -168,6 +177,7 @@ class RunDetectionUseCase:
             ga4_page_metrics=ga4_page_metrics,
             auction_insights=auction_insights,
             business_economics=business_economics,
+            spend_safety_config=spend_safety_config,
         )
 
         # 6. Run rule engine

@@ -8,6 +8,7 @@ from typing import Protocol
 
 from adcopilot.domain.benchmarking import VerticalBenchmarkSnapshot
 from adcopilot.domain.business_economics import BusinessEconomics
+from adcopilot.domain.spend_safety import SpendSafetyConfig
 from adcopilot.domain.entities import GoogleAdsAccount
 from adcopilot.domain.recommendation import Recommendation, RecommendationKind
 from adcopilot.domain.snapshot import (
@@ -98,6 +99,9 @@ class DetectionContext:
     # Per-account business economics for value-based rules (rule 40).
     # None when the user hasn't configured economics yet.
     business_economics: BusinessEconomics | None = field(default=None)
+    # Per-account spend-safety caps (spend-safety system). None when not configured;
+    # lets rules anchor budget/pacing suggestions to the user's spend limits.
+    spend_safety_config: "SpendSafetyConfig | None" = field(default=None)
 
 
 @dataclass
