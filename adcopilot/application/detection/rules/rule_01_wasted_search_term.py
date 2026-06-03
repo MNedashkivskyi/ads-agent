@@ -24,8 +24,15 @@ class WastedSearchTermRule:
 
     def detect(self, ctx: DetectionContext) -> list[Recommendation]:
         recs: list[Recommendation] = []
+        # Anchor the waste floor to the client's target CPA when configured
+        # (30% of an acceptable conversion cost); else 30% of historical avg CPA.
+        econ = ctx.business_economics
+        if econ is not None and getattr(econ, "target_cpa", None):
+            basis_micros = int(econ.target_cpa * 1_000_000)
+        else:
+            basis_micros = ctx.history.avg_cpa_micros
         avg_cpa = ctx.history.avg_cpa_micros
-        cost_threshold = avg_cpa * 0.3
+        cost_threshold = basis_micros * 0.3
 
         for st in ctx.search_terms:
             if st.clicks < 5:
