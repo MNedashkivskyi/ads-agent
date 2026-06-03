@@ -1292,6 +1292,38 @@ class BusinessEconomicsModel(Base):
     )
 
 
+class CampaignExperimentModel(Base):
+    """Native Google Ads campaign experiment (causal measurement)."""
+
+    __tablename__ = "campaign_experiments"
+    __table_args__ = (Index("ix_campaign_experiments_account_status", "account_id", "status"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    base_campaign_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    change_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    change_payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    traffic_split: Mapped[int] = mapped_column(Integer, nullable=False, default=50)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PROPOSED", index=True)
+    draft_resource_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    experiment_resource_name: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    control_metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    treatment_metrics: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    verdict: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING")
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    evaluated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_recommendation_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class ConversionUploadModel(Base):
     """Audit row for one upload attempt (batch) to Google Ads."""
 
