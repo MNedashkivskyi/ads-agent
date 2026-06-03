@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from typing import Any
 
 import sentry_sdk
 import structlog
@@ -32,11 +33,13 @@ class RunDetectionUseCase:
         rec_repo: RecommendationRepository,
         rule_engine: RuleEngine,
         account_repo: GoogleAdsAccountRepository,
+        economics_repo: Any | None = None,
     ) -> None:
         self._snapshot_repo = snapshot_repo
         self._rec_repo = rec_repo
         self._engine = rule_engine
         self._account_repo = account_repo
+        self._economics_repo = economics_repo
 
     async def execute(self, account_id: AccountId, snapshot_date: date) -> dict[str, int]:
         """Run detection for one account on one snapshot date.
@@ -101,6 +104,14 @@ class RunDetectionUseCase:
             self._snapshot_repo, account_id, snapshot_date
         )
 
+        # 3d-bis. Load business economics for value-based rules (rule 40, best-effort).
+        business_economics = None
+        if self._economics_repo is not None:
+            try:
+                business_economics = await self._economics_repo.get(str(account_id))
+            except Exception:
+                business_economics = None
+
         # 4. Compute HistoricalStats from the snapshot itself (30-day proxy)
         total_cost = sum(c.cost_micros for c in snapshot.campaigns)
         total_conversions = sum(c.conversions for c in snapshot.campaigns)
@@ -156,6 +167,7 @@ class RunDetectionUseCase:
             landing_page_results=landing_page_results,
             ga4_page_metrics=ga4_page_metrics,
             auction_insights=auction_insights,
+            business_economics=business_economics,
         )
 
         # 6. Run rule engine

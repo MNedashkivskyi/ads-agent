@@ -432,11 +432,16 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
             rule_engine = build_rule_engine(
                 rec_repo, snooze_repo, has_working_tracking=has_working_tracking
             )
+            from adcopilot.infrastructure.db.repositories.business_economics_repository import (
+                BusinessEconomicsRepository,
+            )
+
             use_case = RunDetectionUseCase(
                 snapshot_repo=snapshot_repo,
                 rec_repo=rec_repo,
                 rule_engine=rule_engine,
                 account_repo=SqlGoogleAdsAccountRepository(session),
+                economics_repo=BusinessEconomicsRepository(session),
             )
             await use_case.execute(AccountId(str(account_id)), snap_date)
             await _generate_explanations(session, settings, AccountId(str(account_id)))

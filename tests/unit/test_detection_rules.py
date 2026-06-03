@@ -2246,13 +2246,38 @@ class TestDeduplicateConversionsRule:
 class TestSetConversionValueRule:
     rule = SetConversionValueRule()
 
-    def test_conversions_no_value_triggers(self):
+    def test_no_economics_no_trigger(self):
+        # Without configured economics there's no value to apply -> advisory only
+        # (handled by the Measurement Health diagnostic), so no executable rec.
         c = _campaign(campaign_id=1, status="ENABLED", conversions=15.0, conv_value=0.0)
-        ctx = _ctx(campaigns=[c])
+        ctx = _ctx(campaigns=[c], conversion_actions=[_conv_action()])
+        assert self.rule.detect(ctx) == []
+
+    def test_economics_and_primary_action_triggers_with_value(self):
+        from adcopilot.domain.business_economics import BusinessEconomics
+
+        c = _campaign(campaign_id=1, status="ENABLED", conversions=15.0, conv_value=0.0)
+        econ = BusinessEconomics(
+            account_id="acc", avg_order_value=200.0, profit_margin_pct=30.0, currency_code="PLN"
+        )
+        action = _conv_action(conversion_action_id=99, name="Zakup", category="PURCHASE")
+        ctx = _ctx(campaigns=[c], conversion_actions=[action], business_economics=econ)
         recs = self.rule.detect(ctx)
         assert len(recs) == 1
         assert recs[0].kind == RecommendationKind.SET_CONVERSION_VALUE
-        assert recs[0].severity == RecommendationSeverity.MEDIUM
+        assert recs[0].payload["conversion_action_id"] == 99
+        assert recs[0].payload["value"] == 60.0  # 200 * 30%
+        assert recs[0].payload["currency_code"] == "PLN"
+
+    def test_value_less_category_skipped(self):
+        from adcopilot.domain.business_economics import BusinessEconomics
+
+        c = _campaign(campaign_id=1, status="ENABLED", conversions=15.0, conv_value=0.0)
+        # Only avg_order_value configured -> a LEAD action yields no derivable value.
+        econ = BusinessEconomics(account_id="acc", avg_order_value=200.0)
+        action = _conv_action(category="SUBMIT_LEAD_FORM")
+        ctx = _ctx(campaigns=[c], conversion_actions=[action], business_economics=econ)
+        assert self.rule.detect(ctx) == []
 
     def test_has_conv_value_no_trigger(self):
         c = _campaign(campaign_id=1, status="ENABLED", conversions=15.0, conv_value=500.0)
@@ -2270,11 +2295,15 @@ class TestSetConversionValueRule:
         assert self.rule.detect(ctx) == []
 
     def test_aggregates_across_campaigns(self):
+        from adcopilot.domain.business_economics import BusinessEconomics
+
         c1 = _campaign(campaign_id=1, status="ENABLED", conversions=6.0, conv_value=0.0)
         c2 = _campaign(campaign_id=2, status="ENABLED", conversions=6.0, conv_value=0.0)
-        ctx = _ctx(campaigns=[c1, c2])
+        econ = BusinessEconomics(account_id="acc", default_lead_value=150.0)
+        action = _conv_action(category="SUBMIT_LEAD_FORM")
+        ctx = _ctx(campaigns=[c1, c2], conversion_actions=[action], business_economics=econ)
         recs = self.rule.detect(ctx)
-        assert len(recs) == 1
+        assert len(recs) == 1  # aggregated 12 conversions ≥ 10, one primary action valued
 
     def test_one_campaign_has_value_no_trigger(self):
         c1 = _campaign(campaign_id=1, status="ENABLED", conversions=10.0, conv_value=200.0)
