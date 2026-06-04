@@ -22,10 +22,18 @@ detection rule has something to fire on:
   nieruchomosci (Łódź)  — budget capped     -> rule 07 / IS-lost-to-budget
   e-commerce (Szczecin) — spend acceleration-> rule 15
   edukacja (Lublin)     — healthy control   -> nothing should fire
+  auto (Katowice)       — no conv. tracking -> ENABLE_CONVERSION_TRACKING
+  fizjoterapia (Bydg.)  — ad fatigue        -> CTR decline / AD_FATIGUE
+  sklep (Toruń)         — IS erosion        -> IMPRESSION_SHARE_EROSION
 
 Snapshots also carry seasonality (via the real per-vertical multipliers),
 conversion actions, business-economics targets (so actuals-vs-target lights up),
-search terms and 14 days of auction insights (competitor scan).
+search terms and 14 days of auction insights (competitor scan). Each account
+additionally gets account-level negatives, campaign extensions (with deliberate
+gaps), device / geo / hour / day-of-week performance breakdowns, one PENDING
+recommendation matching its planted scenario, and weekly digest + insight
+notifications — so the review queue, bulk-execute, dimension rules, and the
+in-app notification feed all light up without first running detection.
 
 Idempotent: demo data is keyed by the ``@demo.local`` user-email marker and the
 ``[DEMO]`` account-name prefix; ``--reset`` wipes prior demo rows first.
@@ -48,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import random
 import sys
@@ -64,10 +73,18 @@ from adcopilot.infrastructure.db.models import (  # noqa: E402
     AdSnapshotModel,
     AuctionInsightsSnapshotModel,
     BusinessEconomicsModel,
+    CampaignExtensionSnapshotModel,
     CampaignSnapshotModel,
     ConversionActionSnapshotModel,
+    DayOfWeekPerformanceSnapshotModel,
+    DevicePerformanceSnapshotModel,
+    GeoPerformanceSnapshotModel,
     GoogleAdsAccountModel,
+    HourPerformanceSnapshotModel,
     KeywordSnapshotModel,
+    NegativeKeywordSnapshotModel,
+    NotificationModel,
+    RecommendationModel,
     SearchTermSnapshotModel,
     UserModel,
 )
@@ -219,6 +236,57 @@ DEMO_BUSINESSES = [
         ],
         "competitors": ["jezyki-lublin.pl", "linguaschool.pl"],
     },
+    {
+        "name": "Auto-Serwis Kowalski",
+        "city": "Katowice",
+        "vertical": "auto",  # no seasonal profile -> flat multiplier
+        "scenario": "no_tracking",
+        "target_cpa": 80.0,
+        "target_roas": None,
+        "aov": 500.0,
+        "keywords": [
+            "mechanik katowice",
+            "wymiana oleju katowice",
+            "serwis klimatyzacji katowice",
+            "naprawa hamulców katowice",
+            "diagnostyka komputerowa katowice",
+        ],
+        "competitors": ["autoserwis-katowice.pl", "mechanicy-slask.pl"],
+    },
+    {
+        "name": "Centrum Fizjoterapii RehaMed",
+        "city": "Bydgoszcz",
+        "vertical": "fizjoterapia",  # 14-day attribution window
+        "scenario": "ad_fatigue",
+        "target_cpa": 65.0,
+        "target_roas": None,
+        "aov": 250.0,
+        "keywords": [
+            "fizjoterapeuta bydgoszcz",
+            "rehabilitacja bydgoszcz",
+            "masaż leczniczy bydgoszcz",
+            "fizjoterapia kręgosłupa bydgoszcz",
+            "terapia manualna bydgoszcz",
+        ],
+        "competitors": ["rehabilitacja-bydgoszcz.pl", "fizjomed.pl"],
+    },
+    {
+        "name": "Sklep Zoologiczny ZooŚwiat",
+        "city": "Toruń",
+        "vertical": "sklep",  # 7-day attribution window
+        "scenario": "is_erosion",
+        "target_cpa": 35.0,
+        "target_roas": None,
+        "aov": 140.0,
+        "keywords": [
+            "karma dla psa toruń",
+            "sklep zoologiczny toruń",
+            "akcesoria dla kota toruń",
+            "akwarystyka toruń",
+            "karma dla kota online",
+        ],
+        "competitors": ["zoo-torun.pl", "sklep-zoologiczny24.pl"],
+    },
 ]
 
 
@@ -287,6 +355,14 @@ def _build_account(biz: dict, index: int, *, days: int, end_date: date) -> dict:
             "search_terms",
             "conversion_actions",
             "auction_insights",
+            "negatives",
+            "extensions",
+            "device_perf",
+            "geo_perf",
+            "hour_perf",
+            "dow_perf",
+            "recommendations",
+            "notifications",
         )
     }
 
@@ -377,6 +453,9 @@ def _build_account(biz: dict, index: int, *, days: int, end_date: date) -> dict:
         rank_lost = round(rng.uniform(0.05, 0.15), 3)
 
         # ---- scenario injection (latest day = "current" window vs 7-days-ago) ----
+        if scenario == "is_erosion":
+            # Stable high IS, then a sharp drop on the latest day (clears 15pp).
+            sis = 0.35 if is_latest else round(rng.uniform(0.68, 0.74), 3)
         if is_latest and scenario == "cpa_spike":
             # +130% so it clears even the peak-month seasonal threshold (0.50*1.3).
             m["cost_micros"] = int(m["cost_micros"] * 2.3)
@@ -389,8 +468,6 @@ def _build_account(biz: dict, index: int, *, days: int, end_date: date) -> dict:
             m["cost_micros"] = int(budget_pln * _PLN * rng.uniform(0.97, 1.0))
             budget_lost = round(rng.uniform(0.30, 0.45), 3)
             sis = round(rng.uniform(0.35, 0.5), 3)
-        elif is_latest and scenario == "is_erosion":
-            sis = 0.40
 
         rows["campaigns"].append(
             CampaignSnapshotModel(
@@ -446,7 +523,11 @@ def _build_account(biz: dict, index: int, *, days: int, end_date: date) -> dict:
                 )
             )
 
-            # One RSA per ad group
+            # One RSA per ad group. Ad-fatigue: CTR drops on the latest day
+            # (clicks down ~35%) while impressions stay stable, on the first group.
+            ad_clicks = ag_clicks
+            if scenario == "ad_fatigue" and is_latest and ag_offset == 0:
+                ad_clicks = int(ag_clicks * 0.62)
             rows["ads"].append(
                 AdSnapshotModel(
                     id=uuid.uuid4(),
@@ -460,10 +541,10 @@ def _build_account(biz: dict, index: int, *, days: int, end_date: date) -> dict:
                     descriptions_json=json.dumps(["Profesjonalna obsługa.", "Zadzwoń już dziś."]),
                     final_urls_json=json.dumps([f"https://demo-{index}.example.pl"]),
                     impressions=ag_impr,
-                    clicks=ag_clicks,
+                    clicks=ad_clicks,
                     cost_micros=ag_cost,
                     conversions=ag_conv,
-                    ad_strength="GOOD",
+                    ad_strength="POOR" if (scenario == "ad_fatigue" and ag_offset == 0) else "GOOD",
                     created_at=now,
                     updated_at=now,
                 )
@@ -565,7 +646,263 @@ def _build_account(biz: dict, index: int, *, days: int, end_date: date) -> dict:
                     )
                 )
 
+    # ------------------------------------------------------------------ #
+    # Point-in-time dimension snapshots (latest date only) + recs/notifs.
+    # `m`, `sis`, `budget_lost` still hold the latest day's values here.
+    # ------------------------------------------------------------------ #
+    latest_impr = m["impressions"]
+    latest_clicks = m["clicks"]
+    latest_cost = m["cost_micros"]
+    latest_conv = m["conversions"]
+
+    # ---- Account-level negative keywords (shared junk terms) ----
+    for neg_offset, neg_text in enumerate(("praca", "opinie", "za darmo", "wikipedia")):
+        rows["negatives"].append(
+            NegativeKeywordSnapshotModel(
+                id=uuid.uuid4(),
+                account_id=account_uuid,
+                snapshot_date=end_date,
+                criterion_id=4_500_000 + index * 100 + neg_offset,
+                campaign_id=campaign_id,
+                ad_group_id=0,
+                text=neg_text,
+                match_type="BROAD",
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    # ---- Campaign extensions (some scenarios deliberately missing types
+    #      so the ADD_SITELINKS / ADD_CALLOUTS / ADD_STRUCTURED_SNIPPETS
+    #      rules have a gap to surface). ----
+    ext_types = ["SITELINK", "CALLOUT", "STRUCTURED_SNIPPET"]
+    if scenario in ("ad_fatigue", "no_tracking"):
+        ext_types = ["SITELINK"]  # missing callouts + snippets
+    elif scenario == "low_qs":
+        ext_types = ["SITELINK", "CALLOUT"]  # missing structured snippets
+    for ext_type in ext_types:
+        rows["extensions"].append(
+            CampaignExtensionSnapshotModel(
+                id=uuid.uuid4(),
+                account_id=account_uuid,
+                snapshot_date=end_date,
+                campaign_id=campaign_id,
+                extension_type=ext_type,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    # ---- Device performance (mobile-heavy; mobile underperforms enough
+    #      on a couple of accounts to surface a device bid adjustment). ----
+    device_split = {"MOBILE": 0.56, "DESKTOP": 0.37, "TABLET": 0.07}
+    for device, share in device_split.items():
+        # Mobile converts worse than desktop on most accounts.
+        conv_factor = 0.7 if device == "MOBILE" else (1.25 if device == "DESKTOP" else 0.9)
+        rows["device_perf"].append(
+            DevicePerformanceSnapshotModel(
+                id=uuid.uuid4(),
+                account_id=account_uuid,
+                snapshot_date=end_date,
+                campaign_id=campaign_id,
+                device=device,
+                impressions=int(latest_impr * share),
+                clicks=int(latest_clicks * share),
+                cost_micros=int(latest_cost * share),
+                conversions=round(latest_conv * share * conv_factor, 1),
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    # ---- Geo performance (city core vs surrounding region) ----
+    geo_split = [(1_000_000 + index, 0.7, 1.15), (2_000_000 + index, 0.3, 0.6)]
+    for loc_id, share, conv_factor in geo_split:
+        rows["geo_perf"].append(
+            GeoPerformanceSnapshotModel(
+                id=uuid.uuid4(),
+                account_id=account_uuid,
+                snapshot_date=end_date,
+                campaign_id=campaign_id,
+                location_id=loc_id,
+                impressions=int(latest_impr * share),
+                clicks=int(latest_clicks * share),
+                cost_micros=int(latest_cost * share),
+                conversions=round(latest_conv * share * conv_factor, 1),
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    # ---- Hour-of-day performance (business-hours peak; late-night waste) ----
+    hour_weights = [
+        0.2, 0.1, 0.1, 0.1, 0.1, 0.2, 0.4, 0.8, 1.2, 1.4, 1.5, 1.4,
+        1.3, 1.3, 1.4, 1.3, 1.2, 1.1, 1.0, 0.9, 0.8, 0.6, 0.4, 0.3,
+    ]
+    weight_sum = sum(hour_weights)
+    for hour, w in enumerate(hour_weights):
+        share = w / weight_sum
+        # Late-night clicks convert poorly (ad-schedule rule fodder).
+        conv_factor = 0.4 if hour in (0, 1, 2, 3, 4) else 1.0
+        rows["hour_perf"].append(
+            HourPerformanceSnapshotModel(
+                id=uuid.uuid4(),
+                account_id=account_uuid,
+                snapshot_date=end_date,
+                campaign_id=campaign_id,
+                hour_of_day=hour,
+                impressions=int(latest_impr * share),
+                clicks=int(latest_clicks * share),
+                cost_micros=int(latest_cost * share),
+                conversions=round(latest_conv * share * conv_factor, 1),
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    # ---- Day-of-week performance (weekends quieter) ----
+    dow_names = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
+    dow_weights = [1.0, 1.05, 1.05, 1.0, 0.95, 0.7, 0.65]
+    dow_sum = sum(dow_weights)
+    for dow_name, w in zip(dow_names, dow_weights, strict=True):
+        share = w / dow_sum
+        conv_factor = 0.85 if dow_name in ("SATURDAY", "SUNDAY") else 1.0
+        rows["dow_perf"].append(
+            DayOfWeekPerformanceSnapshotModel(
+                id=uuid.uuid4(),
+                account_id=account_uuid,
+                snapshot_date=end_date,
+                campaign_id=campaign_id,
+                day_of_week=dow_name,
+                impressions=int(latest_impr * share),
+                clicks=int(latest_clicks * share),
+                cost_micros=int(latest_cost * share),
+                conversions=round(latest_conv * share * conv_factor, 1),
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    # ---- One PENDING recommendation matching the planted scenario, so the
+    #      review UI / bulk-execute path has something to act on without
+    #      first running the detection engine. ----
+    rec = _scenario_recommendation(scenario, biz)
+    if rec is not None:
+        kind, severity, confidence, savings_pln, explanation = rec
+        target = {"campaign_id": str(campaign_id), "campaign_name": f"{biz['city']} – Search"}
+        target_hash = hashlib.sha256(f"{account_uuid}:{kind}:{campaign_id}".encode()).hexdigest()
+        rows["recommendations"].append(
+            RecommendationModel(
+                id=uuid.uuid4(),
+                account_id=account_uuid,
+                kind=kind,
+                severity=severity,
+                confidence=confidence,
+                status="PENDING",
+                target=target,
+                payload={"campaign_id": str(campaign_id)},
+                evidence={"source": "demo_seed", "scenario": scenario},
+                target_hash=target_hash,
+                estimated_monthly_savings_micros=int(savings_pln * _PLN),
+                explanation=explanation,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    # ---- Notifications: a weekly digest + a weekly insight per account, so
+    #      the in-app notification feed is populated. ----
+    user_id_str = str(user_uuid)
+    rows["notifications"].append(
+        NotificationModel(
+            id=uuid.uuid4(),
+            user_id=user_id_str,
+            notification_type="DIGEST",
+            title="Tygodniowe podsumowanie kampanii",
+            body=(
+                f"W tym tygodniu Twoja kampania „{biz['city']} – Search\" wydała "
+                f"{latest_cost / _PLN:.0f} PLN i przyniosła {latest_conv:.0f} konwersji."
+            ),
+            metadata_={"account_id": str(account_uuid), "source": "demo_seed"},
+            read_at=None,
+            created_at=now,
+        )
+    )
+    rows["notifications"].append(
+        NotificationModel(
+            id=uuid.uuid4(),
+            user_id=user_id_str,
+            notification_type="INSIGHT",
+            title="Cotygodniowa analiza",
+            body=_scenario_insight(scenario, biz),
+            metadata_={"account_id": str(account_uuid), "source": "demo_seed"},
+            read_at=None,
+            created_at=now,
+        )
+    )
+
     return rows
+
+
+def _scenario_recommendation(scenario: str, biz: dict) -> tuple | None:
+    """Map a planted scenario to (kind, severity, confidence, savings_pln, pl_explanation)."""
+    mapping = {
+        "cpa_spike": (
+            "CPA_SPIKE", "CRITICAL", "HIGH", 1200.0,
+            "Koszt pozyskania klienta wzrósł o ~95% w ostatnim tygodniu. "
+            "Sprawdź stawki i jakość ruchu.",
+        ),
+        "cvr_drop": (
+            "CONVERSION_RATE_DROP", "HIGH", "MEDIUM", 800.0,
+            "Współczynnik konwersji spadł o ~50%. Zweryfikuj stronę docelową i śledzenie.",
+        ),
+        "low_qs": (
+            "IMPROVE_QUALITY_SCORE", "HIGH", "HIGH", 600.0,
+            "Wynik Jakości słowa kluczowego wynosi 3/10. Popraw trafność reklamy i strony.",
+        ),
+        "wasted_search_term": (
+            "ADD_NEGATIVE_KEYWORD", "HIGH", "HIGH", 600.0,
+            "Wykryto marnujące budżet zapytanie bez konwersji — dodaj słowo wykluczające.",
+        ),
+        "competitor_surge": (
+            "NEW_COMPETITOR", "MEDIUM", "MEDIUM", 0.0,
+            "Nowy konkurent (nowy-rywal.pl) pojawił się w aukcjach w ostatnich 7 dniach.",
+        ),
+        "budget_capped": (
+            "INCREASE_BUDGET", "HIGH", "HIGH", 0.0,
+            "Kampania traci ~40% udziału w wyświetleniach z powodu ograniczonego budżetu.",
+        ),
+        "spend_accel": (
+            "SPEND_ACCELERATION", "CRITICAL", "HIGH", 1500.0,
+            "Wydatki wzrosły o ~100% bez wzrostu konwersji. Sprawdź ustawienia stawek.",
+        ),
+        "no_tracking": (
+            "ENABLE_CONVERSION_TRACKING", "CRITICAL", "HIGH", 0.0,
+            "Brak aktywnego śledzenia konwersji — optymalizacja działa na ślepo.",
+        ),
+        "ad_fatigue": (
+            "AD_FATIGUE", "MEDIUM", "MEDIUM", 300.0,
+            "CTR reklamy spada przy stabilnych wyświetleniach — czas odświeżyć kreację.",
+        ),
+        "is_erosion": (
+            "IMPRESSION_SHARE_EROSION", "HIGH", "MEDIUM", 400.0,
+            "Udział w wyświetleniach spadł o ponad 15 pp. Sprawdź stawki i konkurencję.",
+        ),
+    }
+    return mapping.get(scenario)
+
+
+def _scenario_insight(scenario: str, biz: dict) -> str:
+    """A short Polish weekly-insight body tailored to the scenario."""
+    if scenario == "healthy":
+        return (
+            f"Kampania „{biz['city']} – Search\" działa powyżej średniej dla branży "
+            f"{biz['vertical']}. Utrzymuj obecne ustawienia."
+        )
+    rec = _scenario_recommendation(scenario, biz)
+    if rec is not None:
+        return rec[4]
+    return f"Przegląd kampanii „{biz['city']} – Search\" za miniony tydzień."
 
 
 # --------------------------------------------------------------------------- #
@@ -606,9 +943,22 @@ async def _reset_demo_data(session) -> None:
         ConversionActionSnapshotModel,
         AuctionInsightsSnapshotModel,
         BusinessEconomicsModel,
+        NegativeKeywordSnapshotModel,
+        CampaignExtensionSnapshotModel,
+        DevicePerformanceSnapshotModel,
+        GeoPerformanceSnapshotModel,
+        HourPerformanceSnapshotModel,
+        DayOfWeekPerformanceSnapshotModel,
+        RecommendationModel,
     ]
     for model in snapshot_models:
         await session.execute(delete(model).where(model.account_id.in_(account_ids)))
+    # Notifications key off user_id (string), not account_id.
+    await session.execute(
+        delete(NotificationModel).where(
+            NotificationModel.user_id.in_([str(u) for u in user_ids])
+        )
+    )
     await session.execute(
         delete(GoogleAdsAccountModel).where(GoogleAdsAccountModel.id.in_(account_ids))
     )
