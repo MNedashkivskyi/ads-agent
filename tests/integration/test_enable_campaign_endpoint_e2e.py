@@ -16,6 +16,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+# Spins up the app against sqlite+aiosqlite (handler engine only; DB-load faked).
+# Marked integration so CI's "-m not integration" unit job deselects it.
+pytestmark = pytest.mark.integration
+
 _USER_ID = "11111111-1111-1111-1111-111111111111"
 _BRIEF_ID = "22222222-2222-2222-2222-222222222222"
 

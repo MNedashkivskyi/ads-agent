@@ -18,6 +18,11 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+# Spins up the app against sqlite+aiosqlite (only to satisfy the handler's
+# create_async_engine; the DB-load boundary is faked). Marked integration so
+# CI's "-m not integration" unit job — which has no aiosqlite — deselects it.
+pytestmark = pytest.mark.integration
+
 _USER_ID = "11111111-1111-1111-1111-111111111111"
 _ENC_KEY = "test-key-32-bytes-long-padding!!"
 _CT = "adcopilot.interfaces.api.conversion_tracking"
