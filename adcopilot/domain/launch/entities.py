@@ -83,6 +83,8 @@ class KeywordProposal:
     """Estimated cost-per-click in Google Ads micro-units (1 PLN = 1 000 000)."""
     avg_monthly_searches: int | None = None
     """Real Keyword Planner search volume; None when no demand data was attached."""
+    intent_tier: str | None = None
+    """Search-intent tier: HIGH_INTENT / MID_INTENT / DISCOVERY. None when untagged."""
 
 
 @dataclass(frozen=True)
@@ -115,6 +117,10 @@ class AdGroupProposal:
     name: str
     keywords: list[KeywordProposal]
     ads: list[AdProposal]
+    intent_tier: str | None = None
+    """Search-intent tier of this group: HIGH_INTENT / MID_INTENT / DISCOVERY."""
+    is_brand: bool = False
+    """True when this group targets the advertiser's own brand terms."""
 
 
 # ---------------------------------------------------------------------------

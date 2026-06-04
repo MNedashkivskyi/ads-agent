@@ -6,6 +6,10 @@ import uuid
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.seasonal import (
+    seasonal_multiplier,
+    seasonal_relaxed_threshold,
+)
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -33,6 +37,11 @@ class ImpressionShareErosionRule:
         prev_by_id = {c.campaign_id: c for c in ctx.prev_campaigns}
         recs: list[Recommendation] = []
 
+        # In peak months competitors bid harder and IS naturally erodes; require a
+        # larger drop before flagging. Unchanged in troughs.
+        mult = seasonal_multiplier(ctx)
+        min_is_drop_pp = seasonal_relaxed_threshold(_MIN_IS_DROP_PP, mult)
+
         for camp in ctx.campaigns:
             curr_is = camp.search_impression_share
             if curr_is is None:
@@ -45,7 +54,7 @@ class ImpressionShareErosionRule:
             prev_is = prev.search_impression_share
             drop = prev_is - curr_is
 
-            if drop < _MIN_IS_DROP_PP:
+            if drop < min_is_drop_pp:
                 continue
             if curr_is > _MAX_CURRENT_IS:
                 continue
@@ -68,6 +77,7 @@ class ImpressionShareErosionRule:
                 "budget_lost_impression_share": round(budget_lost, 3),
                 "rank_lost_impression_share": round(rank_lost, 3),
                 "primary_cause": primary_cause,
+                "seasonal_multiplier": round(mult, 2),
             }
             recs.append(
                 Recommendation(

@@ -91,12 +91,27 @@ class KeywordItem(BaseModel):
         return v if v in {"broad", "phrase", "exact"} else "phrase"
 
 
+_INTENT_TIERS = {"HIGH_INTENT", "MID_INTENT", "DISCOVERY"}
+
+
 class AdGroupItem(BaseModel):
     """One ad group in the campaign skeleton."""
 
     name: str
     theme: str = Field(description="Short theme description used in ad-copy generation")
     keywords: list[KeywordItem] = Field(min_length=3)
+    intent_tier: str | None = Field(
+        default=None, description="HIGH_INTENT | MID_INTENT | DISCOVERY"
+    )
+    is_brand: bool = Field(default=False)
+
+    @field_validator("intent_tier")
+    @classmethod
+    def _normalize_intent(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.upper().strip().replace("-", "_").replace(" ", "_")
+        return v if v in _INTENT_TIERS else None
 
 
 class CampaignStructureResponse(BaseModel):
@@ -235,6 +250,13 @@ Prefer keywords with genuine search demand and commercial intent: favour the
 specific terms real customers type (service + city, "near me", buying/booking
 intent) over ultra-generic single words with little intent. Real search-volume
 data is applied after this step, so concrete, high-intent keywords survive.
+Structure each ad group by search intent and tag it with "intent_tier":
+- HIGH_INTENT: ready-to-act terms (buy, book, hire, order, price, cost, "near me");
+- MID_INTENT: research/comparison terms (best, top, review, compare, vs);
+- DISCOVERY: broad informational terms (only for tiers that allow broad match).
+Keep each ad group tightly themed (one intent tier, no keyword overlap between groups).
+Do NOT put brand terms (the business's own name) in these ad groups — a separate
+brand campaign handles those; set "is_brand" to false on every group here.
 Respond ONLY with a valid JSON object matching this schema — no markdown, no prose:
 {
   "campaign_name": "<string ≤ 120 chars>",
@@ -243,6 +265,8 @@ Respond ONLY with a valid JSON object matching this schema — no markdown, no p
     {
       "name": "<string>",
       "theme": "<short theme description>",
+      "intent_tier": "HIGH_INTENT|MID_INTENT|DISCOVERY",
+      "is_brand": false,
       "keywords": [
         { "text": "<string>", "match_type": "broad|phrase|exact", "estimated_cpc_pln": <float> }
       ]
@@ -352,6 +376,7 @@ def _structure_user_prompt(
     feedback: str | None = None,
     has_conversion_tracking: bool = False,
     existing_monthly_conversions: float = 0.0,
+    competitors: list | None = None,
 ) -> str:
     tier = classify_budget_tier(brief.monthly_budget_pln)
     structure_fragment = build_structure_prompt_fragment(tier)
@@ -371,6 +396,16 @@ def _structure_user_prompt(
         lines.append(f"Sub-vertical: {vertical.sub_vertical}")
     if brief.exclusions:
         lines.append(f"Exclusions: {', '.join(brief.exclusions)}")
+    if competitors:
+        comp_str = ", ".join(
+            f"{c.domain} ({c.impression_share:.0%} udziału)" for c in competitors[:5]
+        )
+        lines.append(
+            "\nKnown competitors already bidding on these searches: "
+            f"{comp_str}. Favour differentiated, high-intent keywords where the "
+            "business can realistically win the click; avoid head terms these "
+            "competitors dominate."
+        )
     if feedback:
         lines.append(f"\nPrevious validation errors to fix:\n{feedback}")
     return "\n".join(lines)
@@ -459,6 +494,7 @@ class CampaignGenerator:
         feedback: str | None = None,
         has_conversion_tracking: bool = False,
         existing_monthly_conversions: float = 0.0,
+        competitors: list | None = None,
     ) -> CampaignStructureResponse:
         """Stage 2 — design tier-aware campaign skeleton.
 
@@ -478,6 +514,7 @@ class CampaignGenerator:
             feedback,
             has_conversion_tracking,
             existing_monthly_conversions,
+            competitors,
         )
         response = await self._call_and_parse(
             _STRUCTURE_SYSTEM, user, "structure", CampaignStructureResponse, max_tokens=2000
@@ -575,6 +612,7 @@ class CampaignGenerator:
                         match_type=mt,
                         estimated_cpc_micros=cpc_micros,
                         avg_monthly_searches=kw.avg_monthly_searches,
+                        intent_tier=ag_item.intent_tier,
                     )
                 )
 
@@ -591,7 +629,15 @@ class CampaignGenerator:
                     )
                 )
 
-            ad_groups.append(AdGroupProposal(name=ag_item.name, keywords=keywords, ads=ads))
+            ad_groups.append(
+                AdGroupProposal(
+                    name=ag_item.name,
+                    keywords=keywords,
+                    ads=ads,
+                    intent_tier=ag_item.intent_tier,
+                    is_brand=ag_item.is_brand,
+                )
+            )
 
         cpc_min = min(all_cpcs) if all_cpcs else 500_000
         cpc_max = max(all_cpcs) if all_cpcs else 2_000_000

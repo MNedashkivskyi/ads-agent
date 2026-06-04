@@ -55,6 +55,7 @@ def _model_to_domain(
                 match_type=MatchType(kw.match_type),
                 estimated_cpc_micros=kw.estimated_cpc_micros,
                 avg_monthly_searches=kw.avg_monthly_searches,
+                intent_tier=kw.intent_tier,
             )
             for kw in kw_models
         ]
@@ -69,7 +70,15 @@ def _model_to_domain(
             for ad in ad_models
         ]
 
-        domain_ad_groups.append(AdGroupProposal(name=ag.name, keywords=domain_kws, ads=domain_ads))
+        domain_ad_groups.append(
+            AdGroupProposal(
+                name=ag.name,
+                keywords=domain_kws,
+                ads=domain_ads,
+                intent_tier=ag.intent_tier,
+                is_brand=ag.is_brand,
+            )
+        )
 
     domain_sitelinks = [
         SitelinkProposal(
@@ -224,6 +233,8 @@ class SqlCampaignProposalRepository:
                 proposal_id=proposal_id,
                 name=ag.name,
                 position=position,
+                intent_tier=ag.intent_tier,
+                is_brand=ag.is_brand,
             )
             self._session.add(ag_model)
 
@@ -236,6 +247,7 @@ class SqlCampaignProposalRepository:
                         match_type=kw.match_type.value,
                         estimated_cpc_micros=kw.estimated_cpc_micros,
                         avg_monthly_searches=kw.avg_monthly_searches,
+                        intent_tier=kw.intent_tier,
                     )
                 )
 
