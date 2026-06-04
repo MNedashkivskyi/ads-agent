@@ -762,31 +762,56 @@ def send_daily_digests_task() -> dict[str, object]:
 
 
 async def _run_send_digests(settings: object) -> dict[str, object]:
-    """Compute digests for all users (log-only; notifier wired in Phase 1)."""
+    """Compute + deliver daily recommendation digests as web notifications."""
+    from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+    from adcopilot.application.use_cases.send_daily_digest import SendDailyDigestUseCase
     from adcopilot.config import Settings
+    from adcopilot.domain.entities import UserId
     from adcopilot.infrastructure.db.models import UserModel
+    from adcopilot.infrastructure.db.repositories.digest_sent_log_repository import (
+        SqlDigestSentLogRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+    from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
 
     assert isinstance(settings, Settings)
 
     engine = create_async_engine(settings.DATABASE_URL)
+    sent = skipped = 0
     try:
-        from sqlalchemy import select
-
         async with AsyncSession(engine) as session, session.begin():
-            result = await session.execute(
-                select(UserModel).where(
-                    UserModel.notifications_paused.is_(False),
+            user_ids = (
+                (
+                    await session.execute(
+                        select(UserModel.id).where(UserModel.notifications_paused.is_(False))
+                    )
                 )
+                .scalars()
+                .all()
             )
-            users = result.scalars().all()
-
-        # TODO(phase-1): wire new notifier implementation
-        logger.warning("digest_notifier not configured, skipping digest sends")
-        return {"sent": 0, "skipped": len(users), "reason": "notifier_not_configured"}
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            use_case = SendDailyDigestUseCase(
+                account_repo=account_repo,
+                rec_repo=SqlRecommendationRepository(session),
+                digest_log_repo=SqlDigestSentLogRepository(session),
+                notifier=SqlWebNotifier(session),
+            )
+            for uid in user_ids:
+                accounts = await account_repo.list_for_user(UserId(str(uid)))
+                result = await use_case.execute(UserId(str(uid)), [a.id for a in accounts])
+                sent += 1 if result.sent else 0
+                skipped += 0 if result.sent else 1
     finally:
         await engine.dispose()
+    logger.info("daily digests processed", sent=sent, skipped=skipped)
+    return {"sent": sent, "skipped": skipped}
 
 
 @celery_app.task(name="adcopilot.interfaces.worker.tasks.run_nightly_snapshots")  # type: ignore[untyped-decorator]
@@ -3021,6 +3046,27 @@ def generate_weekly_insight_task() -> dict[str, object]:
                         ctx = await builder.build(account.id)
                         if ctx.get("summary") is None:
                             continue  # no data — skip
+
+                        # Actuals-vs-target: surface "are we hitting target?" to
+                        # the insight (best-effort; needs configured economics).
+                        try:
+                            from adcopilot.domain.performance_targets import compare_to_targets
+                            from adcopilot.infrastructure.db.repositories.business_economics_repository import (  # noqa: E501
+                                BusinessEconomicsRepository,
+                            )
+
+                            econ = await BusinessEconomicsRepository(session).get(str(account.id))
+                            if econ is not None:
+                                cmp_targets = compare_to_targets(
+                                    ctx["summary"].get("cpa_pln"),
+                                    ctx["summary"].get("roas"),
+                                    target_cpa=econ.target_cpa,
+                                    target_roas=econ.target_roas,
+                                )
+                                if cmp_targets is not None:
+                                    ctx["targets"] = cmp_targets.as_dict()
+                        except Exception:
+                            pass  # fail-open — insight still generates without targets
 
                         insight_text = await insight_uc.execute(ctx)
 
