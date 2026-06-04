@@ -765,6 +765,10 @@ class LaunchAdGroupModel(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     # Ordering within the proposal (0-based).
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Search-intent tier (HIGH_INTENT/MID_INTENT/DISCOVERY); NULL when untagged.
+    intent_tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # True when this group targets the advertiser's own brand terms.
+    is_brand: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -787,6 +791,8 @@ class LaunchKeywordModel(Base):
     estimated_cpc_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     # Real Keyword Planner search volume; NULL for template/LLM-only keywords.
     avg_monthly_searches: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Search-intent tier inherited from the ad group; NULL when untagged.
+    intent_tier: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

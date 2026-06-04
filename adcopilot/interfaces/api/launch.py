@@ -54,6 +54,8 @@ class AdGroupResponse(BaseModel):
     name: str
     keywords: list[KeywordResponse]
     ads: list[AdResponse]
+    intent_tier: str | None = None
+    is_brand: bool = False
 
 
 class CompetitorPreview(BaseModel):
@@ -241,6 +243,8 @@ async def get_proposal_preview(proposal_id: str) -> ProposalPreviewResponse:
                     )
                     for ad in ag.ads
                 ],
+                intent_tier=ag.intent_tier,
+                is_brand=ag.is_brand,
             )
             for ag in proposal.ad_groups
         ],
