@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import date
 from typing import Annotated
 
 import structlog
@@ -116,3 +118,87 @@ async def list_clients(
         )
         for u in users
     ]
+
+
+class SeedDemoRequest(BaseModel):
+    # If omitted, demo accounts are attached to the calling admin user (Approach A),
+    # so one login manages all of them via the account switcher.
+    owner_email: str | None = None
+    accounts: int | None = None  # how many demo businesses (default: all 11)
+    days: int = 56
+    end_date: str | None = None  # YYYY-MM-DD; defaults to today
+    reset: bool = True  # wipe prior [DEMO] data first (owner-safe)
+    force: bool = False  # allow running when ENV=production
+
+
+class SeedDemoResponse(BaseModel):
+    owner_user_id: str
+    owner_email: str | None
+    total_rows: int
+    counts: dict[str, int]
+
+
+@router.post("/demo/seed", response_model=SeedDemoResponse)
+async def seed_demo_accounts(
+    body: SeedDemoRequest,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SeedDemoResponse:
+    """Seed scenario-rich demo accounts (for Railway, where the CLI can't run).
+
+    By default the 11 demo accounts are owned by the calling admin user, so they
+    all show up in that user's account switcher and can be managed separately.
+    """
+    _check_admin(current_user, settings)
+
+    if settings.is_production and not body.force:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Refusing to seed demo data while ENV=production. Pass force=true to override.",
+        )
+
+    from adcopilot.infrastructure.demo.seeder import (
+        DEMO_BUSINESSES,
+        resolve_owner_user_id,
+        seed_demo_data,
+    )
+
+    end_date = date.fromisoformat(body.end_date) if body.end_date else None
+    businesses = DEMO_BUSINESSES[: body.accounts] if body.accounts else DEMO_BUSINESSES
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            # Owner = explicit email, else the calling admin themselves.
+            if body.owner_email:
+                owner_id = await resolve_owner_user_id(session, owner_email=body.owner_email)
+                if owner_id is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"No user found with email {body.owner_email!r}",
+                    )
+            else:
+                owner_id = uuid.UUID(current_user)
+
+            counts = await seed_demo_data(
+                session,
+                businesses=businesses,
+                days=body.days,
+                end_date=end_date,
+                reset=body.reset,
+                owner_user_id=owner_id,
+            )
+    finally:
+        await engine.dispose()
+
+    logger.info(
+        "demo_seed_completed",
+        owner_user_id=str(owner_id),
+        total_rows=sum(counts.values()),
+    )
+    return SeedDemoResponse(
+        owner_user_id=str(owner_id),
+        owner_email=body.owner_email,
+        total_rows=sum(counts.values()),
+        counts=counts,
+    )
