@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # deploy needed, and no risk of pointing at a model the API key can't use.
     LLM_MODEL_DEFAULT: str = "claude-haiku-4-5-20251001"
     LLM_MODEL_PREMIUM: str = "claude-haiku-4-5-20251001"
+    # Max concurrent outbound Google Ads API calls per event loop (throttle) so
+    # managing many accounts at once can't exhaust the developer-token quota.
+    GOOGLE_ADS_MAX_CONCURRENCY: int = 8
     PAGESPEED_API_KEY: str | None = None
 
     # Comma-separated list of user UUIDs that have admin access to /api/admin/* endpoints.

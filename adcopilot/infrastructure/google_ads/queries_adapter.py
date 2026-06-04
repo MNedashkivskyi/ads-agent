@@ -22,8 +22,10 @@ from adcopilot.domain.snapshot import (
 )
 from adcopilot.infrastructure.google_ads import queries
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter
+from adcopilot.infrastructure.google_ads.resilience import resilient_adapter
 
 
+@resilient_adapter
 class GoogleAdsQueriesAdapter:
     """Full implementation of GoogleAdsClientPort combining client + query functions."""
 
@@ -151,12 +153,8 @@ class GoogleAdsQueriesAdapter:
     async def list_conversion_actions(
         self, refresh_token: str, customer_id: str
     ) -> list[ConversionActionSnapshot]:
-        from adcopilot.infrastructure.google_ads.retry import retry_on_rate_limit
-
-        return await retry_on_rate_limit(
-            lambda: queries.list_conversion_actions(refresh_token, customer_id, self._settings),
-            label="list_conversion_actions",
-        )
+        # Retry is now applied uniformly by @resilient_adapter (below).
+        return await queries.list_conversion_actions(refresh_token, customer_id, self._settings)
 
     async def get_enhanced_conversions_for_leads_enabled(
         self, refresh_token: str, customer_id: str

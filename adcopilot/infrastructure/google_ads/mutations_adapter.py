@@ -12,8 +12,17 @@ from adcopilot.domain.conversion_tracking.setup import (
     validate_macro_category,
 )
 from adcopilot.domain.conversion_tracking.tag_parsing import parse_conversion_send_to
-from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
-from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
+from adcopilot.domain.exceptions import (
+    GoogleAdsAuthError,
+    GoogleAdsRateLimited,
+    GoogleAdsUnavailable,
+)
+from adcopilot.infrastructure.google_ads.client import (
+    GoogleAdsClientAdapter,
+    is_google_auth_error,
+    is_rate_limit_error,
+)
+from adcopilot.infrastructure.google_ads.resilience import throttled_adapter
 
 logger = structlog.get_logger(__name__)
 
@@ -22,9 +31,12 @@ def _wrap_mutation_exc(operation: str, exc: Exception) -> Exception:
     """Map a raw Google Ads exception to the appropriate domain exception."""
     if is_google_auth_error(exc):
         return GoogleAdsAuthError(str(exc))
+    if is_rate_limit_error(exc):
+        return GoogleAdsRateLimited(f"{operation} rate-limited: {exc}")
     return GoogleAdsUnavailable(f"{operation} failed: {exc}")
 
 
+@throttled_adapter
 class GoogleAdsMutationsAdapter:
     """Implements GoogleAdsMutationsPort against the real Google Ads API."""
 

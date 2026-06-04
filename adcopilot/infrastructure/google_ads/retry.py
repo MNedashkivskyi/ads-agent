@@ -31,14 +31,16 @@ async def retry_on_rate_limit[T](
     attempts: int = _DEFAULT_ATTEMPTS,
     base_delay: float = _DEFAULT_BASE_DELAY,
     label: str = "google_ads_call",
-    sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+    sleep: Callable[[float], Awaitable[None]] | None = None,
 ) -> T:
     """Call ``fn`` (a zero-arg async thunk), retrying on GoogleAdsRateLimited.
 
-    ``sleep`` is injectable so tests run without real delays. Re-raises the last
-    GoogleAdsRateLimited after ``attempts`` exhausted; non-rate-limit errors
-    propagate immediately.
+    ``sleep`` is injectable so tests run without real delays; it is resolved at
+    call time (defaulting to ``asyncio.sleep``) so patching ``asyncio.sleep``
+    also works. Re-raises the last GoogleAdsRateLimited after ``attempts``
+    exhausted; non-rate-limit errors propagate immediately.
     """
+    _sleep = sleep or asyncio.sleep
     last_exc: GoogleAdsRateLimited | None = None
     for attempt in range(attempts):
         try:
@@ -55,6 +57,6 @@ async def retry_on_rate_limit[T](
                 max_attempts=attempts,
                 delay_seconds=delay,
             )
-            await sleep(delay)
+            await _sleep(delay)
     assert last_exc is not None
     raise last_exc
