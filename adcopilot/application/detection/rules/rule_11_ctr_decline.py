@@ -6,6 +6,10 @@ import uuid
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.seasonal import (
+    seasonal_multiplier,
+    seasonal_relaxed_threshold,
+)
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -33,6 +37,11 @@ class CtrDeclineRule:
         prev_by_id = {ag.ad_group_id: ag for ag in ctx.prev_ad_groups}
         recs: list[Recommendation] = []
 
+        # Widen the drop threshold in the vertical's peak month (seasonal traffic
+        # composition naturally lowers CTR); unchanged in troughs.
+        mult = seasonal_multiplier(ctx)
+        min_ctr_drop = seasonal_relaxed_threshold(_MIN_CTR_DROP, mult)
+
         for ag in ctx.ad_groups:
             prev = prev_by_id.get(ag.ad_group_id)
             if prev is None:
@@ -54,7 +63,7 @@ class CtrDeclineRule:
                 continue
 
             drop = (prev_ctr - curr_ctr) / prev_ctr
-            if drop < _MIN_CTR_DROP:
+            if drop < min_ctr_drop:
                 continue
 
             target = {"ad_group_id": ag.ad_group_id, "campaign_id": ag.campaign_id}
@@ -66,6 +75,7 @@ class CtrDeclineRule:
                 "ctr_drop_pct": round(drop * 100, 1),
                 "current_impressions": ag.impressions,
                 "previous_impressions": prev.impressions,
+                "seasonal_multiplier": round(mult, 2),
             }
             recs.append(
                 Recommendation(
