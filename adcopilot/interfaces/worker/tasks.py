@@ -1290,9 +1290,10 @@ async def _run_generate_campaign(
     error_text: str | None = None
 
     try:
-        # \u2500\u2500 Step 1: load brief + account creds (short tx, released immediately) \u2500\u2500
+        # \u2500\u2500 Step 1: load brief + account creds + competitors (short tx) \u2500\u2500
         kw_refresh_token: str | None = None
         kw_customer_id: str | None = None
+        competitors: list = []
         async with AsyncSession(engine) as session, session.begin():
             brief_repo = SqlCampaignBriefRepository(session)
             brief = await brief_repo.get(CampaignBriefId(brief_id))
@@ -1321,6 +1322,28 @@ async def _run_generate_campaign(
                         kw_customer_id = _account.customer_id
             except Exception:
                 logger.warning("generate_campaign_task: planner creds unavailable", brief_id=brief_id)
+            # Best-effort competitor scan from collected auction insights (14d).
+            try:
+                from datetime import UTC, datetime, timedelta
+
+                from adcopilot.domain.competitors import top_competitors
+                from adcopilot.infrastructure.db.repositories.snapshot_repository import (
+                    SqlSnapshotRepository,
+                )
+
+                _today = datetime.now(tz=UTC).date()
+                _rows = await SqlSnapshotRepository(session).get_auction_insights(
+                    brief.account_id, _today - timedelta(days=14), _today
+                )
+                competitors = top_competitors(_rows, limit=5)
+                if competitors:
+                    logger.info(
+                        "generate_campaign_task: competitor scan",
+                        brief_id=brief_id,
+                        competitors=len(competitors),
+                    )
+            except Exception:
+                logger.warning("generate_campaign_task: competitor scan unavailable", brief_id=brief_id)
         # session and DB connection are fully released here;
         # nothing is held open during the LLM calls below.
 
@@ -1365,6 +1388,7 @@ async def _run_generate_campaign(
                     keyword_planner=keyword_planner,
                     account_refresh_token=kw_refresh_token,
                     account_customer_id=kw_customer_id,
+                    competitors=competitors,
                 )
                 # generate_content_only runs the full LLM pipeline (vertical
                 # detection -> structure -> ad copy -> negatives -> extensions ->

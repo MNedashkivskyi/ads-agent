@@ -186,16 +186,12 @@ class AccountContextBuilder:
         except Exception:
             return []
 
-        # Aggregate by domain: pick max impression_share across campaigns
-        domain_is: dict[str, float] = {}
-        for r in rows:
-            domain = r["competitor_domain"]
-            is_val = r.get("impression_share") or 0.0
-            if is_val > domain_is.get(domain, 0.0):
-                domain_is[domain] = is_val
+        from adcopilot.domain.competitors import top_competitors
 
-        top = sorted(domain_is.items(), key=lambda x: -x[1])[:5]
-        return [{"domain": d, "impression_share": round(is_val, 4)} for d, is_val in top]
+        return [
+            {"domain": c.domain, "impression_share": c.impression_share}
+            for c in top_competitors(rows, limit=5)
+        ]
 
 
 def _empty_context(account_id: AccountId) -> dict[str, Any]:

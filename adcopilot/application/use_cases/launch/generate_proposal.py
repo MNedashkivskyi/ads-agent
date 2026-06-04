@@ -161,6 +161,7 @@ class GenerateCampaignProposalUseCase:
         keyword_planner: "KeywordPlannerPort | None" = None,
         account_refresh_token: str | None = None,
         account_customer_id: str | None = None,
+        competitors: list | None = None,
     ) -> None:
         self._brief_repo = brief_repo
         self._proposal_repo = proposal_repo
@@ -174,6 +175,10 @@ class GenerateCampaignProposalUseCase:
         self._keyword_planner = keyword_planner
         self._account_refresh_token = account_refresh_token
         self._account_customer_id = account_customer_id
+        # Top competitors (from auction insights) fetched upstream; fed into the
+        # LLM structure prompt so it picks differentiated keywords. Empty/None →
+        # no competitor context (new accounts, no auction-insights history).
+        self._competitors = competitors or []
 
     async def execute(
         self,
@@ -496,9 +501,9 @@ class GenerateCampaignProposalUseCase:
         )
         logger.debug("vertical_detected", vertical=vertical.vertical, brief_id=brief.id)
 
-        # Stage 2 — campaign structure (pass revision feedback when provided)
+        # Stage 2 — campaign structure (pass revision feedback + competitor scan)
         structure = await self._generator.build_structure(
-            brief, vertical, feedback=revision_feedback
+            brief, vertical, feedback=revision_feedback, competitors=self._competitors
         )
 
         # Stage 2a — enrich structure keywords with real Keyword Planner demand
@@ -583,7 +588,7 @@ class GenerateCampaignProposalUseCase:
 
         if has_structure_errors:
             structure = await self._generator.build_structure(
-                brief, vertical, feedback=combined_feedback
+                brief, vertical, feedback=combined_feedback, competitors=self._competitors
             )
 
         if has_copy_errors or has_structure_errors:
