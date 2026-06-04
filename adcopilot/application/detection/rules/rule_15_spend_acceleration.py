@@ -6,6 +6,10 @@ import uuid
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.seasonal import (
+    seasonal_multiplier,
+    seasonal_relaxed_threshold,
+)
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -33,6 +37,11 @@ class SpendAccelerationRule:
         prev_by_id = {c.campaign_id: c for c in ctx.prev_campaigns}
         recs: list[Recommendation] = []
 
+        # In the vertical's peak month, spend naturally accelerates — require a
+        # larger jump before flagging. Unchanged in troughs.
+        mult = seasonal_multiplier(ctx)
+        min_spend_growth = seasonal_relaxed_threshold(_MIN_SPEND_GROWTH, mult)
+
         for camp in ctx.campaigns:
             prev = prev_by_id.get(camp.campaign_id)
             if prev is None:
@@ -42,7 +51,7 @@ class SpendAccelerationRule:
                 continue
 
             spend_growth = (camp.cost_micros - prev.cost_micros) / prev.cost_micros
-            if spend_growth < _MIN_SPEND_GROWTH:
+            if spend_growth < min_spend_growth:
                 continue
 
             # Check conversions didn't grow proportionally
@@ -69,6 +78,7 @@ class SpendAccelerationRule:
                 "current_conversions": camp.conversions,
                 "previous_conversions": prev.conversions,
                 "conversion_growth_pct": round(conv_growth * 100, 1),
+                "seasonal_multiplier": round(mult, 2),
             }
             recs.append(
                 Recommendation(

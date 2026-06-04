@@ -7,6 +7,10 @@ from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
 from adcopilot.application.detection.lag_guard import is_comparison_reliable
+from adcopilot.application.detection.seasonal import (
+    seasonal_multiplier,
+    seasonal_relaxed_threshold,
+)
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -38,6 +42,11 @@ class CpaSpikeRule:
         reliable = is_comparison_reliable(ctx.attribution_window_days)
         effective_severity = self.severity if reliable else RecommendationSeverity.LOW
 
+        # In the vertical's peak month a higher CPA is expected — require a larger
+        # spike before firing. Unchanged in troughs.
+        mult = seasonal_multiplier(ctx)
+        min_cpa_spike = seasonal_relaxed_threshold(_MIN_CPA_SPIKE, mult)
+
         for camp in ctx.campaigns:
             prev = prev_by_id.get(camp.campaign_id)
             if prev is None:
@@ -53,7 +62,7 @@ class CpaSpikeRule:
                 continue
 
             spike = (curr_cpa - prev_cpa) / prev_cpa
-            if spike < _MIN_CPA_SPIKE:
+            if spike < min_cpa_spike:
                 continue
 
             # Estimated extra monthly spend caused by the CPA increase.
@@ -71,6 +80,7 @@ class CpaSpikeRule:
                 "previous_conversions": prev.conversions,
                 "conversions_maturing": not reliable,
                 "attribution_window_days": ctx.attribution_window_days,
+                "seasonal_multiplier": round(mult, 2),
             }
             recs.append(
                 Recommendation(
