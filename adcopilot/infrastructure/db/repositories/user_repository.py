@@ -68,9 +68,16 @@ class SqlUserRepository:
         user = await self.get_by_id(user_id)
         if user is not None:
             return user
+        # ``users.email`` is NOT NULL + UNIQUE. When the caller has no email
+        # (e.g. the /me bootstrap, which only carries the JWT ``sub``), inserting
+        # an empty string collides with any other email-less user on
+        # ``ix_users_email``. Fall back to a unique, per-user placeholder so the
+        # first-login bootstrap can never 500; the real address is backfilled
+        # later (OAuth / settings) when it becomes known.
+        effective_email = email or f"{user_id}@no-email.adswise.local"
         user = User(
             id=user_id,
-            email=email,
+            email=effective_email,
             telegram_chat_id=None,
             created_at=datetime.now(UTC),
             plan=PlanTier.STARTER,
