@@ -596,3 +596,169 @@ async def get_implementation_status(
             created_at=req.created_at.isoformat(),
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# Bootstrap conversion tracking (create a macro conversion action) + verify
+# ---------------------------------------------------------------------------
+
+
+class SetupTrackingRequest(BaseModel):
+    category: str  # PURCHASE | LEAD | SIGNUP | PHONE_CALL
+    platform: str = "custom"
+    value_micros: int | None = None
+    account_id: str | None = None
+
+
+class ConversionTagResponse(BaseModel):
+    conversion_action_id: int
+    conversion_id: str
+    conversion_label: str
+    global_site_tag: str
+    event_snippet: str
+
+
+class SetupTrackingResponse(BaseModel):
+    already_configured: bool
+    conversion_action_id: int | None
+    tag: ConversionTagResponse | None
+    message_pl: str
+
+
+class VerifyTrackingRequest(BaseModel):
+    conversion_action_id: int
+    account_id: str | None = None
+
+
+class VerifyTrackingResponse(BaseModel):
+    conversion_action_id: int
+    found: bool
+    enabled: bool
+    recent_conversions: float
+    is_firing: bool
+    message_pl: str
+
+
+async def _resolve_account_and_creds(session, settings, user_id: str, account_id: str | None):
+    """Return (account, credentials), raising HTTPException on the usual misses."""
+    from adcopilot.domain.entities import AccountId, UserId
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
+    )
+
+    account_repo = SqlGoogleAdsAccountRepository(session)
+    credentials_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
+
+    accounts = await account_repo.list_for_user(UserId(user_id))
+    if not accounts:
+        raise HTTPException(status_code=404, detail="No Google Ads accounts found")
+    if account_id:
+        account = next((a for a in accounts if str(a.id) == account_id), None)
+        if account is None:
+            raise HTTPException(status_code=404, detail="Account not found")
+    else:
+        account = accounts[0]
+
+    credentials = await credentials_repo.get(AccountId(account.id))
+    if credentials is None:
+        raise HTTPException(status_code=422, detail="Google Ads account not connected")
+    return account, credentials
+
+
+@router.post("/conversion-tracking/setup", response_model=SetupTrackingResponse)
+async def setup_conversion_tracking(
+    body: SetupTrackingRequest,
+    user_id: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SetupTrackingResponse:
+    """Create a macro conversion action (if none exists) and return its tag."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.launch.setup_conversion_tracking import (
+        SetupConversionTrackingUseCase,
+    )
+    from adcopilot.domain.conversion_tracking.setup import InvalidConversionCategory
+    from adcopilot.infrastructure.google_ads.mutations_adapter import GoogleAdsMutationsAdapter
+    from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            account, credentials = await _resolve_account_and_creds(
+                session, settings, user_id, body.account_id
+            )
+
+        reader = GoogleAdsQueriesAdapter(settings)
+        writer = GoogleAdsMutationsAdapter(settings)
+        use_case = SetupConversionTrackingUseCase(reader, writer)
+        try:
+            result = await use_case.execute(
+                refresh_token=credentials.refresh_token,
+                customer_id=account.customer_id,
+                category=body.category,
+                platform=body.platform,
+                value_micros=body.value_micros,
+            )
+        except InvalidConversionCategory as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    finally:
+        await engine.dispose()
+
+    tag = None
+    if result.tag is not None:
+        tag = ConversionTagResponse(
+            conversion_action_id=result.tag.conversion_action_id,
+            conversion_id=result.tag.conversion_id,
+            conversion_label=result.tag.conversion_label,
+            global_site_tag=result.tag.global_site_tag,
+            event_snippet=result.tag.event_snippet,
+        )
+    return SetupTrackingResponse(
+        already_configured=result.already_configured,
+        conversion_action_id=result.conversion_action_id,
+        tag=tag,
+        message_pl=result.message_pl,
+    )
+
+
+@router.post("/conversion-tracking/verify", response_model=VerifyTrackingResponse)
+async def verify_conversion_tracking(
+    body: VerifyTrackingRequest,
+    user_id: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> VerifyTrackingResponse:
+    """Verify a conversion action is enabled and recording conversions."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.launch.verify_conversion_firing import (
+        VerifyConversionFiringUseCase,
+    )
+    from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            account, credentials = await _resolve_account_and_creds(
+                session, settings, user_id, body.account_id
+            )
+
+        reader = GoogleAdsQueriesAdapter(settings)
+        status = await VerifyConversionFiringUseCase(reader).execute(
+            refresh_token=credentials.refresh_token,
+            customer_id=account.customer_id,
+            conversion_action_id=body.conversion_action_id,
+        )
+    finally:
+        await engine.dispose()
+
+    return VerifyTrackingResponse(
+        conversion_action_id=status.conversion_action_id,
+        found=status.found,
+        enabled=status.enabled,
+        recent_conversions=status.recent_conversions,
+        is_firing=status.is_firing,
+        message_pl=status.message_pl,
+    )

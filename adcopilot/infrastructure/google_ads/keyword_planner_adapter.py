@@ -16,7 +16,9 @@ import structlog
 
 from adcopilot.application.ports.keyword_planner import KeywordIdea
 from adcopilot.config import Settings
+from adcopilot.domain.exceptions import GoogleAdsRateLimited
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter
+from adcopilot.infrastructure.google_ads.retry import retry_on_rate_limit
 
 logger = structlog.get_logger(__name__)
 
@@ -47,6 +49,28 @@ class GoogleKeywordPlannerAdapter:
         if not seeds and not seed_url:
             return []
 
+        async def _call() -> list[KeywordIdea]:
+            return self._generate_ideas(refresh_token, customer_id, seeds, seed_url, limit)
+
+        try:
+            # Retry transient quota errors; fail-open on anything else.
+            return await retry_on_rate_limit(_call, label="keyword_ideas")
+        except Exception as exc:  # fail-open per port contract
+            logger.warning(
+                "keyword_ideas failed; returning empty",
+                customer_id=customer_id,
+                error=str(exc),
+            )
+            return []
+
+    def _generate_ideas(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        seeds: list[str],
+        seed_url: str | None,
+        limit: int,
+    ) -> list[KeywordIdea]:
         try:
             client = self._client._build_client(refresh_token)
             cid = customer_id.replace("-", "")
@@ -96,10 +120,10 @@ class GoogleKeywordPlannerAdapter:
                 if len(ideas) >= limit:
                     break
             return ideas
-        except Exception as exc:  # fail-open per port contract
-            logger.warning(
-                "keyword_ideas failed; returning empty",
-                customer_id=customer_id,
-                error=str(exc),
-            )
-            return []
+        except Exception as exc:
+            # Surface quota errors so the retry helper can back off; everything
+            # else propagates to the fail-open boundary in keyword_ideas().
+            err = str(exc).lower()
+            if "quota" in err or "resource exhausted" in err:
+                raise GoogleAdsRateLimited(str(exc)) from exc
+            raise

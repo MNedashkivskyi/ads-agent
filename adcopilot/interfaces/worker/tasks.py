@@ -1290,13 +1290,37 @@ async def _run_generate_campaign(
     error_text: str | None = None
 
     try:
-        # \u2500\u2500 Step 1: load brief (short tx, connection released immediately) \u2500\u2500
+        # \u2500\u2500 Step 1: load brief + account creds (short tx, released immediately) \u2500\u2500
+        kw_refresh_token: str | None = None
+        kw_customer_id: str | None = None
         async with AsyncSession(engine) as session, session.begin():
             brief_repo = SqlCampaignBriefRepository(session)
             brief = await brief_repo.get(CampaignBriefId(brief_id))
             if brief is None:
                 logger.error("generate_campaign_task: brief not found", brief_id=brief_id)
                 return {"error": "brief_not_found"}
+            # Best-effort: capture credentials so the LLM pipeline can enrich
+            # keywords with real Keyword Planner demand. Fail-open \u2014 any miss
+            # leaves the planner unwired and generation proceeds unchanged.
+            try:
+                from adcopilot.domain.entities import AccountId as _AccountId
+                from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+                    SqlGoogleAdsAccountRepository,
+                )
+                from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+                    SqlOAuthCredentialsRepository,
+                )
+
+                _account = await SqlGoogleAdsAccountRepository(session).get(brief.account_id)
+                if _account is not None:
+                    _creds = await SqlOAuthCredentialsRepository(
+                        session, settings.TOKEN_ENCRYPTION_KEY
+                    ).get(_AccountId(_account.id))
+                    if _creds is not None:
+                        kw_refresh_token = _creds.refresh_token
+                        kw_customer_id = _account.customer_id
+            except Exception:
+                logger.warning("generate_campaign_task: planner creds unavailable", brief_id=brief_id)
         # session and DB connection are fully released here;
         # nothing is held open during the LLM calls below.
 
@@ -1325,12 +1349,22 @@ async def _run_generate_campaign(
             llm = AnthropicClient(api_key=settings.LLM_API_KEY)
             try:
                 generator = CampaignGenerator(llm)
+                keyword_planner = None
+                if kw_refresh_token and kw_customer_id:
+                    from adcopilot.infrastructure.google_ads.keyword_planner_adapter import (
+                        GoogleKeywordPlannerAdapter,
+                    )
+
+                    keyword_planner = GoogleKeywordPlannerAdapter(settings)
                 use_case = GenerateCampaignProposalUseCase(
                     brief_repo=None,     # not needed for content-only generation
                     proposal_repo=None,  # not needed for content-only generation
                     generator=generator,
                     template_repo=YamlVerticalTemplateAdapter(),
                     assembler=TemplateProposalAssembler(),
+                    keyword_planner=keyword_planner,
+                    account_refresh_token=kw_refresh_token,
+                    account_customer_id=kw_customer_id,
                 )
                 # generate_content_only runs the full LLM pipeline (vertical
                 # detection -> structure -> ad copy -> negatives -> extensions ->
@@ -1798,15 +1832,11 @@ def enable_campaign_task(
     return asyncio.run(_run_enable_campaign(brief_id, skip_conversion_check))
 
 
-# Launch goals that require conversion tracking before spend is enabled. A goal
-# not in this set (e.g. plain "visit"/traffic) is allowed without tracking.
-_GOALS_REQUIRING_TRACKING = frozenset(
-    {"call", "phone_call", "book", "booking", "purchase", "buy", "signup", "sign_up", "lead"}
+# Re-exported from the shared launch module so the worker gate and the API
+# enable endpoint use one source of truth.
+from adcopilot.application.use_cases.launch.check_conversion_setup import (  # noqa: E402
+    goal_requires_tracking as _goal_requires_tracking,
 )
-
-
-def _goal_requires_tracking(primary_action: str | None) -> bool:
-    return (primary_action or "").strip().lower().replace(" ", "_") in _GOALS_REQUIRING_TRACKING
 
 
 async def _run_enable_campaign(

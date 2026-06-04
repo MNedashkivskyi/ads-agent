@@ -151,7 +151,12 @@ class GoogleAdsQueriesAdapter:
     async def list_conversion_actions(
         self, refresh_token: str, customer_id: str
     ) -> list[ConversionActionSnapshot]:
-        return await queries.list_conversion_actions(refresh_token, customer_id, self._settings)
+        from adcopilot.infrastructure.google_ads.retry import retry_on_rate_limit
+
+        return await retry_on_rate_limit(
+            lambda: queries.list_conversion_actions(refresh_token, customer_id, self._settings),
+            label="list_conversion_actions",
+        )
 
     async def get_enhanced_conversions_for_leads_enabled(
         self, refresh_token: str, customer_id: str

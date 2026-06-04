@@ -40,6 +40,7 @@ class KeywordResponse(BaseModel):
     text: str
     match_type: str
     estimated_cpc_pln: float
+    avg_monthly_searches: int | None = None
 
 
 class AdResponse(BaseModel):
@@ -190,6 +191,7 @@ async def get_proposal_preview(proposal_id: str) -> ProposalPreviewResponse:
                         text=kw.text,
                         match_type=kw.match_type,
                         estimated_cpc_pln=kw.estimated_cpc_micros / _MICROS_PER_PLN,
+                        avg_monthly_searches=kw.avg_monthly_searches,
                     )
                     for kw in ag.keywords
                 ],
@@ -451,6 +453,112 @@ async def launch_proposal(
     create_campaign_task.delay(brief_id)
     logger.info("proposal launched without setup fee", proposal_id=proposal_id, brief_id=brief_id)
     return LaunchProposalResponse(status="launching", brief_id=brief_id)
+
+
+class EnableCampaignRequest(BaseModel):
+    override_conversion_check: bool = False
+
+
+class EnableCampaignResponse(BaseModel):
+    status: str  # "enabling"
+    brief_id: str
+
+
+@api_router.post(
+    "/launch/{brief_id}/enable",
+    response_model=EnableCampaignResponse,
+    status_code=202,
+)
+async def enable_campaign(
+    brief_id: str,
+    user_id: CurrentUser,
+    body: EnableCampaignRequest | None = None,
+) -> EnableCampaignResponse:
+    """Enable a PAUSED campaign (go live). Gated on conversion tracking for
+    conversion-goal campaigns unless ``override_conversion_check`` is set.
+
+    Returns 409 with ``{error, message_pl}`` when blocked so the frontend can
+    route the user to tracking setup (or retry with the override).
+    """
+    override = bool(body and body.override_conversion_check)
+
+    from adcopilot.application.use_cases.launch.check_conversion_setup import (
+        goal_requires_tracking,
+        has_macro_conversion_tracking,
+    )
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.domain.launch.entities import CampaignBriefId, LaunchStatus
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
+        SqlCampaignBriefRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
+    )
+    from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            brief = await SqlCampaignBriefRepository(session).get(CampaignBriefId(brief_id))
+            if brief is None or brief.user_id != user_id:
+                raise HTTPException(status_code=404, detail="Brief not found")
+            if brief.status != LaunchStatus.CREATED_PAUSED:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Brief is in status '{brief.status}', expected 'created_paused'",
+                )
+
+            account = await SqlGoogleAdsAccountRepository(session).get(brief.account_id)
+            if account is None:
+                raise HTTPException(status_code=404, detail="Account not found")
+            credentials = await SqlOAuthCredentialsRepository(
+                session, settings.TOKEN_ENCRYPTION_KEY
+            ).get(AccountId(account.id))
+            if credentials is None:
+                raise HTTPException(status_code=422, detail="Google Ads account not connected")
+
+        # Conversion-tracking gate (synchronous, for immediate UX). The worker
+        # task re-checks as defense-in-depth.
+        if not override and goal_requires_tracking(brief.primary_action):
+            try:
+                actions = await GoogleAdsQueriesAdapter(settings).list_conversion_actions(
+                    credentials.refresh_token, account.customer_id
+                )
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "tracking_check_failed",
+                        "message_pl": (
+                            "Nie udało się zweryfikować śledzenia konwersji. "
+                            "Spróbuj ponownie za chwilę."
+                        ),
+                    },
+                ) from exc
+            if not has_macro_conversion_tracking(actions):
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "error": "no_conversion_tracking",
+                        "message_pl": (
+                            "Kampania z tym celem wymaga skonfigurowanego śledzenia "
+                            "konwersji przed uruchomieniem. Skonfiguruj śledzenie lub "
+                            "uruchom mimo to (override)."
+                        ),
+                    },
+                )
+    finally:
+        await engine.dispose()
+
+    from adcopilot.interfaces.worker.tasks import enable_campaign_task
+
+    enable_campaign_task.delay(brief_id, skip_conversion_check=override)
+    logger.info("campaign enable requested", brief_id=brief_id, override=override)
+    return EnableCampaignResponse(status="enabling", brief_id=brief_id)
 
 
 @api_router.get(

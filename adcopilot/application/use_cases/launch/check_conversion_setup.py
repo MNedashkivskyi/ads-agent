@@ -1,7 +1,6 @@
 """Check whether an account has macro-conversion tracking configured.
 
-Called after campaign creation. If no macro-conversion actions exist,
-returns a guide message so the caller can send it via Telegram.
+Used by the enable-spend gate and the conversion-tracking setup flow.
 """
 
 from __future__ import annotations
@@ -9,6 +8,12 @@ from __future__ import annotations
 from adcopilot.domain.snapshot import ConversionActionSnapshot
 
 _MACRO_CATEGORIES = frozenset({"PURCHASE", "LEAD", "SIGNUP", "PHONE_CALL"})
+
+# Launch goals that require conversion tracking before spend is enabled. A goal
+# not in this set (e.g. plain "visit"/traffic) may be enabled without tracking.
+_GOALS_REQUIRING_TRACKING = frozenset(
+    {"call", "phone_call", "book", "booking", "purchase", "buy", "signup", "sign_up", "lead"}
+)
 
 
 def has_macro_conversion_tracking(
@@ -21,3 +26,9 @@ def has_macro_conversion_tracking(
         and ca.include_in_conversions_metric
         for ca in conversion_actions
     )
+
+
+def goal_requires_tracking(primary_action: str | None) -> bool:
+    """Return True if a campaign goal requires conversion tracking before spend."""
+    normalised = (primary_action or "").strip().lower().replace(" ", "_")
+    return normalised in _GOALS_REQUIRING_TRACKING
