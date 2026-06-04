@@ -457,3 +457,60 @@ class FakeGoogleAdsMutations:
                 "match_type": match_type,
             }
         )
+
+    async def create_conversion_action(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        *,
+        name: str,
+        category: str,
+        value_micros: int | None = None,
+        counting_type: str = "ONE_PER_CLICK",
+        default_currency: str = "PLN",
+    ) -> int:
+        from adcopilot.domain.conversion_tracking.setup import validate_macro_category
+
+        category = validate_macro_category(category)
+        self.calls.append(
+            {
+                "method": "create_conversion_action",
+                "customer_id": customer_id,
+                "name": name,
+                "category": category,
+                "value_micros": value_micros,
+                "counting_type": counting_type,
+                "default_currency": default_currency,
+            }
+        )
+        return 555555  # fake conversion_action_id
+
+    async def get_conversion_action_tag_snippets(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        conversion_action_id: int,
+    ):
+        from adcopilot.domain.conversion_tracking.setup import ConversionActionTag
+
+        self.calls.append(
+            {
+                "method": "get_conversion_action_tag_snippets",
+                "customer_id": customer_id,
+                "conversion_action_id": conversion_action_id,
+            }
+        )
+        return ConversionActionTag(
+            conversion_action_id=conversion_action_id,
+            conversion_id="AW-123456789",
+            conversion_label="AbC-D_efGhIjk",
+            global_site_tag=(
+                "<!-- Google tag (gtag.js) -->\n"
+                '<script async src="https://www.googletagmanager.com/gtag/js?id=AW-123456789">'
+                "</script>"
+            ),
+            event_snippet=(
+                "<script>gtag('event', 'conversion', "
+                "{'send_to': 'AW-123456789/AbC-D_efGhIjk'});</script>"
+            ),
+        )

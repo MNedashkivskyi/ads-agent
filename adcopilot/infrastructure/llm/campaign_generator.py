@@ -71,11 +71,18 @@ class VerticalClassification(BaseModel):
 
 
 class KeywordItem(BaseModel):
-    """A single keyword suggestion."""
+    """A single keyword suggestion.
+
+    ``avg_monthly_searches`` and ``competition`` are populated from real Keyword
+    Planner data when a planner is available; ``None`` when no demand data was
+    attached (LLM/template-only keyword).
+    """
 
     text: str
     match_type: str = Field(default="phrase")
     estimated_cpc_pln: float = Field(default=1.0)
+    avg_monthly_searches: int | None = Field(default=None)
+    competition: str | None = Field(default=None)
 
     @field_validator("match_type")
     @classmethod
@@ -224,6 +231,10 @@ You are an expert Google Ads campaign architect.
 Design a complete campaign skeleton from the business brief and vertical.
 IMPORTANT: Follow the budget-tier structure constraints provided in the user prompt exactly.
 The bidding strategy has been pre-selected — use it as-is, do not change it.
+Prefer keywords with genuine search demand and commercial intent: favour the
+specific terms real customers type (service + city, "near me", buying/booking
+intent) over ultra-generic single words with little intent. Real search-volume
+data is applied after this step, so concrete, high-intent keywords survive.
 Respond ONLY with a valid JSON object matching this schema — no markdown, no prose:
 {
   "campaign_name": "<string ≤ 120 chars>",
@@ -563,6 +574,7 @@ class CampaignGenerator:
                         text=kw.text,
                         match_type=mt,
                         estimated_cpc_micros=cpc_micros,
+                        avg_monthly_searches=kw.avg_monthly_searches,
                     )
                 )
 

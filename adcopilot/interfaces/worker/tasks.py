@@ -1785,17 +1785,33 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
     retry_backoff=True,
     name="adcopilot.interfaces.worker.tasks.enable_campaign_task",
 )
-def enable_campaign_task(brief_id: str) -> dict[str, object]:
+def enable_campaign_task(
+    brief_id: str, skip_conversion_check: bool = False
+) -> dict[str, object]:
     """Enable the paused campaign and start monitoring.
 
-    Dispatched when the user confirms enabling.
+    Dispatched when the user confirms enabling. ``skip_conversion_check`` is the
+    explicit user override that bypasses the conversion-tracking gate.
     """
     import asyncio
 
-    return asyncio.run(_run_enable_campaign(brief_id))
+    return asyncio.run(_run_enable_campaign(brief_id, skip_conversion_check))
 
 
-async def _run_enable_campaign(brief_id: str) -> dict[str, object]:
+# Launch goals that require conversion tracking before spend is enabled. A goal
+# not in this set (e.g. plain "visit"/traffic) is allowed without tracking.
+_GOALS_REQUIRING_TRACKING = frozenset(
+    {"call", "phone_call", "book", "booking", "purchase", "buy", "signup", "sign_up", "lead"}
+)
+
+
+def _goal_requires_tracking(primary_action: str | None) -> bool:
+    return (primary_action or "").strip().lower().replace(" ", "_") in _GOALS_REQUIRING_TRACKING
+
+
+async def _run_enable_campaign(
+    brief_id: str, skip_conversion_check: bool = False
+) -> dict[str, object]:
     import dataclasses
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -1844,6 +1860,50 @@ async def _run_enable_campaign(brief_id: str) -> dict[str, object]:
             credentials = await credentials_repo.get(AccountId(account.id))
             if credentials is None:
                 return {"error": "credentials_not_found"}
+
+            # B5 gate: do not enable spend for a conversion-goal campaign unless
+            # the account has a macro conversion action (live check). Bypassable
+            # via the explicit user override ``skip_conversion_check``.
+            if not skip_conversion_check and _goal_requires_tracking(brief.primary_action):
+                from adcopilot.application.use_cases.launch.check_conversion_setup import (
+                    has_macro_conversion_tracking,
+                )
+                from adcopilot.infrastructure.google_ads.queries_adapter import (
+                    GoogleAdsQueriesAdapter,
+                )
+
+                try:
+                    conversion_actions = await GoogleAdsQueriesAdapter(
+                        settings
+                    ).list_conversion_actions(credentials.refresh_token, account.customer_id)
+                except Exception:
+                    logger.warning(
+                        "enable_campaign_tracking_check_failed", brief_id=brief_id
+                    )
+                    return {
+                        "enabled": False,
+                        "error": "tracking_check_failed",
+                        "message": (
+                            "Nie udało się zweryfikować śledzenia konwersji. "
+                            "Spróbuj ponownie za chwilę."
+                        ),
+                    }
+
+                if not has_macro_conversion_tracking(conversion_actions):
+                    logger.warning(
+                        "enable_campaign_blocked_no_conversion_tracking",
+                        brief_id=brief_id,
+                        primary_action=brief.primary_action,
+                    )
+                    return {
+                        "enabled": False,
+                        "error": "no_conversion_tracking",
+                        "message": (
+                            "Kampania z tym celem wymaga skonfigurowanego śledzenia "
+                            "konwersji przed uruchomieniem. Skonfiguruj śledzenie lub "
+                            "uruchom mimo to (override)."
+                        ),
+                    }
 
             writer = CampaignWriter(
                 settings=settings,

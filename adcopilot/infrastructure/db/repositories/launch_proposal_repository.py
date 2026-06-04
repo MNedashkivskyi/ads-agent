@@ -54,6 +54,7 @@ def _model_to_domain(
                 text=kw.text,
                 match_type=MatchType(kw.match_type),
                 estimated_cpc_micros=kw.estimated_cpc_micros,
+                avg_monthly_searches=kw.avg_monthly_searches,
             )
             for kw in kw_models
         ]
@@ -234,6 +235,7 @@ class SqlCampaignProposalRepository:
                         text=kw.text,
                         match_type=kw.match_type.value,
                         estimated_cpc_micros=kw.estimated_cpc_micros,
+                        avg_monthly_searches=kw.avg_monthly_searches,
                     )
                 )
 

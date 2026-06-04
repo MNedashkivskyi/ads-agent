@@ -106,6 +106,14 @@ class DetectionContext:
     # Empty for accounts with no PMax/Shopping campaigns.
     asset_groups: list = field(default_factory=list)
     listing_groups: list = field(default_factory=list)
+    # Polish-market vertical (e.g. "salon", "prawnik"); None when unknown.
+    # Drives the conversion-attribution window used by lag-sensitive rules.
+    vertical: str | None = None
+    # Days conversions take to settle for this vertical. Defaults to the 7-day
+    # comparison gap so unknown-vertical accounts keep today's behaviour; only
+    # known long-cycle verticals (law / real estate / education / medical)
+    # relax the lag-sensitive rules. See lag_guard.is_comparison_reliable.
+    attribution_window_days: int = 7
 
 
 @dataclass

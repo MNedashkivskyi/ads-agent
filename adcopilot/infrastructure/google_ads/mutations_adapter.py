@@ -7,6 +7,11 @@ from typing import Any
 import structlog
 
 from adcopilot.config import Settings
+from adcopilot.domain.conversion_tracking.setup import (
+    ConversionActionTag,
+    validate_macro_category,
+)
+from adcopilot.domain.conversion_tracking.tag_parsing import parse_conversion_send_to
 from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
 
@@ -823,6 +828,101 @@ class GoogleAdsMutationsAdapter:
             raise
         except Exception as exc:
             raise _wrap_mutation_exc("set_conversion_action_value", exc) from exc
+
+    async def create_conversion_action(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        *,
+        name: str,
+        category: str,
+        value_micros: int | None = None,
+        counting_type: str = "ONE_PER_CLICK",
+        default_currency: str = "PLN",
+    ) -> int:
+        """Create a webpage conversion action; return the new conversion_action_id."""
+        category = validate_macro_category(category)
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            ca_service = client.get_service("ConversionActionService")
+            op = client.get_type("ConversionActionOperation")
+            action = op.create
+            action.name = name
+            action.type_ = client.enums.ConversionActionTypeEnum.WEBPAGE
+            action.category = getattr(client.enums.ConversionActionCategoryEnum, category)
+            action.status = client.enums.ConversionActionStatusEnum.ENABLED
+            action.counting_type = getattr(
+                client.enums.ConversionActionCountingTypeEnum, counting_type
+            )
+            # Count toward the primary "Conversions" column so Smart Bidding uses it.
+            action.primary_for_goal = True
+            if value_micros is not None:
+                action.value_settings.default_value = value_micros / 1_000_000
+                action.value_settings.default_currency_code = default_currency
+                action.value_settings.always_use_default_value = True
+
+            response = ca_service.mutate_conversion_actions(
+                customer_id=cid, operations=[op]
+            )
+            resource_name = response.results[0].resource_name
+            # resource_name == "customers/<cid>/conversionActions/<id>"
+            conversion_action_id = int(resource_name.rsplit("/", 1)[-1])
+            logger.info(
+                "conversion action created",
+                customer_id=customer_id,
+                conversion_action_id=conversion_action_id,
+                name=name,
+                category=category,
+                has_value=value_micros is not None,
+            )
+            return conversion_action_id
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("create_conversion_action", exc) from exc
+
+    async def get_conversion_action_tag_snippets(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        conversion_action_id: int,
+    ) -> ConversionActionTag:
+        """Read back the installable tag for a conversion action."""
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            ga_service = client.get_service("GoogleAdsService")
+            query = (
+                "SELECT conversion_action.id, conversion_action.tag_snippets "
+                "FROM conversion_action "
+                f"WHERE conversion_action.id = {conversion_action_id} LIMIT 1"
+            )
+            response = ga_service.search(customer_id=cid, query=query)
+            global_site_tag = ""
+            event_snippet = ""
+            for row in response:
+                for snippet in row.conversion_action.tag_snippets:
+                    # Prefer the gtag.js (GLOBAL_SITE_TAG) page-format snippet.
+                    if snippet.global_site_tag and not global_site_tag:
+                        global_site_tag = snippet.global_site_tag
+                    if snippet.event_snippet and not event_snippet:
+                        event_snippet = snippet.event_snippet
+                break
+
+            parsed = parse_conversion_send_to(event_snippet)
+            conversion_id, conversion_label = parsed if parsed else ("", "")
+            return ConversionActionTag(
+                conversion_action_id=conversion_action_id,
+                conversion_id=conversion_id,
+                conversion_label=conversion_label,
+                global_site_tag=global_site_tag,
+                event_snippet=event_snippet,
+            )
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("get_conversion_action_tag_snippets", exc) from exc
 
     async def set_ad_schedule_bid_modifier(
         self,

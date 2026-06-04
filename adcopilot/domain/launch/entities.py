@@ -81,6 +81,8 @@ class KeywordProposal:
     match_type: MatchType
     estimated_cpc_micros: int
     """Estimated cost-per-click in Google Ads micro-units (1 PLN = 1 000 000)."""
+    avg_monthly_searches: int | None = None
+    """Real Keyword Planner search volume; None when no demand data was attached."""
 
 
 @dataclass(frozen=True)

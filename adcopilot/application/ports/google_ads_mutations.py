@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from adcopilot.domain.conversion_tracking.setup import ConversionActionTag
+
 
 class GoogleAdsMutationsPort(Protocol):
     async def campaign_exists(
@@ -211,6 +213,36 @@ class GoogleAdsMutationsPort(Protocol):
         value: float,
         currency_code: str,
     ) -> None: ...
+
+    async def create_conversion_action(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        *,
+        name: str,
+        category: str,
+        value_micros: int | None = None,
+        counting_type: str = "ONE_PER_CLICK",
+        default_currency: str = "PLN",
+    ) -> int:
+        """Create a webpage conversion action; return the new conversion_action_id.
+
+        ``category`` is a macro category (PURCHASE/LEAD/SIGNUP/PHONE_CALL).
+        When ``value_micros`` is given, the action is created with a default
+        value (+ always-use-default) so the account can bid on value even when
+        the tag sends no per-conversion value.
+        """
+        ...
+
+    async def get_conversion_action_tag_snippets(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        conversion_action_id: int,
+    ) -> ConversionActionTag:
+        """Read back the installable tag (global site tag + event snippet) for a
+        conversion action, with the ``AW-<id>/<label>`` parsed out."""
+        ...
 
     async def remove_campaign_negative_keyword(
         self,

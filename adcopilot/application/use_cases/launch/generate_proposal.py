@@ -17,8 +17,12 @@ from __future__ import annotations
 
 import dataclasses
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 import structlog
+
+if TYPE_CHECKING:
+    from adcopilot.application.ports.keyword_planner import KeywordPlannerPort
 
 from adcopilot.application.detection.validation import LandingPageCheckResult as DetectionLPResult
 from adcopilot.application.detection.validation import ValidationContext, validate_proposal
@@ -154,6 +158,9 @@ class GenerateCampaignProposalUseCase:
         website_url: str | None = None,
         template_repo: VerticalTemplateRepository | None = None,
         assembler: TemplateProposalAssembler | None = None,
+        keyword_planner: "KeywordPlannerPort | None" = None,
+        account_refresh_token: str | None = None,
+        account_customer_id: str | None = None,
     ) -> None:
         self._brief_repo = brief_repo
         self._proposal_repo = proposal_repo
@@ -161,6 +168,12 @@ class GenerateCampaignProposalUseCase:
         self._website_url = website_url
         self._template_repo = template_repo
         self._assembler = assembler or TemplateProposalAssembler()
+        # Optional Keyword Planner: when wired (with account creds) the pipeline
+        # enriches structure keywords with real search volume. Absent/failing →
+        # the pipeline keeps its template/LLM keywords unchanged (fail-open).
+        self._keyword_planner = keyword_planner
+        self._account_refresh_token = account_refresh_token
+        self._account_customer_id = account_customer_id
 
     async def execute(
         self,
@@ -424,6 +437,53 @@ class GenerateCampaignProposalUseCase:
     # Internal pipeline
     # ------------------------------------------------------------------
 
+    async def _maybe_enrich_keywords(self, structure, brief: CampaignBrief) -> None:
+        """Attach real Keyword Planner demand to ``structure`` keywords in place.
+
+        Fail-open: returns silently when no planner/credentials are configured or
+        on any planner error — the structure keeps its template/LLM keywords.
+        """
+        if (
+            self._keyword_planner is None
+            or not self._account_refresh_token
+            or not self._account_customer_id
+        ):
+            return
+
+        from adcopilot.application.services.keyword_enrichment import enrich_keywords
+
+        try:
+            seeds: list[str] = []
+            for ag in structure.ad_groups:
+                seeds.extend(kw.text for kw in ag.keywords)
+
+            ideas = await self._keyword_planner.keyword_ideas(
+                self._account_refresh_token,
+                self._account_customer_id,
+                seed_keywords=seeds,
+                seed_url=self._website_url,
+                location=brief.location,
+            )
+            if not ideas:
+                return
+
+            total_before = 0
+            total_after = 0
+            for ag in structure.ad_groups:
+                total_before += len(ag.keywords)
+                ag.keywords = enrich_keywords(ag.keywords, ideas)
+                total_after += len(ag.keywords)
+
+            logger.info(
+                "keywords_enriched_with_demand",
+                brief_id=brief.id,
+                ideas=len(ideas),
+                keywords_before=total_before,
+                keywords_after=total_after,
+            )
+        except Exception:
+            logger.warning("keyword_enrichment_failed", brief_id=brief.id)
+
     async def _run_pipeline(
         self,
         brief: CampaignBrief,
@@ -440,6 +500,10 @@ class GenerateCampaignProposalUseCase:
         structure = await self._generator.build_structure(
             brief, vertical, feedback=revision_feedback
         )
+
+        # Stage 2a — enrich structure keywords with real Keyword Planner demand
+        # (fail-open: no-op when no planner/creds, or on any API error).
+        await self._maybe_enrich_keywords(structure, brief)
 
         # Stage 3 — ad copy (one call per ad group, sequential)
         ad_copies = []

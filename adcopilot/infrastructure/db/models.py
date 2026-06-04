@@ -785,6 +785,8 @@ class LaunchKeywordModel(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     match_type: Mapped[str] = mapped_column(String(20), nullable=False)
     estimated_cpc_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    # Real Keyword Planner search volume; NULL for template/LLM-only keywords.
+    avg_monthly_searches: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

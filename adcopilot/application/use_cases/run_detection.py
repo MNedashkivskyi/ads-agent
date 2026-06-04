@@ -14,6 +14,7 @@ from adcopilot.application.ports.recommendation_repository import Recommendation
 from adcopilot.application.ports.repositories import GoogleAdsAccountRepository
 from adcopilot.application.ports.snapshot_repository import SnapshotData, SnapshotRepository
 from adcopilot.domain.entities import AccountId
+from adcopilot.domain.polish_market.attribution_windows import attribution_window_days
 from adcopilot.domain.recommendation import RecommendationSeverity
 
 logger = structlog.get_logger(__name__)
@@ -121,6 +122,15 @@ class RunDetectionUseCase:
             except Exception:
                 business_economics = None
 
+        # Vertical drives the conversion-attribution window for lag-sensitive
+        # rules. Best-effort: derive from whatever vertical signal is available
+        # (business economics today; a per-account vertical field once wired).
+        # Falls back to the default window when unknown.
+        vertical = getattr(business_economics, "vertical", None) or getattr(
+            account, "vertical", None
+        )
+        attribution_window = attribution_window_days(vertical)
+
         # 4. Compute HistoricalStats from the snapshot itself (30-day proxy)
         total_cost = sum(c.cost_micros for c in snapshot.campaigns)
         total_conversions = sum(c.conversions for c in snapshot.campaigns)
@@ -192,6 +202,8 @@ class RunDetectionUseCase:
             spend_safety_config=spend_safety_config,
             asset_groups=asset_groups,
             listing_groups=listing_groups,
+            vertical=vertical,
+            attribution_window_days=attribution_window,
         )
 
         # 6. Run rule engine
