@@ -55,6 +55,25 @@ def is_google_auth_error(exc: Exception) -> bool:
     return any(sig in error_str for sig in _AUTH_ERROR_SIGNATURES)
 
 
+# Substrings indicating Google Ads throttled the request (quota exhausted /
+# rate limited). Such requests are rejected before processing, so retrying with
+# back-off is safe.
+_RATE_LIMIT_SIGNATURES = (
+    "quota",
+    "resource exhausted",
+    "resource_exhausted",
+    "rate exceeded",
+    "rate_exceeded",
+    "too many requests",
+)
+
+
+def is_rate_limit_error(exc: Exception) -> bool:
+    """Return True if *exc* indicates a Google Ads quota / rate-limit error."""
+    error_str = str(exc).lower()
+    return any(sig in error_str for sig in _RATE_LIMIT_SIGNATURES)
+
+
 class GoogleAdsClientAdapter:
     """Thin wrapper around the google-ads library.
 

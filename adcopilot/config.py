@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     # Example (local):    http://localhost:8000/oauth/google/callback
     OAUTH_REDIRECT_URI: str = "http://localhost:8000/oauth/google/callback"
     LLM_API_KEY: str | None = None
+    # Max concurrent outbound Google Ads API calls per event loop (throttle) so
+    # managing many accounts at once can't exhaust the developer-token quota.
+    GOOGLE_ADS_MAX_CONCURRENCY: int = 8
     PAGESPEED_API_KEY: str | None = None
 
     # Comma-separated list of user UUIDs that have admin access to /api/admin/* endpoints.

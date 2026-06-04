@@ -35,7 +35,11 @@ from adcopilot.application.ports.campaign_writer import CreatedCampaignResources
 from adcopilot.config import Settings
 from adcopilot.domain.audit_log import AuditLog, AuditLogId
 from adcopilot.domain.entities import AccountId
-from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
+from adcopilot.domain.exceptions import (
+    GoogleAdsAuthError,
+    GoogleAdsRateLimited,
+    GoogleAdsUnavailable,
+)
 from adcopilot.domain.launch.audience_signals import AudienceSignal
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
@@ -49,8 +53,13 @@ from adcopilot.domain.launch.entities import (
 )
 from adcopilot.domain.launch.schedule_rules import AdScheduleEntry
 from adcopilot.domain.recommendation import RecommendationId
-from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
+from adcopilot.infrastructure.google_ads.client import (
+    GoogleAdsClientAdapter,
+    is_google_auth_error,
+    is_rate_limit_error,
+)
 from adcopilot.infrastructure.google_ads.error_messages import is_duplicate_campaign_name
+from adcopilot.infrastructure.google_ads.resilience import throttled_adapter
 
 logger = structlog.get_logger(__name__)
 
@@ -68,6 +77,8 @@ _MATCH_TYPE_MAP: dict[str, str] = {
 def _wrap_exc(operation: str, exc: Exception) -> Exception:
     if is_google_auth_error(exc):
         return GoogleAdsAuthError(str(exc))
+    if is_rate_limit_error(exc):
+        return GoogleAdsRateLimited(f"{operation} rate-limited: {exc}")
     return GoogleAdsUnavailable(f"{operation} failed: {exc}")
 
 
@@ -97,6 +108,7 @@ def _sanitize_ad_text(text: str) -> str:
     return " ".join(cleaned.split())
 
 
+@throttled_adapter
 class CampaignWriter:
     """Implements ``CampaignWriterPort`` against the real Google Ads API v24+."""
 
