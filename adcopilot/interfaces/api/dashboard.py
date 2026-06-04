@@ -76,10 +76,13 @@ async def get_performance(
             )
             series = []
             for row in rows:
-                cost = row.total_cost_micros or 0
+                # SUM() over bigint columns comes back as Decimal under asyncpg;
+                # coerce to int/float so mixed Decimal/float arithmetic below
+                # (cpa, ctr) doesn't raise TypeError once real data exists.
+                cost = int(row.total_cost_micros or 0)
                 conv = float(row.total_conversions or 0)
-                clicks = row.total_clicks or 0
-                impressions = row.total_impressions or 0
+                clicks = int(row.total_clicks or 0)
+                impressions = int(row.total_impressions or 0)
                 cpa_micros = int(cost / conv) if conv > 0 else 0
                 ctr = clicks / impressions if impressions > 0 else 0.0
                 series.append(
