@@ -1341,3 +1341,25 @@ class ConversionUploadModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+
+
+class SpendSafetyConfigModel(Base):
+    """Per-account spend-safety caps + auto-pause toggle (spend-safety system)."""
+
+    __tablename__ = "spend_safety_config"
+
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    monthly_spend_cap_micros: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    daily_spend_cap_micros: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    per_campaign_daily_cap_micros: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    max_budget_increase_pct: Mapped[float] = mapped_column(
+        Numeric(6, 2), nullable=False, default=50.0
+    )
+    warning_threshold_pct: Mapped[float] = mapped_column(
+        Numeric(5, 2), nullable=False, default=80.0
+    )
+    auto_pause_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    currency_code: Mapped[str] = mapped_column(String(3), nullable=False, default="PLN")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )

@@ -205,6 +205,31 @@ class GoogleAdsMutationsAdapter:
         except Exception as exc:
             raise _wrap_mutation_exc("update_campaign_budget", exc) from exc
 
+    async def pause_campaign(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+    ) -> None:
+        """Set a campaign's status to PAUSED (spend-safety protective action)."""
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            campaign_service = client.get_service("CampaignService")
+            operation = client.get_type("CampaignOperation")
+            campaign = operation.update
+            campaign.resource_name = campaign_service.campaign_path(cid, campaign_id)
+            campaign.status = client.enums.CampaignStatusEnum.PAUSED
+            from google.protobuf import field_mask_pb2
+
+            client.copy_from(operation.update_mask, field_mask_pb2.FieldMask(paths=["status"]))
+            campaign_service.mutate_campaigns(customer_id=cid, operations=[operation])
+            logger.info("campaign paused", customer_id=customer_id, campaign_id=campaign_id)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("pause_campaign", exc) from exc
+
     async def enable_keyword(
         self,
         refresh_token: str,

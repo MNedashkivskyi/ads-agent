@@ -46,6 +46,7 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
     from adcopilot.application.executors.geo_exclusion import GeoExclusionExecutor
     from adcopilot.application.executors.increase_budget import IncreaseBudgetExecutor
     from adcopilot.application.executors.pause_ad import PauseAdExecutor
+    from adcopilot.application.executors.pause_campaign import PauseCampaignExecutor
     from adcopilot.application.executors.pause_keyword import PauseKeywordExecutor
     from adcopilot.application.executors.promote_search_term import PromoteSearchTermExecutor
     from adcopilot.application.executors.reallocate_budget import ReallocateBudgetExecutor
@@ -70,6 +71,7 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
         RemoveRedundantMatchTypeExecutor(),
         GeoExclusionExecutor(),
         PauseAdExecutor(),
+        PauseCampaignExecutor(),
         AddNegativeKeywordExecutor(),
         IncreaseBudgetExecutor(),
         ChangeMatchTypeExecutor(),
@@ -110,6 +112,8 @@ class ExecuteRecommendationUseCase:
         mutations: GoogleAdsMutationsPort,
         executors: dict[RecommendationKind, RecommendationExecutor] | None = None,
         baseline_repo: Any | None = None,
+        spend_safety_repo: Any | None = None,
+        account_spend_provider: Any | None = None,
     ) -> None:
         self._rec_repo = rec_repo
         self._audit_log_repo = audit_log_repo
@@ -118,6 +122,11 @@ class ExecuteRecommendationUseCase:
         self._mutations = mutations
         self._executors = executors if executors is not None else _default_executors()
         self._baseline_repo = baseline_repo
+        # Spend-safety guardrail (optional; inert if either dependency is absent or
+        # no caps are configured). spend_safety_repo.get(account_id) -> SpendSafetyConfig|None;
+        # account_spend_provider(account_id) -> AccountSpendContext (awaitable).
+        self._spend_safety_repo = spend_safety_repo
+        self._account_spend_provider = account_spend_provider
 
     async def execute(self, rec_id: RecommendationId) -> dict[str, Any]:
         with sentry_sdk.start_transaction(
@@ -170,6 +179,10 @@ class ExecuteRecommendationUseCase:
                     "get up-to-date suggestions."
                 )
 
+        # Preventive spend guardrail: refuse spend-increasing actions that would
+        # breach the account's configured caps (inert until the user opts in).
+        await self._enforce_spend_guard(rec, account.customer_id, credentials.refresh_token)
+
         # One span per executor so the Sentry waterfall shows which action
         # dominated the latency (pause_keyword vs adjust_budget etc.).
         with sentry_sdk.start_span(
@@ -209,6 +222,71 @@ class ExecuteRecommendationUseCase:
             account_id=rec.account_id,
         )
         return result
+
+    async def _enforce_spend_guard(self, rec: Any, customer_id: str, refresh_token: str) -> None:
+        """Refuse a spend-increasing action that would breach the account's caps.
+
+        Inert unless both the config repo and an account-spend provider are wired
+        AND the account has opted in (at least one cap set). Builds a normalized
+        SpendAction from the recommendation payload/evidence per kind.
+        """
+        if self._spend_safety_repo is None or self._account_spend_provider is None:
+            return
+        from adcopilot.domain.spend_guard import (
+            BUDGET_KINDS,
+            TCPA_KINDS,
+            SpendAction,
+            evaluate_spend_action,
+        )
+
+        kind = rec.kind.value
+        if kind not in BUDGET_KINDS and kind not in TCPA_KINDS:
+            return
+
+        config = await self._spend_safety_repo.get(rec.account_id)
+        if config is None or not config.is_configured():
+            return
+
+        payload = getattr(rec, "payload", {}) or {}
+        evidence = getattr(rec, "evidence", {}) or {}
+
+        def _as_int(*keys: str) -> int | None:
+            for src in (payload, evidence):
+                for k in keys:
+                    if src.get(k) is not None:
+                        return int(src[k])
+            return None
+
+        if kind in BUDGET_KINDS:
+            action = SpendAction(
+                kind=kind,
+                campaign_id=_as_int("campaign_id"),
+                current_budget_micros=_as_int("current_budget_micros"),
+                new_budget_micros=_as_int("new_budget_micros", "suggested_budget_micros"),
+            )
+        else:  # tCPA
+            action = SpendAction(
+                kind=kind,
+                campaign_id=_as_int("campaign_id"),
+                current_target_cpa_micros=_as_int("current_target_cpa_micros"),
+                new_target_cpa_micros=_as_int(
+                    "suggested_target_cpa_micros", "new_target_cpa_micros", "target_cpa_micros"
+                ),
+            )
+
+        spend_ctx = await self._account_spend_provider(rec.account_id)
+        decision = evaluate_spend_action(action, config, spend_ctx)
+        if not decision.allowed:
+            from adcopilot.domain.exceptions import SpendGuardViolation
+
+            logger.warning(
+                "spend_guard_blocked",
+                rec_id=str(rec.id),
+                account_id=rec.account_id,
+                kind=kind,
+                code=decision.code,
+            )
+            raise SpendGuardViolation(decision.reason_pl, code=decision.code)
 
     async def _capture_baseline(self, rec: Any, execution_result: dict[str, Any]) -> None:
         from adcopilot.domain.performance_tracking import PerformanceBaseline

@@ -306,3 +306,40 @@ async def test_run_detection_account_not_found_returns_empty() -> None:
     result = await use_case.execute(_ACCOUNT_ID, _SNAP_DATE)
 
     assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_run_detection_threads_spend_safety_config_into_context() -> None:
+    """Spend-safety config from the repo is wired into the DetectionContext."""
+    from adcopilot.application.ports.snapshot_repository import SnapshotData
+    from adcopilot.application.use_cases.run_detection import RunDetectionUseCase
+    from adcopilot.domain.spend_safety import SpendSafetyConfig
+
+    account = _make_account()
+    account_repo = MagicMock()
+    account_repo.get = AsyncMock(return_value=account)
+
+    snapshot_repo = MagicMock()
+    snapshot_repo.load_snapshot = AsyncMock(
+        return_value=SnapshotData(campaigns=[], ad_groups=[], keywords=[], search_terms=[], ads=[])
+    )
+
+    config = SpendSafetyConfig(account_id=str(_ACCOUNT_ID), monthly_spend_cap_micros=5_000_000_000)
+    ss_repo = MagicMock()
+    ss_repo.get = AsyncMock(return_value=config)
+
+    engine = MagicMock()
+    engine.run = AsyncMock(return_value=[])
+
+    use_case = RunDetectionUseCase(
+        snapshot_repo=snapshot_repo,
+        rec_repo=MagicMock(),
+        rule_engine=engine,
+        account_repo=account_repo,
+        spend_safety_repo=ss_repo,
+    )
+    await use_case.execute(_ACCOUNT_ID, _SNAP_DATE)
+
+    ctx = engine.run.call_args.args[0]
+    assert ctx.spend_safety_config is config
+    assert ctx.spend_safety_config.monthly_spend_cap_micros == 5_000_000_000

@@ -86,6 +86,20 @@ class FakeGoogleAdsMutations:
             }
         )
 
+    async def pause_campaign(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        campaign_id: int,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "pause_campaign",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+            }
+        )
+
     async def enable_keyword(
         self,
         refresh_token: str,

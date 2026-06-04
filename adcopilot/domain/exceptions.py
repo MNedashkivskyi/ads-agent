@@ -30,6 +30,18 @@ class CampaignNotFoundError(AdCopilotError):
     """
 
 
+class SpendGuardViolation(AdCopilotError):
+    """Raised when a spend-increasing mutation would breach an account's spend caps.
+
+    A permanent (non-retryable) block: the action is refused before execution and
+    the human-readable Polish reason is surfaced to the user (no silent failure).
+    """
+
+    def __init__(self, message: str, code: str = "SPEND_GUARD") -> None:
+        super().__init__(message)
+        self.code = code
+
+
 class GoogleAdsTokenNotApproved(AdCopilotError):
     """Raised when the developer token is in test mode or pending approval.
 
