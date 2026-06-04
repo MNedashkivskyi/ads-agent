@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.channel import is_search_campaign
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -27,6 +28,8 @@ class WrongBiddingStrategyRule:
         recs: list[Recommendation] = []
 
         for campaign in ctx.campaigns:
+            if not is_search_campaign(campaign.channel_type):
+                continue  # PMax/Shopping manage bidding differently
             if "MAXIMIZE_CLICKS" not in campaign.bidding_strategy.upper():
                 continue
             if campaign.conversions < _MIN_CONVERSIONS:

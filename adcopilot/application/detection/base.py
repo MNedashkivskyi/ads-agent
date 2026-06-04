@@ -102,6 +102,10 @@ class DetectionContext:
     # Per-account spend-safety caps (spend-safety system). None when not configured;
     # lets rules anchor budget/pacing suggestions to the user's spend limits.
     spend_safety_config: "SpendSafetyConfig | None" = field(default=None)
+    # Performance Max / Shopping asset groups + listing-group filters (breadth).
+    # Empty for accounts with no PMax/Shopping campaigns.
+    asset_groups: list = field(default_factory=list)
+    listing_groups: list = field(default_factory=list)
 
 
 @dataclass

@@ -78,9 +78,13 @@ class RecommendationKind(Enum):
     SEARCH_TERM_WASTE = "SEARCH_TERM_WASTE"
     # Module 10 — Benchmarking
     ABOVE_VERTICAL_BENCHMARK = "ABOVE_VERTICAL_BENCHMARK"
-    # Module 11 — Performance Max
+    # Module 11 — Performance Max / Shopping
     PMAX_LOW_ROAS = "PMAX_LOW_ROAS"
     PMAX_ASSET_DISAPPROVED = "PMAX_ASSET_DISAPPROVED"
+    PMAX_ASSET_GROUP_WEAK = "PMAX_ASSET_GROUP_WEAK"
+    PMAX_ASSET_GROUP_LIMITED = "PMAX_ASSET_GROUP_LIMITED"
+    PMAX_FEED_SEGMENTATION = "PMAX_FEED_SEGMENTATION"
+    ADJUST_PMAX_TARGET_ROAS = "ADJUST_PMAX_TARGET_ROAS"
     # Module 12 — Competitive monitoring
     NEW_COMPETITOR = "NEW_COMPETITOR"
     COMPETITOR_AGGRESSION = "COMPETITOR_AGGRESSION"
@@ -157,6 +161,9 @@ NON_EXECUTABLE_KINDS: frozenset[RecommendationKind] = frozenset(
         # Module 11 — PMax alerts (informational; no executor)
         RecommendationKind.PMAX_LOW_ROAS,
         RecommendationKind.PMAX_ASSET_DISAPPROVED,
+        RecommendationKind.PMAX_ASSET_GROUP_WEAK,
+        RecommendationKind.PMAX_ASSET_GROUP_LIMITED,
+        RecommendationKind.PMAX_FEED_SEGMENTATION,
         # Module 12 — competitive monitoring (informational)
         RecommendationKind.NEW_COMPETITOR,
         RecommendationKind.COMPETITOR_AGGRESSION,

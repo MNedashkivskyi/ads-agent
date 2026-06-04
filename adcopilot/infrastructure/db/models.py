@@ -1363,3 +1363,58 @@ class SpendSafetyConfigModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+class AssetGroupSnapshotModel(Base):
+    __tablename__ = "asset_group_snapshots"
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "account_id", "snapshot_date", "asset_group_id", name="uq_asset_group_snapshots"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    asset_group_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    campaign_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    ad_strength: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    primary_status: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    impressions: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    clicks: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    cost_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    conversions: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    conv_value: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class ListingGroupSnapshotModel(Base):
+    __tablename__ = "listing_group_snapshots"
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "account_id", "snapshot_date", "listing_group_id", name="uq_listing_group_snapshots"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    snapshot_date: Mapped[date] = mapped_column(Date, nullable=False)
+    asset_group_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    campaign_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    listing_group_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    dimension_type: Mapped[str] = mapped_column(String(50), nullable=False, default="")
+    case_value: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    is_catch_all: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )

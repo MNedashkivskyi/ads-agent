@@ -209,6 +209,29 @@ class SnapshotAccountUseCase:
         await self._snapshot_repo.upsert_conversion_actions(account_id, conversion_actions)
         await self._snapshot_repo.upsert_campaign_extensions(account_id, campaign_extensions)
         await self._snapshot_repo.upsert_sitelink_performance(account_id, sitelink_performance)
+
+        # PMax/Shopping asset groups + listing-group filters — fetched only when
+        # the account actually runs those channels (quota-conscious; best-effort
+        # so a failure here never fails the whole snapshot).
+        has_pmax_shopping = any(
+            c.channel_type in ("PERFORMANCE_MAX", "SHOPPING") for c in campaigns
+        )
+        if has_pmax_shopping:
+            try:
+                asset_groups = await self._ads_client.query_asset_groups(
+                    refresh_token, customer_id, snapshot_date
+                )
+                listing_groups = await self._ads_client.query_listing_group_filters(
+                    refresh_token, customer_id
+                )
+                await self._snapshot_repo.upsert_asset_groups(account_id, asset_groups)
+                await self._snapshot_repo.upsert_listing_groups(account_id, listing_groups)
+            except Exception as exc:  # noqa: BLE001 — best-effort enrichment
+                logger.warning(
+                    "asset/listing group snapshot failed (best-effort)",
+                    account_id=account_id,
+                    error=str(exc),
+                )
         upsert_span.finish()
 
         duration = time.monotonic() - start

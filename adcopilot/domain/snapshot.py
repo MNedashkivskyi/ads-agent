@@ -35,6 +35,45 @@ class CampaignSnapshot:
 
 
 @dataclass(frozen=True)
+class AssetGroupSnapshot:
+    """One Performance Max / Shopping asset group on a snapshot date.
+
+    `ad_strength` (POOR/AVERAGE/GOOD/EXCELLENT/UNSPECIFIED) and `primary_status`
+    (ELIGIBLE/LIMITED/NOT_ELIGIBLE/PAUSED/REMOVED) drive the PMax health rules.
+    """
+
+    id: SnapshotId
+    account_id: AccountId
+    snapshot_date: date
+    asset_group_id: int
+    campaign_id: int
+    name: str
+    status: str
+    ad_strength: str
+    primary_status: str
+    impressions: int
+    clicks: int
+    cost_micros: int
+    conversions: float
+    conv_value: float
+
+
+@dataclass(frozen=True)
+class ListingGroupSnapshot:
+    """One asset-group listing-group filter (product segmentation node)."""
+
+    id: SnapshotId
+    account_id: AccountId
+    snapshot_date: date
+    asset_group_id: int
+    campaign_id: int
+    listing_group_id: int
+    dimension_type: str  # e.g. PRODUCT_CATEGORY, PRODUCT_BRAND, or "" for catch-all
+    case_value: str  # the dimension value; empty for catch-all
+    is_catch_all: bool
+
+
+@dataclass(frozen=True)
 class AdGroupSnapshot:
     id: SnapshotId
     account_id: AccountId

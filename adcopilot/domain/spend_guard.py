@@ -20,6 +20,7 @@ from adcopilot.domain.spend_safety import SpendSafetyConfig
 
 BUDGET_KINDS = {"INCREASE_BUDGET", "ADJUST_BUDGET"}
 TCPA_KINDS = {"RELAX_TARGET_CPA", "SET_TARGET_CPA"}
+TROAS_KINDS = {"ADJUST_PMAX_TARGET_ROAS"}
 
 
 @dataclass
@@ -32,6 +33,8 @@ class SpendAction:
     new_budget_micros: int | None = None
     current_target_cpa_micros: int | None = None
     new_target_cpa_micros: int | None = None
+    current_target_roas: float | None = None
+    new_target_roas: float | None = None
 
 
 @dataclass
@@ -69,9 +72,31 @@ def evaluate_spend_action(
 
     if action.kind in TCPA_KINDS:
         return _evaluate_tcpa(action, config)
+    if action.kind in TROAS_KINDS:
+        return _evaluate_troas(action, config)
     if action.kind in BUDGET_KINDS:
         return _evaluate_budget(action, config, ctx)
     # Out of the guard's numeric scope (reallocation, strategy switch).
+    return _ALLOW
+
+
+def _evaluate_troas(action: SpendAction, config: SpendSafetyConfig) -> GuardDecision:
+    """Loosening target ROAS (lowering it) raises spend; bound it. Tightening is safe."""
+    current = action.current_target_roas
+    new = action.new_target_roas
+    if not current or new is None or new >= current:
+        return _ALLOW  # tightening (raising tROAS) or unknown baseline never raises spend
+    decrease_pct = (current - new) / current * 100
+    if decrease_pct > config.max_budget_increase_pct:
+        return GuardDecision(
+            allowed=False,
+            code="TROAS_RELAX",
+            reason_pl=(
+                f"Obniżenie docelowego ROAS o {decrease_pct:.0f}% przekracza dozwolony "
+                f"limit {config.max_budget_increase_pct:.0f}% na jedną zmianę "
+                f"({current:.2f} → {new:.2f})."
+            ),
+        )
     return _ALLOW
 
 

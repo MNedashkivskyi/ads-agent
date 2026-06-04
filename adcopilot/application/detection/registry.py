@@ -111,6 +111,11 @@ from adcopilot.application.detection.rules.rule_49_pmax_low_roas import PMaxLowR
 from adcopilot.application.detection.rules.rule_50_pmax_asset_disapproved import (
     PMaxAssetDisapprovedRule,
 )
+from adcopilot.application.detection.rules.rule_60_pmax_asset_group_health import (
+    PMaxAssetGroupLimitedRule,
+    PMaxAssetGroupWeakRule,
+    PMaxFeedSegmentationRule,
+)
 from adcopilot.application.detection.rules.rule_51_qs_improvement_opportunity import (
     QSImprovementOpportunityRule,
 )
@@ -218,9 +223,12 @@ def build_rule_engine(
         PromoteSearchTermRule(),
         # Module 10 — Benchmarking
         AboveVerticalBenchmarkRule(),
-        # Module 11 — Performance Max
+        # Module 11 — Performance Max / Shopping
         PMaxLowRoasRule(),
         PMaxAssetDisapprovedRule(),
+        PMaxAssetGroupWeakRule(),
+        PMaxAssetGroupLimitedRule(),
+        PMaxFeedSegmentationRule(),
         # Module 12 — Competitive monitoring
         NewCompetitorRule(),
         CompetitorAggressionRule(),

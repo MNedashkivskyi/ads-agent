@@ -8,6 +8,7 @@ from adcopilot.domain.entities import AccountId
 from adcopilot.domain.snapshot import (
     AdGroupSnapshot,
     AdSnapshot,
+    AssetGroupSnapshot,
     AudiencePerformanceSnapshot,
     CampaignExtensionSnapshot,
     CampaignSnapshot,
@@ -17,6 +18,7 @@ from adcopilot.domain.snapshot import (
     GeoPerformanceSnapshot,
     HourPerformanceSnapshot,
     KeywordSnapshot,
+    ListingGroupSnapshot,
     NegativeKeywordSnapshot,
     SearchTermSnapshot,
     SitelinkPerformanceSnapshot,
@@ -53,6 +55,22 @@ class SnapshotRepository(Protocol):
     ) -> None: ...
 
     async def upsert_ads(self, account_id: AccountId, snapshots: list[AdSnapshot]) -> None: ...
+
+    async def upsert_asset_groups(
+        self, account_id: AccountId, snapshots: list[AssetGroupSnapshot]
+    ) -> None: ...
+
+    async def upsert_listing_groups(
+        self, account_id: AccountId, snapshots: list[ListingGroupSnapshot]
+    ) -> None: ...
+
+    async def load_asset_groups(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[AssetGroupSnapshot]: ...
+
+    async def load_listing_groups(
+        self, account_id: AccountId, snapshot_date: date
+    ) -> list[ListingGroupSnapshot]: ...
 
     async def get_latest_snapshot_date(self, account_id: AccountId) -> date | None: ...
 

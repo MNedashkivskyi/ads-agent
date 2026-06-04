@@ -41,6 +41,9 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
         AdjustBiddingStrategyExecutor,
     )
     from adcopilot.application.executors.adjust_budget import AdjustBudgetExecutor
+    from adcopilot.application.executors.adjust_pmax_target_roas import (
+        AdjustPmaxTargetRoasExecutor,
+    )
     from adcopilot.application.executors.change_match_type import ChangeMatchTypeExecutor
     from adcopilot.application.executors.device_bid_adjustment import DeviceBidAdjustmentExecutor
     from adcopilot.application.executors.geo_exclusion import GeoExclusionExecutor
@@ -82,6 +85,7 @@ def _default_executors() -> dict[RecommendationKind, RecommendationExecutor]:
         AddStructuredSnippetsExecutor(),
         PromoteSearchTermExecutor(),
         SetConversionValueExecutor(),
+        AdjustPmaxTargetRoasExecutor(),
     ]
     result = {e.kind: e for e in execs}
 
@@ -235,12 +239,13 @@ class ExecuteRecommendationUseCase:
         from adcopilot.domain.spend_guard import (
             BUDGET_KINDS,
             TCPA_KINDS,
+            TROAS_KINDS,
             SpendAction,
             evaluate_spend_action,
         )
 
         kind = rec.kind.value
-        if kind not in BUDGET_KINDS and kind not in TCPA_KINDS:
+        if kind not in BUDGET_KINDS and kind not in TCPA_KINDS and kind not in TROAS_KINDS:
             return
 
         config = await self._spend_safety_repo.get(rec.account_id)
@@ -263,6 +268,21 @@ class ExecuteRecommendationUseCase:
                 campaign_id=_as_int("campaign_id"),
                 current_budget_micros=_as_int("current_budget_micros"),
                 new_budget_micros=_as_int("new_budget_micros", "suggested_budget_micros"),
+            )
+        elif kind in TROAS_KINDS:
+
+            def _as_float(*keys: str) -> float | None:
+                for src in (payload, evidence):
+                    for k in keys:
+                        if src.get(k) is not None:
+                            return float(src[k])
+                return None
+
+            action = SpendAction(
+                kind=kind,
+                campaign_id=_as_int("campaign_id"),
+                current_target_roas=_as_float("current_target_roas"),
+                new_target_roas=_as_float("target_roas", "new_target_roas"),
             )
         else:  # tCPA
             action = SpendAction(

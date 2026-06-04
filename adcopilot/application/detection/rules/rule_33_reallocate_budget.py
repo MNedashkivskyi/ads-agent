@@ -15,6 +15,7 @@ import uuid
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.channel import is_search_campaign
 from adcopilot.domain.polish_market.seasonality import get_seasonal_multiplier
 from adcopilot.domain.recommendation import (
     Recommendation,
@@ -45,7 +46,11 @@ class ReallocateBudgetRule:
     severity = RecommendationSeverity.CRITICAL
 
     def detect(self, ctx: DetectionContext) -> list[Recommendation]:
-        enabled = [c for c in ctx.campaigns if c.status == "ENABLED"]
+        enabled = [
+            c
+            for c in ctx.campaigns
+            if c.status == "ENABLED" and is_search_campaign(c.channel_type)
+        ]
         if len(enabled) < 2:
             return []
 
