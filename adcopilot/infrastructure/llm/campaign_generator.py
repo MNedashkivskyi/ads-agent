@@ -23,7 +23,7 @@ from pydantic import BaseModel, BeforeValidator, Field, field_validator
 from adcopilot.application.ports.llm import LLMClient
 from adcopilot.domain.exceptions import LLMError
 from adcopilot.domain.launch.bidding_resolver import resolve_bidding_strategy
-from adcopilot.domain.launch.budget_tier import classify_budget_tier
+from adcopilot.domain.launch.budget_tier import BudgetTier, classify_budget_tier
 from adcopilot.domain.launch.entities import (
     AdGroupProposal,
     AdProposal,
@@ -465,8 +465,11 @@ class CampaignGenerator:
     failure before raising ``LLMError``.
     """
 
-    def __init__(self, llm: LLMClient) -> None:
+    def __init__(self, llm: LLMClient, premium_llm: LLMClient | None = None) -> None:
         self._llm = llm
+        # Optional stronger model used only for the ad-copy stage on GROWTH
+        # accounts (model tiering). Falls back to the default model when absent.
+        self._premium_llm = premium_llm
         self._input_chars_used = 0
         self._output_chars_used = 0
 
@@ -528,10 +531,16 @@ class CampaignGenerator:
         brief: CampaignBrief,
         feedback: str | None = None,
     ) -> AdGroupCopyResponse:
-        """Stage 3 — write RSA copy for a single ad group."""
+        """Stage 3 — write RSA copy for a single ad group.
+
+        Ad copy is the highest-leverage stage, so GROWTH accounts use the premium
+        model when one is configured; all other stages stay on the default.
+        """
         user = _ad_copy_user_prompt(ad_group, brief, feedback)
+        tier = classify_budget_tier(brief.monthly_budget_pln)
+        llm = self._premium_llm if (self._premium_llm and tier is BudgetTier.GROWTH) else None
         return await self._call_and_parse(
-            _AD_COPY_SYSTEM, user, "ad_copy", AdGroupCopyResponse, max_tokens=1200
+            _AD_COPY_SYSTEM, user, "ad_copy", AdGroupCopyResponse, max_tokens=1200, llm=llm
         )
 
     async def generate_negatives(
@@ -720,11 +729,17 @@ class CampaignGenerator:
         model_cls: type[_T],
         max_tokens: int = 1000,
         temperature: float = 0.3,
+        llm: LLMClient | None = None,
     ) -> _T:
-        """Call LLM, parse JSON, retry ONCE on parse failure."""
+        """Call LLM, parse JSON, retry ONCE on parse failure.
+
+        ``llm`` overrides the client for this call (model tiering); defaults to
+        the generator's primary client.
+        """
+        client = llm or self._llm
         self._track_budget(system + user, stage)
 
-        raw = await self._llm.complete(
+        raw = await client.complete(
             system=system, user=user, max_tokens=max_tokens, temperature=temperature
         )
         self._output_chars_used += len(raw)
@@ -743,7 +758,7 @@ class CampaignGenerator:
                 f"parsed as JSON. Error: {first_exc!s}\n"
                 "Please respond with ONLY a valid JSON object, no markdown."
             )
-            raw2 = await self._llm.complete(
+            raw2 = await client.complete(
                 system=system,
                 user=retry_user,
                 max_tokens=max_tokens,

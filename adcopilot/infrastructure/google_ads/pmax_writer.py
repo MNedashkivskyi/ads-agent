@@ -30,6 +30,7 @@ from adcopilot.config import Settings
 from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
 from adcopilot.domain.launch.entities import PMaxCampaignProposal
 from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
+from adcopilot.infrastructure.google_ads.resilience import throttled_adapter
 
 logger = structlog.get_logger(__name__)
 
@@ -47,6 +48,7 @@ def _wrap_exc(exc: Exception) -> Exception:
     return GoogleAdsUnavailable(str(exc))
 
 
+@throttled_adapter
 class PMaxCampaignWriter:
     """Google Ads API adapter for creating Performance Max campaigns."""
 

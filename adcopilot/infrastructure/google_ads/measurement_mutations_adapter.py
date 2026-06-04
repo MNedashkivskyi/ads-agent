@@ -20,8 +20,17 @@ from adcopilot.application.ports.measurement import (
     UploadResult,
 )
 from adcopilot.config import Settings
-from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
-from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
+from adcopilot.domain.exceptions import (
+    GoogleAdsAuthError,
+    GoogleAdsRateLimited,
+    GoogleAdsUnavailable,
+)
+from adcopilot.infrastructure.google_ads.client import (
+    GoogleAdsClientAdapter,
+    is_google_auth_error,
+    is_rate_limit_error,
+)
+from adcopilot.infrastructure.google_ads.resilience import throttled_adapter
 
 logger = structlog.get_logger(__name__)
 
@@ -29,6 +38,8 @@ logger = structlog.get_logger(__name__)
 def _wrap(operation: str, exc: Exception) -> Exception:
     if is_google_auth_error(exc):
         return GoogleAdsAuthError(str(exc))
+    if is_rate_limit_error(exc):
+        return GoogleAdsRateLimited(f"{operation} rate-limited: {exc}")
     return GoogleAdsUnavailable(f"{operation} failed: {exc}")
 
 
@@ -67,6 +78,7 @@ def _extract_partial_failure_messages(pfe: Any) -> list[str]:
     return messages
 
 
+@throttled_adapter
 class GoogleAdsMeasurementUploadAdapter:
     """Implements MeasurementUploadPort against the real Google Ads API."""
 

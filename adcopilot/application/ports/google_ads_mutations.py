@@ -304,3 +304,38 @@ class GoogleAdsMutationsPort(Protocol):
     ) -> int:
         """Create a PAUSED Responsive Search Ad; return new ad_id."""
         ...
+
+    # --- Shared negative-keyword lists (Google Ads shared library) ---
+
+    async def create_shared_negative_list(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        *,
+        name: str,
+    ) -> int:
+        """Create a NEGATIVE_KEYWORDS SharedSet; return its shared_set_id."""
+        ...
+
+    async def add_shared_negatives(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        *,
+        shared_set_id: int,
+        keywords: list[tuple[str, str]],
+    ) -> int:
+        """Add (keyword_text, match_type) pairs to a shared set in one batch;
+        return the number added."""
+        ...
+
+    async def attach_shared_set_to_campaign(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        *,
+        campaign_id: int,
+        shared_set_id: int,
+    ) -> None:
+        """Attach a shared negative list to a campaign (covers all its ad groups)."""
+        ...

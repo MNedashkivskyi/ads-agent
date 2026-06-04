@@ -17,8 +17,17 @@ from adcopilot.application.ports.experiment_mutations import (
     ExperimentMetrics,
 )
 from adcopilot.config import Settings
-from adcopilot.domain.exceptions import GoogleAdsAuthError, GoogleAdsUnavailable
-from adcopilot.infrastructure.google_ads.client import GoogleAdsClientAdapter, is_google_auth_error
+from adcopilot.domain.exceptions import (
+    GoogleAdsAuthError,
+    GoogleAdsRateLimited,
+    GoogleAdsUnavailable,
+)
+from adcopilot.infrastructure.google_ads.client import (
+    GoogleAdsClientAdapter,
+    is_google_auth_error,
+    is_rate_limit_error,
+)
+from adcopilot.infrastructure.google_ads.resilience import throttled_adapter
 
 logger = structlog.get_logger(__name__)
 
@@ -26,6 +35,8 @@ logger = structlog.get_logger(__name__)
 def _wrap(op: str, exc: Exception) -> Exception:
     if is_google_auth_error(exc):
         return GoogleAdsAuthError(str(exc))
+    if is_rate_limit_error(exc):
+        return GoogleAdsRateLimited(f"{op} rate-limited: {exc}")
     return GoogleAdsUnavailable(f"{op} failed: {exc}")
 
 
@@ -55,6 +66,7 @@ def _parse_metrics(
     return ExperimentMetrics(status="RUNNING", control=control, treatment=treatment)
 
 
+@throttled_adapter
 class GoogleAdsExperimentAdapter:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings

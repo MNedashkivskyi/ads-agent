@@ -514,3 +514,46 @@ class FakeGoogleAdsMutations:
                 "{'send_to': 'AW-123456789/AbC-D_efGhIjk'});</script>"
             ),
         )
+
+    async def create_shared_negative_list(
+        self, refresh_token: str, customer_id: str, *, name: str
+    ) -> int:
+        self.calls.append(
+            {"method": "create_shared_negative_list", "customer_id": customer_id, "name": name}
+        )
+        return 7777
+
+    async def add_shared_negatives(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        *,
+        shared_set_id: int,
+        keywords: list,
+    ) -> int:
+        self.calls.append(
+            {
+                "method": "add_shared_negatives",
+                "customer_id": customer_id,
+                "shared_set_id": shared_set_id,
+                "keywords": list(keywords),
+            }
+        )
+        return len(keywords)
+
+    async def attach_shared_set_to_campaign(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        *,
+        campaign_id: int,
+        shared_set_id: int,
+    ) -> None:
+        self.calls.append(
+            {
+                "method": "attach_shared_set_to_campaign",
+                "customer_id": customer_id,
+                "campaign_id": campaign_id,
+                "shared_set_id": shared_set_id,
+            }
+        )

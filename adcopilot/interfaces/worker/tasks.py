@@ -762,31 +762,56 @@ def send_daily_digests_task() -> dict[str, object]:
 
 
 async def _run_send_digests(settings: object) -> dict[str, object]:
-    """Compute digests for all users (log-only; notifier wired in Phase 1)."""
+    """Compute + deliver daily recommendation digests as web notifications."""
+    from sqlalchemy import select
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+    from adcopilot.application.use_cases.send_daily_digest import SendDailyDigestUseCase
     from adcopilot.config import Settings
+    from adcopilot.domain.entities import UserId
     from adcopilot.infrastructure.db.models import UserModel
+    from adcopilot.infrastructure.db.repositories.digest_sent_log_repository import (
+        SqlDigestSentLogRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+    from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
 
     assert isinstance(settings, Settings)
 
     engine = create_async_engine(settings.DATABASE_URL)
+    sent = skipped = 0
     try:
-        from sqlalchemy import select
-
         async with AsyncSession(engine) as session, session.begin():
-            result = await session.execute(
-                select(UserModel).where(
-                    UserModel.notifications_paused.is_(False),
+            user_ids = (
+                (
+                    await session.execute(
+                        select(UserModel.id).where(UserModel.notifications_paused.is_(False))
+                    )
                 )
+                .scalars()
+                .all()
             )
-            users = result.scalars().all()
-
-        # TODO(phase-1): wire new notifier implementation
-        logger.warning("digest_notifier not configured, skipping digest sends")
-        return {"sent": 0, "skipped": len(users), "reason": "notifier_not_configured"}
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            use_case = SendDailyDigestUseCase(
+                account_repo=account_repo,
+                rec_repo=SqlRecommendationRepository(session),
+                digest_log_repo=SqlDigestSentLogRepository(session),
+                notifier=SqlWebNotifier(session),
+            )
+            for uid in user_ids:
+                accounts = await account_repo.list_for_user(UserId(str(uid)))
+                result = await use_case.execute(UserId(str(uid)), [a.id for a in accounts])
+                sent += 1 if result.sent else 0
+                skipped += 0 if result.sent else 1
     finally:
         await engine.dispose()
+    logger.info("daily digests processed", sent=sent, skipped=skipped)
+    return {"sent": sent, "skipped": skipped}
 
 
 @celery_app.task(name="adcopilot.interfaces.worker.tasks.run_nightly_snapshots")  # type: ignore[untyped-decorator]
@@ -1007,6 +1032,44 @@ async def _run_execute_recommendation(rec_id: str) -> dict[str, object]:
 
     logger.info("recommendation executed", rec_id=rec_id)
     return {"rec_id": rec_id, "result": result}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.execute_recommendations_bulk_task",
+)
+def execute_recommendations_bulk_task(rec_ids: list[str]) -> dict[str, object]:
+    """Execute many recommendations with per-item failure isolation."""
+    import asyncio
+
+    return asyncio.run(_run_execute_recommendations_bulk(rec_ids))
+
+
+async def _run_execute_recommendations_bulk(rec_ids: list[str]) -> dict[str, object]:
+    from adcopilot.application.use_cases.execute_recommendations_bulk import (
+        BulkExecuteRecommendationsUseCase,
+    )
+    from adcopilot.domain.recommendation import RecommendationId
+
+    class _PerRecSingle:
+        """Runs each recommendation through its own session/engine (isolated)."""
+
+        async def execute(self, rec_id: RecommendationId) -> dict[str, object]:
+            return await _run_execute_recommendation(str(rec_id))
+
+    bulk = BulkExecuteRecommendationsUseCase(_PerRecSingle())
+    result = await bulk.execute([RecommendationId(r) for r in rec_ids])
+    logger.info(
+        "bulk recommendations executed",
+        total=result.total,
+        succeeded=result.succeeded,
+        failed=result.failed,
+    )
+    return {
+        "total": result.total,
+        "succeeded": result.succeeded,
+        "failed": result.failed,
+        "results": result.results,
+    }
 
 
 async def _handle_auth_failure(rec_id: str) -> None:
@@ -1369,9 +1432,16 @@ async def _run_generate_campaign(
                 YamlVerticalTemplateAdapter,
             )
 
-            llm = AnthropicClient(api_key=settings.LLM_API_KEY)
+            llm = AnthropicClient(api_key=settings.LLM_API_KEY, model=settings.LLM_MODEL_DEFAULT)
+            # Premium model for ad-copy on GROWTH accounts (model tiering). Only
+            # build a second client when the premium model actually differs.
+            premium_llm = (
+                AnthropicClient(api_key=settings.LLM_API_KEY, model=settings.LLM_MODEL_PREMIUM)
+                if settings.LLM_MODEL_PREMIUM != settings.LLM_MODEL_DEFAULT
+                else None
+            )
             try:
-                generator = CampaignGenerator(llm)
+                generator = CampaignGenerator(llm, premium_llm=premium_llm)
                 keyword_planner = None
                 if kw_refresh_token and kw_customer_id:
                     from adcopilot.infrastructure.google_ads.keyword_planner_adapter import (
@@ -1401,6 +1471,8 @@ async def _run_generate_campaign(
                 )
             finally:
                 await llm.aclose()
+                if premium_llm is not None:
+                    await premium_llm.aclose()
 
         # \u2500\u2500 Step 3: persist proposal + mark brief PROPOSED (short write-tx) \u2500\u2500
         async with AsyncSession(engine) as session, session.begin():
@@ -3012,6 +3084,27 @@ def generate_weekly_insight_task() -> dict[str, object]:
                         ctx = await builder.build(account.id)
                         if ctx.get("summary") is None:
                             continue  # no data — skip
+
+                        # Actuals-vs-target: surface "are we hitting target?" to
+                        # the insight (best-effort; needs configured economics).
+                        try:
+                            from adcopilot.domain.performance_targets import compare_to_targets
+                            from adcopilot.infrastructure.db.repositories.business_economics_repository import (  # noqa: E501
+                                BusinessEconomicsRepository,
+                            )
+
+                            econ = await BusinessEconomicsRepository(session).get(str(account.id))
+                            if econ is not None:
+                                cmp_targets = compare_to_targets(
+                                    ctx["summary"].get("cpa_pln"),
+                                    ctx["summary"].get("roas"),
+                                    target_cpa=econ.target_cpa,
+                                    target_roas=econ.target_roas,
+                                )
+                                if cmp_targets is not None:
+                                    ctx["targets"] = cmp_targets.as_dict()
+                        except Exception:
+                            pass  # fail-open — insight still generates without targets
 
                         insight_text = await insight_uc.execute(ctx)
 
