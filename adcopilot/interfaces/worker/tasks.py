@@ -1369,9 +1369,16 @@ async def _run_generate_campaign(
                 YamlVerticalTemplateAdapter,
             )
 
-            llm = AnthropicClient(api_key=settings.LLM_API_KEY)
+            llm = AnthropicClient(api_key=settings.LLM_API_KEY, model=settings.LLM_MODEL_DEFAULT)
+            # Premium model for ad-copy on GROWTH accounts (model tiering). Only
+            # build a second client when the premium model actually differs.
+            premium_llm = (
+                AnthropicClient(api_key=settings.LLM_API_KEY, model=settings.LLM_MODEL_PREMIUM)
+                if settings.LLM_MODEL_PREMIUM != settings.LLM_MODEL_DEFAULT
+                else None
+            )
             try:
-                generator = CampaignGenerator(llm)
+                generator = CampaignGenerator(llm, premium_llm=premium_llm)
                 keyword_planner = None
                 if kw_refresh_token and kw_customer_id:
                     from adcopilot.infrastructure.google_ads.keyword_planner_adapter import (
@@ -1401,6 +1408,8 @@ async def _run_generate_campaign(
                 )
             finally:
                 await llm.aclose()
+                if premium_llm is not None:
+                    await premium_llm.aclose()
 
         # \u2500\u2500 Step 3: persist proposal + mark brief PROPOSED (short write-tx) \u2500\u2500
         async with AsyncSession(engine) as session, session.begin():

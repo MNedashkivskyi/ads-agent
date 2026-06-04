@@ -140,7 +140,7 @@ async def _generate_evaluation_summary(
         )
         client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         msg = await client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=settings.LLM_MODEL_DEFAULT,
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )

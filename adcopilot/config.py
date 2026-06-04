@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     # Example (local):    http://localhost:8000/oauth/google/callback
     OAUTH_REDIRECT_URI: str = "http://localhost:8000/oauth/google/callback"
     LLM_API_KEY: str | None = None
+    # Model used for most LLM work. The "premium" model is used only for the
+    # highest-leverage stage (ad-copy) on high-spend (GROWTH) accounts. Defaults
+    # to the same model as the default, so tiering is INERT until ops sets
+    # LLM_MODEL_PREMIUM to a stronger model (e.g. an Opus snapshot) — no code
+    # deploy needed, and no risk of pointing at a model the API key can't use.
+    LLM_MODEL_DEFAULT: str = "claude-haiku-4-5-20251001"
+    LLM_MODEL_PREMIUM: str = "claude-haiku-4-5-20251001"
     PAGESPEED_API_KEY: str | None = None
 
     # Comma-separated list of user UUIDs that have admin access to /api/admin/* endpoints.

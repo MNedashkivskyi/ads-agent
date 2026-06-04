@@ -110,7 +110,7 @@ async def _generate_llm_summary(keywords: list[KeywordQSDiagnosis]) -> str | Non
         prompt = _LLM_PROMPT.format(keyword_lines="\n".join(lines))
         client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
         msg = await client.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model=settings.LLM_MODEL_DEFAULT,
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
