@@ -50,9 +50,31 @@ class CausalExperimentResponse(BaseModel):
     last_error: str | None
     source_recommendation_id: str | None
     created_at: str
+    # Causal evidence grade — set once the experiment reaches a conclusive verdict
+    # (WIN/LOSS from a native Google Ads experiment with a control arm). None while
+    # PENDING/INCONCLUSIVE.
+    evidence_grade: str | None = None
+    evidence_caveat_pl: str | None = None
+
+
+def _causal_grade_for(e):
+    """Return the CAUSAL evidence grade for a concluded experiment, else None."""
+    from adcopilot.domain.campaign_experiment import ExperimentVerdict
+    from adcopilot.domain.evidence_grading import grade_comparison
+
+    if e.verdict not in (ExperimentVerdict.WIN, ExperimentVerdict.LOSS):
+        return None
+    return grade_comparison(
+        baseline_conversions=float(e.control_metrics.get("conversions", 0.0)),
+        baseline_impressions=float(e.control_metrics.get("impressions", 0.0)),
+        current_conversions=float(e.treatment_metrics.get("conversions", 0.0)),
+        current_impressions=float(e.treatment_metrics.get("impressions", 0.0)),
+        has_causal_experiment=True,
+    )
 
 
 def _to_response(e) -> CausalExperimentResponse:
+    grade = _causal_grade_for(e)
     return CausalExperimentResponse(
         id=str(e.id),
         base_campaign_id=e.base_campaign_id,
@@ -69,6 +91,8 @@ def _to_response(e) -> CausalExperimentResponse:
         last_error=e.last_error,
         source_recommendation_id=e.source_recommendation_id,
         created_at=e.created_at.isoformat() if e.created_at else "",
+        evidence_grade=grade.grade if grade else None,
+        evidence_caveat_pl=grade.caveat_pl if grade else None,
     )
 
 
