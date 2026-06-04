@@ -3649,3 +3649,104 @@ def upload_offline_conversions_task() -> dict[str, object]:
         }
 
     return asyncio.run(_run())
+
+
+@celery_app.task(name="adcopilot.interfaces.worker.tasks.evaluate_campaign_experiments_task")  # type: ignore[untyped-decorator]
+def evaluate_campaign_experiments_task() -> dict[str, object]:
+    """Daily poll of RUNNING native Google Ads experiments → causal verdict.
+
+    Reads per-arm metrics, runs the two-proportion z-test, and on a concluded
+    verdict records it + notifies the user (human-in-the-loop: a WIN is surfaced
+    for explicit approval before promotion — never auto-promoted here).
+    """
+    import asyncio
+
+    from adcopilot.config import get_settings
+
+    settings = get_settings()
+
+    async def _run() -> dict[str, object]:
+        from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+        from adcopilot.application.use_cases.campaign_experiment_flow import (
+            evaluate_campaign_experiment,
+        )
+        from adcopilot.domain.campaign_experiment import ExperimentVerdict
+        from adcopilot.domain.entities import AccountId
+        from adcopilot.infrastructure.db.repositories.campaign_experiment_repository import (
+            CampaignExperimentRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+            SqlGoogleAdsAccountRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+            SqlOAuthCredentialsRepository,
+        )
+        from adcopilot.infrastructure.google_ads.experiment_mutations_adapter import (
+            GoogleAdsExperimentAdapter,
+        )
+        from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+
+        engine = create_async_engine(settings.DATABASE_URL)
+        adapter = GoogleAdsExperimentAdapter(settings)
+        evaluated = 0
+        concluded = 0
+        try:
+            async with AsyncSession(engine) as session:
+                running = await CampaignExperimentRepository(session).list_running()
+
+            for exp in running:
+                try:
+                    async with AsyncSession(engine) as session, session.begin():
+                        account_repo = SqlGoogleAdsAccountRepository(session)
+                        creds_repo = SqlOAuthCredentialsRepository(
+                            session, settings.TOKEN_ENCRYPTION_KEY
+                        )
+                        account = await account_repo.get(AccountId(exp.account_id))
+                        creds = await creds_repo.get(AccountId(exp.account_id))
+                        if account is None or creds is None:
+                            continue
+                        decision = await evaluate_campaign_experiment(
+                            experiment=exp,
+                            adapter=adapter,
+                            refresh_token=creds.refresh_token,
+                            customer_id=account.customer_id,
+                        )
+                        evaluated += 1
+                        if decision.concluded:
+                            concluded += 1
+                            await CampaignExperimentRepository(session).save(exp)
+                            verdict_pl = {
+                                ExperimentVerdict.WIN: "wygrana (wariant lepszy)",
+                                ExperimentVerdict.LOSS: "przegrana (kontrola lepsza)",
+                                ExperimentVerdict.INCONCLUSIVE: "nierozstrzygnięty",
+                            }.get(decision.verdict, "nierozstrzygnięty")
+                            body = (
+                                f"Eksperyment dla kampanii {exp.base_campaign_id} "
+                                f"({exp.change_kind.value}) zakończył się: {verdict_pl}. "
+                                f"{decision.reason}"
+                            )
+                            if decision.verdict is ExperimentVerdict.WIN:
+                                body += " Zatwierdź, aby wdrożyć zmianę na kampanii bazowej."
+                            await SqlWebNotifier(session).send_alert(
+                                user_id=str(account.user_id),
+                                title="Wynik eksperymentu (pomiar przyczynowy)",
+                                body=body,
+                            )
+                except Exception as exc:  # noqa: BLE001 — isolate per-experiment failures
+                    logger.warning(
+                        "campaign_experiment_eval_failed",
+                        experiment_id=str(exp.id),
+                        error=str(exc),
+                    )
+        finally:
+            await engine.dispose()
+
+        logger.info(
+            "evaluate_campaign_experiments_task_done",
+            evaluated=evaluated,
+            concluded=concluded,
+        )
+        return {"evaluated": evaluated, "concluded": concluded}
+
+    return asyncio.run(_run())
