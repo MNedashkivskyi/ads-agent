@@ -1034,6 +1034,44 @@ async def _run_execute_recommendation(rec_id: str) -> dict[str, object]:
     return {"rec_id": rec_id, "result": result}
 
 
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.tasks.execute_recommendations_bulk_task",
+)
+def execute_recommendations_bulk_task(rec_ids: list[str]) -> dict[str, object]:
+    """Execute many recommendations with per-item failure isolation."""
+    import asyncio
+
+    return asyncio.run(_run_execute_recommendations_bulk(rec_ids))
+
+
+async def _run_execute_recommendations_bulk(rec_ids: list[str]) -> dict[str, object]:
+    from adcopilot.application.use_cases.execute_recommendations_bulk import (
+        BulkExecuteRecommendationsUseCase,
+    )
+    from adcopilot.domain.recommendation import RecommendationId
+
+    class _PerRecSingle:
+        """Runs each recommendation through its own session/engine (isolated)."""
+
+        async def execute(self, rec_id: RecommendationId) -> dict[str, object]:
+            return await _run_execute_recommendation(str(rec_id))
+
+    bulk = BulkExecuteRecommendationsUseCase(_PerRecSingle())
+    result = await bulk.execute([RecommendationId(r) for r in rec_ids])
+    logger.info(
+        "bulk recommendations executed",
+        total=result.total,
+        succeeded=result.succeeded,
+        failed=result.failed,
+    )
+    return {
+        "total": result.total,
+        "succeeded": result.succeeded,
+        "failed": result.failed,
+        "results": result.results,
+    }
+
+
 async def _handle_auth_failure(rec_id: str) -> None:
     """Mark rec FAILED, set account.needs_reauth=True, and send a reauth notification."""
     import dataclasses

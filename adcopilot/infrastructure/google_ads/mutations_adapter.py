@@ -1341,3 +1341,97 @@ class GoogleAdsMutationsAdapter:
             raise
         except Exception as exc:
             raise _wrap_mutation_exc("create_customer_match_user_list", exc) from exc
+
+    # ------------------------------------------------------------------
+    # Shared negative-keyword lists (Google Ads shared library)
+    # ------------------------------------------------------------------
+
+    async def create_shared_negative_list(
+        self, refresh_token: str, customer_id: str, *, name: str
+    ) -> int:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            service = client.get_service("SharedSetService")
+            op = client.get_type("SharedSetOperation")
+            shared_set = op.create
+            shared_set.name = name
+            shared_set.type_ = client.enums.SharedSetTypeEnum.NEGATIVE_KEYWORDS
+            resp = service.mutate_shared_sets(customer_id=cid, operations=[op])
+            shared_set_id = int(resp.results[0].resource_name.rsplit("/", 1)[-1])
+            logger.info("shared_negative_list_created", customer_id=customer_id, name=name)
+            return shared_set_id
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("create_shared_negative_list", exc) from exc
+
+    async def add_shared_negatives(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        *,
+        shared_set_id: int,
+        keywords: list[tuple[str, str]],
+    ) -> int:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            ss_service = client.get_service("SharedSetService")
+            crit_service = client.get_service("SharedCriterionService")
+            shared_set_rn = ss_service.shared_set_path(cid, shared_set_id)
+
+            ops = []
+            for text, match_type in keywords:
+                op = client.get_type("SharedCriterionOperation")
+                criterion = op.create
+                criterion.shared_set = shared_set_rn
+                criterion.keyword.text = text
+                criterion.keyword.match_type = getattr(
+                    client.enums.KeywordMatchTypeEnum, match_type.upper()
+                )
+                ops.append(op)
+            if not ops:
+                return 0
+            crit_service.mutate_shared_criteria(customer_id=cid, operations=ops)
+            logger.info(
+                "shared_negatives_added",
+                customer_id=customer_id,
+                shared_set_id=shared_set_id,
+                count=len(ops),
+            )
+            return len(ops)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("add_shared_negatives", exc) from exc
+
+    async def attach_shared_set_to_campaign(
+        self,
+        refresh_token: str,
+        customer_id: str,
+        *,
+        campaign_id: int,
+        shared_set_id: int,
+    ) -> None:
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            css_service = client.get_service("CampaignSharedSetService")
+            campaign_service = client.get_service("CampaignService")
+            ss_service = client.get_service("SharedSetService")
+            op = client.get_type("CampaignSharedSetOperation")
+            css = op.create
+            css.campaign = campaign_service.campaign_path(cid, campaign_id)
+            css.shared_set = ss_service.shared_set_path(cid, shared_set_id)
+            css_service.mutate_campaign_shared_sets(customer_id=cid, operations=[op])
+            logger.info(
+                "shared_set_attached",
+                customer_id=customer_id,
+                campaign_id=campaign_id,
+                shared_set_id=shared_set_id,
+            )
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:
+            raise _wrap_mutation_exc("attach_shared_set_to_campaign", exc) from exc
