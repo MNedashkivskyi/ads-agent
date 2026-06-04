@@ -2590,6 +2590,27 @@ class TestCpaSpikeRule:
         ctx = _ctx(campaigns=[camp], prev_campaigns=[])
         assert self.rule.detect(ctx) == []
 
+    def test_high_severity_for_short_cycle_vertical(self):
+        camp = _campaign(campaign_id=1, cost_micros=20_000_000, conversions=10.0)
+        prev = _campaign(campaign_id=1, cost_micros=10_000_000, conversions=10.0)
+        # Short window (salon=7) → comparison reliable → stays HIGH.
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev], attribution_window_days=7)
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].severity == RecommendationSeverity.HIGH
+        assert recs[0].evidence["conversions_maturing"] is False
+
+    def test_downgraded_for_long_cycle_vertical(self):
+        camp = _campaign(campaign_id=1, cost_micros=20_000_000, conversions=10.0)
+        prev = _campaign(campaign_id=1, cost_micros=10_000_000, conversions=10.0)
+        # Long window (prawnik=45) → comparison unreliable → downgraded to LOW + annotated.
+        ctx = _ctx(campaigns=[camp], prev_campaigns=[prev], attribution_window_days=45)
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].severity == RecommendationSeverity.LOW
+        assert recs[0].evidence["conversions_maturing"] is True
+        assert recs[0].evidence["attribution_window_days"] == 45
+
 
 class TestConversionRateDropRule:
     """Rule 13: campaign click-to-conversion rate dropped >25% WoW with ≥50 clicks."""

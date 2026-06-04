@@ -43,6 +43,10 @@ class GoogleAdsAccount:
     write_enabled: bool
     connected_at: datetime
     needs_reauth: bool = False
+    # Polish-market vertical (e.g. "salon", "prawnik"), populated by the vertical
+    # classifier after the first snapshot. Drives the conversion-attribution
+    # window used by lag-sensitive detection rules. None until classified.
+    vertical: str | None = None
 
 
 @dataclass(frozen=True)

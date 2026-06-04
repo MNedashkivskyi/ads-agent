@@ -22,6 +22,7 @@ def _model_to_domain(model: GoogleAdsAccountModel) -> GoogleAdsAccount:
         connected_at=model.connected_at.replace(tzinfo=UTC)
         if model.connected_at.tzinfo is None
         else model.connected_at,
+        vertical=model.vertical,
     )
 
 

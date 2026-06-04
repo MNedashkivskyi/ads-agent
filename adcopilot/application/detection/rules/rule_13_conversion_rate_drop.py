@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
+from adcopilot.application.detection.lag_guard import is_comparison_reliable
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -30,6 +31,11 @@ class ConversionRateDropRule:
 
         prev_by_id = {c.campaign_id: c for c in ctx.prev_campaigns}
         recs: list[Recommendation] = []
+
+        # Conversion-lag guard (see rule_12): downgrade to advisory for verticals
+        # whose conversions settle slower than the week-over-week comparison gap.
+        reliable = is_comparison_reliable(ctx.attribution_window_days)
+        effective_severity = self.severity if reliable else RecommendationSeverity.LOW
 
         for camp in ctx.campaigns:
             prev = prev_by_id.get(camp.campaign_id)
@@ -65,13 +71,15 @@ class ConversionRateDropRule:
                 "current_clicks": camp.clicks,
                 "current_conversions": camp.conversions,
                 "lost_conversions_estimate": round(lost_conversions, 1),
+                "conversions_maturing": not reliable,
+                "attribution_window_days": ctx.attribution_window_days,
             }
             recs.append(
                 Recommendation(
                     id=RecommendationId(str(uuid.uuid4())),
                     account_id=ctx.account.id,  # type: ignore[arg-type]
                     kind=self.kind,
-                    severity=self.severity,
+                    severity=effective_severity,
                     target=target,
                     payload=payload,
                     evidence=evidence,
