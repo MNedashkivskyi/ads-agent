@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
 
 import structlog
 
@@ -21,14 +20,12 @@ from adcopilot.domain.exceptions import GoogleAdsRateLimited
 
 logger = structlog.get_logger(__name__)
 
-T = TypeVar("T")
-
 _DEFAULT_ATTEMPTS = 3
 _DEFAULT_BASE_DELAY = 2.0  # seconds; grows 2s, 4s, 8s ...
 _MAX_DELAY = 30.0
 
 
-async def retry_on_rate_limit(
+async def retry_on_rate_limit[T](
     fn: Callable[[], Awaitable[T]],
     *,
     attempts: int = _DEFAULT_ATTEMPTS,

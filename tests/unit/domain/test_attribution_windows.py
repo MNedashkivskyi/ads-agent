@@ -14,7 +14,6 @@ from adcopilot.domain.polish_market.attribution_windows import (
     attribution_window_days,
 )
 
-
 # --------------------------------------------------------------------------- #
 # attribution_window_days
 # --------------------------------------------------------------------------- #
