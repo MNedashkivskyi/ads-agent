@@ -279,7 +279,7 @@ async def get_sync_status(
 
             if not accounts:
                 return SyncStatusResponse(
-                    syncing=False, accounts=[], estimated_seconds_remaining=None
+                    syncing=False, has_errors=False, accounts=[], estimated_seconds_remaining=None
                 )
 
             statuses: list[AccountSyncStatus] = []
