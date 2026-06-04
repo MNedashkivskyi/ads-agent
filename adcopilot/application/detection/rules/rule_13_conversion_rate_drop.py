@@ -7,6 +7,10 @@ from datetime import UTC, datetime
 
 from adcopilot.application.detection.base import DetectionContext
 from adcopilot.application.detection.lag_guard import is_comparison_reliable
+from adcopilot.application.detection.seasonal import (
+    seasonal_multiplier,
+    seasonal_relaxed_threshold,
+)
 from adcopilot.domain.recommendation import (
     Recommendation,
     RecommendationId,
@@ -37,6 +41,11 @@ class ConversionRateDropRule:
         reliable = is_comparison_reliable(ctx.attribution_window_days)
         effective_severity = self.severity if reliable else RecommendationSeverity.LOW
 
+        # Peak months bring more lower-intent traffic, naturally lowering CVR —
+        # require a larger drop before firing. Unchanged in troughs.
+        mult = seasonal_multiplier(ctx)
+        min_cvr_drop = seasonal_relaxed_threshold(_MIN_CVR_DROP, mult)
+
         for camp in ctx.campaigns:
             prev = prev_by_id.get(camp.campaign_id)
             if prev is None:
@@ -52,7 +61,7 @@ class ConversionRateDropRule:
                 continue
 
             drop = (prev_cvr - curr_cvr) / prev_cvr
-            if drop < _MIN_CVR_DROP:
+            if drop < min_cvr_drop:
                 continue
 
             # Estimate lost conversions vs. prior week performance.
@@ -73,6 +82,7 @@ class ConversionRateDropRule:
                 "lost_conversions_estimate": round(lost_conversions, 1),
                 "conversions_maturing": not reliable,
                 "attribution_window_days": ctx.attribution_window_days,
+                "seasonal_multiplier": round(mult, 2),
             }
             recs.append(
                 Recommendation(

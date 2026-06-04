@@ -54,6 +54,13 @@ class AdGroupResponse(BaseModel):
     name: str
     keywords: list[KeywordResponse]
     ads: list[AdResponse]
+    intent_tier: str | None = None
+    is_brand: bool = False
+
+
+class CompetitorPreview(BaseModel):
+    domain: str
+    impression_share: float  # 0..1
 
 
 class ProposalPreviewResponse(BaseModel):
@@ -67,6 +74,9 @@ class ProposalPreviewResponse(BaseModel):
     estimated_cpc_min_pln: float
     estimated_cpc_max_pln: float
     generated_at: str
+    # Top competitors from auction insights (live, best-effort). Empty when the
+    # account has no auction-insights history yet.
+    competitors: list[CompetitorPreview] = []
 
 
 class VerticalResponse(BaseModel):
@@ -162,15 +172,44 @@ async def get_proposal_preview(proposal_id: str) -> ProposalPreviewResponse:
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
+    competitors: list[CompetitorPreview] = []
     try:
         async with AsyncSession(engine) as session:
-            from adcopilot.domain.launch.entities import CampaignProposalId
+            from adcopilot.domain.launch.entities import CampaignBriefId, CampaignProposalId
             from adcopilot.infrastructure.db.repositories.launch_proposal_repository import (
                 SqlCampaignProposalRepository,
             )
 
             repo = SqlCampaignProposalRepository(session)
             proposal = await repo.get(CampaignProposalId(proposal_id))
+
+            # Best-effort live competitor scan for display (account-scoped).
+            if proposal is not None:
+                try:
+                    from datetime import UTC, datetime, timedelta
+
+                    from adcopilot.domain.competitors import top_competitors
+                    from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
+                        SqlCampaignBriefRepository,
+                    )
+                    from adcopilot.infrastructure.db.repositories.snapshot_repository import (
+                        SqlSnapshotRepository,
+                    )
+
+                    brief = await SqlCampaignBriefRepository(session).get(
+                        CampaignBriefId(str(proposal.brief_id))
+                    )
+                    if brief is not None:
+                        today = datetime.now(tz=UTC).date()
+                        rows = await SqlSnapshotRepository(session).get_auction_insights(
+                            brief.account_id, today - timedelta(days=14), today
+                        )
+                        competitors = [
+                            CompetitorPreview(domain=c.domain, impression_share=c.impression_share)
+                            for c in top_competitors(rows, limit=5)
+                        ]
+                except Exception:
+                    competitors = []
     finally:
         await engine.dispose()
 
@@ -204,6 +243,8 @@ async def get_proposal_preview(proposal_id: str) -> ProposalPreviewResponse:
                     )
                     for ad in ag.ads
                 ],
+                intent_tier=ag.intent_tier,
+                is_brand=ag.is_brand,
             )
             for ag in proposal.ad_groups
         ],
@@ -211,6 +252,7 @@ async def get_proposal_preview(proposal_id: str) -> ProposalPreviewResponse:
         estimated_cpc_min_pln=proposal.estimated_cpc_range[0] / _MICROS_PER_PLN,
         estimated_cpc_max_pln=proposal.estimated_cpc_range[1] / _MICROS_PER_PLN,
         generated_at=proposal.generated_at.isoformat(),
+        competitors=competitors,
     )
 
 
