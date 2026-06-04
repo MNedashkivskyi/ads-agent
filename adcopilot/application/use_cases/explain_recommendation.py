@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import string
 
 import structlog
@@ -69,6 +71,33 @@ def _build_prompt(template: str, evidence: dict[str, object], savings: str) -> s
     return _FORMATTER.format(template, **fmt)
 
 
+def _economics_context_line(econ: Any | None) -> str:
+    """A compact Polish business-context line for the explanation prompt, so the
+    model frames the recommendation against the client's economics. Empty when
+    no context is configured."""
+    if econ is None or not getattr(econ, "is_context_configured", lambda: False)():
+        return ""
+    cur = getattr(econ, "currency_code", "PLN")
+    parts: list[str] = []
+    if getattr(econ, "primary_goal", None):
+        parts.append(f"cel={econ.primary_goal}")
+    if getattr(econ, "target_cpa", None) is not None:
+        parts.append(f"docelowy CPA={econ.target_cpa:.0f} {cur}")
+    if getattr(econ, "target_roas", None) is not None:
+        parts.append(f"docelowy ROAS={econ.target_roas:.1f}x")
+    if getattr(econ, "profit_margin_pct", None) is not None:
+        parts.append(f"marża={econ.profit_margin_pct:.0f}%")
+    if getattr(econ, "monthly_conversion_capacity", None) is not None:
+        parts.append(f"miesięczna pojemność={econ.monthly_conversion_capacity} konwersji")
+    if not parts:
+        return ""
+    return (
+        "Kontekst biznesowy klienta: "
+        + ", ".join(parts)
+        + ". Odnieś rekomendację do tych celów (np. porównaj do docelowego CPA/ROAS)."
+    )
+
+
 class ExplainRecommendationUseCase:
     def __init__(self, llm: LLMClient, repo: RecommendationRepository) -> None:
         self._llm = llm
@@ -78,6 +107,7 @@ class ExplainRecommendationUseCase:
         self,
         recommendation_id: RecommendationId,
         language: str = "pl",
+        business_context: Any | None = None,
     ) -> str:
         rec = await self._repo.get(recommendation_id)
         if rec is None:
@@ -90,6 +120,11 @@ class ExplainRecommendationUseCase:
             or "Explain this recommendation: {evidence}"
         )
         user_prompt = _build_prompt(template, rec.evidence, savings_str)
+        # Anchor the explanation to the client's economics so every rec is framed
+        # against their goal/targets/margin, not just platform metrics.
+        context_line = _economics_context_line(business_context)
+        if context_line:
+            user_prompt = f"{user_prompt}\n\n{context_line}"
 
         explanation = await self._llm.complete(
             system=SYSTEM_PROMPT,

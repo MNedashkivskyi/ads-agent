@@ -22,12 +22,23 @@ class ZeroConversionKeywordRule:
 
     def detect(self, ctx: DetectionContext) -> list[Recommendation]:
         recs: list[Recommendation] = []
+
+        # Anchor waste to the client's target CPA when configured: a keyword that
+        # spent a full acceptable CPA with zero conversions is wasted. Otherwise
+        # fall back to 2× the historical average CPA.
+        econ = ctx.business_economics
+        target_cpa_micros = (
+            int(econ.target_cpa * 1_000_000)
+            if econ is not None and getattr(econ, "target_cpa", None)
+            else None
+        )
         avg_cpa = ctx.history.avg_cpa_micros
-
-        if avg_cpa == 0:
+        if target_cpa_micros:
+            threshold = target_cpa_micros
+        elif avg_cpa > 0:
+            threshold = 2 * avg_cpa
+        else:
             return recs
-
-        threshold = 2 * avg_cpa
 
         for kw in ctx.keywords:
             if kw.conversions != 0:
@@ -44,6 +55,7 @@ class ZeroConversionKeywordRule:
                 "clicks": kw.clicks,
                 "cost_micros": kw.cost_micros,
                 "threshold_micros": threshold,
+                "threshold_basis": "target_cpa" if target_cpa_micros else "avg_cpa_2x",
             }
             recs.append(
                 self._make_rec(

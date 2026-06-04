@@ -23,6 +23,11 @@ def _to_domain(m: BusinessEconomicsModel) -> BusinessEconomics:
         if m.default_lead_value is not None
         else None,
         currency_code=m.currency_code,
+        primary_goal=m.primary_goal,
+        target_cpa=float(m.target_cpa) if m.target_cpa is not None else None,
+        monthly_conversion_capacity=m.monthly_conversion_capacity,
+        brand_terms=list(m.brand_terms or []),
+        excluded_terms=list(m.excluded_terms or []),
         updated_at=m.updated_at,
     )
 
@@ -50,6 +55,11 @@ class BusinessEconomicsRepository:
             "target_roas": econ.target_roas,
             "default_lead_value": econ.default_lead_value,
             "currency_code": econ.currency_code,
+            "primary_goal": econ.primary_goal,
+            "target_cpa": econ.target_cpa,
+            "monthly_conversion_capacity": econ.monthly_conversion_capacity,
+            "brand_terms": list(econ.brand_terms or []),
+            "excluded_terms": list(econ.excluded_terms or []),
         }
         stmt = insert(BusinessEconomicsModel).values(**values)
         update_cols = {k: getattr(stmt.excluded, k) for k in values if k != "account_id"}

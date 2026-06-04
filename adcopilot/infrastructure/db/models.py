@@ -1281,6 +1281,12 @@ class BusinessEconomicsModel(Base):
     target_roas: Mapped[float | None] = mapped_column(Numeric(8, 2), nullable=True)
     default_lead_value: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False, default="PLN")
+    # Business context (onboarding).
+    primary_goal: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    target_cpa: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
+    monthly_conversion_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    brand_terms: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    excluded_terms: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

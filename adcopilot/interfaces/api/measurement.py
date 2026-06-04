@@ -77,6 +77,11 @@ class BusinessContextRequest(BaseModel):
     target_roas: float | None = None
     default_lead_value: float | None = None
     currency_code: str = "PLN"
+    primary_goal: str | None = None
+    target_cpa: float | None = None
+    monthly_conversion_capacity: int | None = None
+    brand_terms: list[str] = []
+    excluded_terms: list[str] = []
 
 
 class BusinessContextResponse(BaseModel):
@@ -86,7 +91,13 @@ class BusinessContextResponse(BaseModel):
     target_roas: float | None
     default_lead_value: float | None
     currency_code: str
+    primary_goal: str | None
+    target_cpa: float | None
+    monthly_conversion_capacity: int | None
+    brand_terms: list[str]
+    excluded_terms: list[str]
     is_configured: bool
+    is_context_configured: bool
 
 
 class UploadRequest(BaseModel):
@@ -580,7 +591,13 @@ async def get_business_context(
         target_roas=econ.target_roas,
         default_lead_value=econ.default_lead_value,
         currency_code=econ.currency_code,
+        primary_goal=econ.primary_goal,
+        target_cpa=econ.target_cpa,
+        monthly_conversion_capacity=econ.monthly_conversion_capacity,
+        brand_terms=list(econ.brand_terms or []),
+        excluded_terms=list(econ.excluded_terms or []),
         is_configured=econ.is_configured(),
+        is_context_configured=econ.is_context_configured(),
     )
 
 
@@ -613,6 +630,11 @@ async def put_business_context(
                 target_roas=body.target_roas,
                 default_lead_value=body.default_lead_value,
                 currency_code=body.currency_code,
+                primary_goal=body.primary_goal,
+                target_cpa=body.target_cpa,
+                monthly_conversion_capacity=body.monthly_conversion_capacity,
+                brand_terms=body.brand_terms,
+                excluded_terms=body.excluded_terms,
             )
             await BusinessEconomicsRepository(session).upsert(econ)
     finally:
@@ -624,7 +646,13 @@ async def put_business_context(
         target_roas=econ.target_roas,
         default_lead_value=econ.default_lead_value,
         currency_code=econ.currency_code,
+        primary_goal=econ.primary_goal,
+        target_cpa=econ.target_cpa,
+        monthly_conversion_capacity=econ.monthly_conversion_capacity,
+        brand_terms=list(econ.brand_terms or []),
+        excluded_terms=list(econ.excluded_terms or []),
         is_configured=econ.is_configured(),
+        is_context_configured=econ.is_context_configured(),
     )
 
 
