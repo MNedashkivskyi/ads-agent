@@ -177,9 +177,57 @@ class GoogleAdsExperimentAdapter:
     async def get_experiment_metrics(
         self, refresh_token: str, customer_id: str, experiment_resource_name: str
     ) -> ExperimentMetrics:
-        # Live-validated: reads experiment status + per-arm campaign metrics.
-        # Pure splitting handled by _parse_metrics (unit-tested).
-        raise NotImplementedError("wired live; see _parse_metrics for the tested core")
+        """Read per-arm campaign metrics for a running/finished experiment.
+
+        Resolves the control + treatment campaign IDs from the experiment's arms
+        at read time (Google materialises the treatment campaign asynchronously
+        after scheduling, so there is nothing reliable to persist up front), then
+        queries aggregated metrics for both and splits them via ``_parse_metrics``.
+        Returns empty arms with status ``PENDING`` until both campaigns exist.
+        """
+        try:
+            client = self._build_client(refresh_token)
+            cid = customer_id.replace("-", "")
+            ga = client.get_service("GoogleAdsService")
+
+            # 1) Resolve arm → campaign IDs. control flag distinguishes the arms;
+            #    `campaigns` holds the live (post-schedule) campaign resource names.
+            arm_query = (
+                "SELECT experiment_arm.control, experiment_arm.campaigns "
+                "FROM experiment_arm "
+                f"WHERE experiment_arm.experiment = '{experiment_resource_name}'"
+            )
+            control_id: int | None = None
+            treatment_id: int | None = None
+            for row in ga.search(customer_id=cid, query=arm_query):
+                arm = row.experiment_arm
+                campaign_ids = [int(rn.rsplit("/", 1)[-1]) for rn in arm.campaigns]
+                if not campaign_ids:
+                    continue
+                if arm.control:
+                    control_id = campaign_ids[0]
+                else:
+                    treatment_id = campaign_ids[0]
+
+            if control_id is None or treatment_id is None:
+                # Experiment still spinning up — arms/campaigns not materialised.
+                return ExperimentMetrics(status="PENDING", control={}, treatment={})
+
+            # 2) Aggregated metrics per arm campaign (no segments.date in SELECT →
+            #    the date filter aggregates over the window into one row/campaign).
+            metrics_query = (
+                "SELECT campaign.id, metrics.impressions, metrics.clicks, "
+                "metrics.cost_micros, metrics.conversions, metrics.conversions_value "
+                "FROM campaign "
+                f"WHERE campaign.id IN ({control_id}, {treatment_id}) "
+                "AND segments.date DURING LAST_30_DAYS"
+            )
+            rows = list(ga.search(customer_id=cid, query=metrics_query))
+            return _parse_metrics(rows, control_id, treatment_id)
+        except (GoogleAdsAuthError, GoogleAdsUnavailable):
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise _wrap("get_experiment_metrics", exc) from exc
 
     async def promote_experiment(
         self, refresh_token: str, customer_id: str, experiment_resource_name: str
