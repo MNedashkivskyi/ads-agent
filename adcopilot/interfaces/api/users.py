@@ -742,6 +742,66 @@ async def approve_recommendation(
     return {"status": "approved", "rec_id": rec_id}
 
 
+class BulkApproveRequest(BaseModel):
+    recommendation_ids: list[str]
+
+
+@router.post("/{user_id}/recommendations/approve-bulk")
+async def approve_recommendations_bulk(
+    user_id: str,
+    body: BulkApproveRequest,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """Approve + enqueue execution of many recommendations in one call.
+
+    Marks each executable, owned, PENDING/FAILED recommendation APPROVED, then
+    dispatches a single bulk task that runs them with per-item failure isolation.
+    """
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from adcopilot.domain.recommendation import (
+        NON_EXECUTABLE_KINDS,
+        RecommendationId,
+        RecommendationStatus,
+    )
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+
+    accepted: list[str] = []
+    skipped: list[dict[str, str]] = []
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            repo = SqlRecommendationRepository(session)
+            for rec_id in body.recommendation_ids:
+                rec = await repo.get(RecommendationId(rec_id))
+                if rec is None:
+                    skipped.append({"rec_id": rec_id, "reason": "not_found"})
+                    continue
+                if rec.status not in (RecommendationStatus.PENDING, RecommendationStatus.FAILED):
+                    skipped.append({"rec_id": rec_id, "reason": f"already_{rec.status.value}"})
+                    continue
+                if rec.kind in NON_EXECUTABLE_KINDS:
+                    skipped.append({"rec_id": rec_id, "reason": "not_executable"})
+                    continue
+                await repo.update_status(RecommendationId(rec_id), RecommendationStatus.APPROVED)
+                accepted.append(rec_id)
+    finally:
+        await engine.dispose()
+
+    if accepted:
+        from adcopilot.interfaces.worker.tasks import execute_recommendations_bulk_task
+
+        execute_recommendations_bulk_task.delay(accepted)
+    logger.info(
+        "recommendations.bulk_approved", user_id=user_id, accepted=len(accepted), skipped=len(skipped)
+    )
+    return {"status": "executing", "accepted": accepted, "skipped": skipped}
+
+
 @router.post("/{user_id}/recommendations/{rec_id}/decline")
 async def decline_recommendation(
     user_id: str,
