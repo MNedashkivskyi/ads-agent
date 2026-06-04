@@ -352,6 +352,7 @@ def _structure_user_prompt(
     feedback: str | None = None,
     has_conversion_tracking: bool = False,
     existing_monthly_conversions: float = 0.0,
+    competitors: list | None = None,
 ) -> str:
     tier = classify_budget_tier(brief.monthly_budget_pln)
     structure_fragment = build_structure_prompt_fragment(tier)
@@ -371,6 +372,16 @@ def _structure_user_prompt(
         lines.append(f"Sub-vertical: {vertical.sub_vertical}")
     if brief.exclusions:
         lines.append(f"Exclusions: {', '.join(brief.exclusions)}")
+    if competitors:
+        comp_str = ", ".join(
+            f"{c.domain} ({c.impression_share:.0%} udziału)" for c in competitors[:5]
+        )
+        lines.append(
+            "\nKnown competitors already bidding on these searches: "
+            f"{comp_str}. Favour differentiated, high-intent keywords where the "
+            "business can realistically win the click; avoid head terms these "
+            "competitors dominate."
+        )
     if feedback:
         lines.append(f"\nPrevious validation errors to fix:\n{feedback}")
     return "\n".join(lines)
@@ -459,6 +470,7 @@ class CampaignGenerator:
         feedback: str | None = None,
         has_conversion_tracking: bool = False,
         existing_monthly_conversions: float = 0.0,
+        competitors: list | None = None,
     ) -> CampaignStructureResponse:
         """Stage 2 — design tier-aware campaign skeleton.
 
@@ -478,6 +490,7 @@ class CampaignGenerator:
             feedback,
             has_conversion_tracking,
             existing_monthly_conversions,
+            competitors,
         )
         response = await self._call_and_parse(
             _STRUCTURE_SYSTEM, user, "structure", CampaignStructureResponse, max_tokens=2000
