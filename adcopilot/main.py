@@ -33,7 +33,6 @@ def create_app() -> FastAPI:
     from slowapi.middleware import SlowAPIMiddleware
 
     from adcopilot.interfaces.api.account_structure import router as account_structure_router
-    from adcopilot.interfaces.api.accounts import router as accounts_router
     from adcopilot.interfaces.api.ad_proposals import router as ad_proposals_router
     from adcopilot.interfaces.api.admin import router as admin_router
     from adcopilot.interfaces.api.audiences import router as audiences_router
@@ -117,7 +116,6 @@ def create_app() -> FastAPI:
     application.include_router(snapshots_router)
     application.include_router(digest_router)
     application.include_router(users_router)
-    application.include_router(accounts_router)
     application.include_router(billing_router)
     application.include_router(debug_router)
     application.include_router(launch_router)
