@@ -881,6 +881,8 @@ async def _run_trial_reminders(settings: object) -> dict[str, object]:
     sent = 0
     skipped = 0
     try:
+        from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+
         async with AsyncSession(engine) as session, session.begin():
             result = await session.execute(
                 select(UserModel).where(
@@ -892,9 +894,19 @@ async def _run_trial_reminders(settings: object) -> dict[str, object]:
             )
             users = result.scalars().all()
 
-        # TODO(phase-0.2): wire new notifier implementation
-        logger.warning("trial_reminder_notifier not configured, skipping")
-        skipped = len(users)
+            notifier = SqlWebNotifier(session)
+            for user in users:
+                await notifier.send_alert(
+                    user_id=str(user.id),
+                    title="Twój okres próbny wkrótce się kończy",
+                    body=(
+                        "Okres próbny Adswise kończy się za 2 dni. Aby zachować ciągłość "
+                        "codziennej optymalizacji kampanii, wybierz plan w ustawieniach "
+                        "subskrypcji."
+                    ),
+                    metadata={"type": "trial_reminder"},
+                )
+                sent += 1
     finally:
         await engine.dispose()
 
