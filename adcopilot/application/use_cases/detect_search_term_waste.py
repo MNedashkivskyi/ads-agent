@@ -7,6 +7,10 @@ from datetime import UTC, datetime
 
 import structlog
 
+from adcopilot.application.detection.search_term_waste import (
+    WASTE_SPEND_SHARE,
+    has_waste_signal,
+)
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.recommendation import (
     Recommendation,
@@ -19,7 +23,9 @@ from adcopilot.domain.snapshot import SearchTermSnapshot
 
 logger = structlog.get_logger(__name__)
 
-_WASTE_THRESHOLD = 0.20  # >20% of total daily cost with zero conversions
+# Account-level "budget hog" threshold. Lives in the shared module so the
+# engine rule and this use case never diverge on the waste vocabulary/criteria.
+_WASTE_THRESHOLD = WASTE_SPEND_SHARE  # >20% of total daily cost with zero conversions
 
 
 def detect_search_term_waste(
@@ -59,6 +65,9 @@ def detect_search_term_waste(
                     "waste_pct": round(term.cost_micros / total_cost * 100, 1),
                     "conversions": 0,
                     "campaign_name": term.campaign_name,
+                    # Shared junk-intent vocabulary (rule_01 uses the same list)
+                    # — surfaces whether this budget hog is also a junk term.
+                    "has_waste_signal": has_waste_signal(term.search_term),
                 },
                 estimated_monthly_savings_micros=term.cost_micros * 30,
                 created_at=now,
