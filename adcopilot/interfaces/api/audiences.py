@@ -39,6 +39,8 @@ class AudienceTopPerformer(BaseModel):
     criterion_id: int
     campaign_id: int
     conv_rate: float
+    avg_conv_rate: float = 0.0
+    lift_pct: float = 0.0
     conversions: float
     cost_micros: int
 
@@ -47,6 +49,8 @@ class AudienceUnderperformer(BaseModel):
     criterion_id: int
     campaign_id: int
     cpa: float
+    avg_cpa: float = 0.0
+    overspend_pct: float = 0.0
     conversions: float
     cost_micros: int
 

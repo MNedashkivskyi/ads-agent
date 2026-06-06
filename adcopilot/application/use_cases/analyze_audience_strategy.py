@@ -99,21 +99,33 @@ async def analyze_audience_strategy(
 
         for a in audiences:
             if a["conv_rate"] > avg_conv_rate * 1.30:
+                lift_pct = (
+                    round((a["conv_rate"] - avg_conv_rate) / avg_conv_rate * 100, 1)
+                    if avg_conv_rate > 0
+                    else 0.0
+                )
                 top_performers.append(
                     {
                         "criterion_id": a["criterion_id"],
                         "campaign_id": a["campaign_id"],
                         "conv_rate": round(a["conv_rate"], 4),
+                        "avg_conv_rate": round(avg_conv_rate, 4),
+                        "lift_pct": lift_pct,
                         "conversions": a["conversions"],
                         "cost_micros": a["cost_micros"],
                     }
                 )
             if avg_cpa is not None and a["cpa"] is not None and a["cpa"] > avg_cpa * 2.0:
+                overspend_pct = (
+                    round((a["cpa"] - avg_cpa) / avg_cpa * 100, 1) if avg_cpa > 0 else 0.0
+                )
                 underperformers.append(
                     {
                         "criterion_id": a["criterion_id"],
                         "campaign_id": a["campaign_id"],
                         "cpa": round(a["cpa"], 2),
+                        "avg_cpa": round(avg_cpa, 2),
+                        "overspend_pct": overspend_pct,
                         "conversions": a["conversions"],
                         "cost_micros": a["cost_micros"],
                     }
