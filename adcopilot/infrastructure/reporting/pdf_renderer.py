@@ -3,17 +3,37 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path
 
 from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 PAGE_W, PAGE_H = A4
 MARGIN = 50
 FOOTER_TEXT = "Wygenerowano przez Adswise - adswise.pl"
 
+# Bundle a Unicode font with full Polish glyph coverage. The reportlab built-in
+# Helvetica (Type1, WinAnsi) cannot render ł/ą/ę/ś/ć/ż/ź/ń, so Polish text was
+# previously broken in reports. DejaVu Sans is bundled (no system dependency).
+_FONTS_DIR = Path(__file__).parent / "fonts"
+FONT_REGULAR = "AdswiseSans"
+FONT_BOLD = "AdswiseSans-Bold"
+
+
+def _register_fonts() -> None:
+    if FONT_REGULAR in pdfmetrics.getRegisteredFontNames():
+        return
+    pdfmetrics.registerFont(TTFont(FONT_REGULAR, str(_FONTS_DIR / "DejaVuSans.ttf")))
+    pdfmetrics.registerFont(TTFont(FONT_BOLD, str(_FONTS_DIR / "DejaVuSans-Bold.ttf")))
+
+
+_register_fonts()
+
 
 def _draw_footer(c: canvas.Canvas, page_num: int) -> None:
-    c.setFont("Helvetica", 8)
+    c.setFont(FONT_REGULAR, 8)
     c.setFillColorRGB(0.5, 0.5, 0.5)
     c.drawString(MARGIN, 30, FOOTER_TEXT)
     c.drawRightString(PAGE_W - MARGIN, 30, f"Strona {page_num}")
@@ -21,7 +41,7 @@ def _draw_footer(c: canvas.Canvas, page_num: int) -> None:
 
 
 def _draw_title(c: canvas.Canvas, text: str, y: float, font_size: int = 16) -> float:
-    c.setFont("Helvetica-Bold", font_size)
+    c.setFont(FONT_BOLD, font_size)
     c.drawString(MARGIN, y, text)
     return y - font_size - 8
 
@@ -33,12 +53,12 @@ def _draw_body(
     font_size: int = 10,
     max_width: float = PAGE_W - 2 * MARGIN,
 ) -> float:
-    c.setFont("Helvetica", font_size)
+    c.setFont(FONT_REGULAR, font_size)
     words = text.split()
     line = ""
     for word in words:
         test_line = (line + " " + word).strip()
-        if c.stringWidth(test_line, "Helvetica", font_size) <= max_width:
+        if c.stringWidth(test_line, FONT_REGULAR, font_size) <= max_width:
             line = test_line
         else:
             c.drawString(MARGIN, y, line)
@@ -83,11 +103,11 @@ def render_performance_report_pdf(report_data: dict) -> bytes:
     # Page 1: Title page
     # ------------------------------------------------------------------
     y = PAGE_H - MARGIN
-    c.setFont("Helvetica-Bold", 22)
-    c.drawString(MARGIN, y, "Raport Wydajnosci Google Ads")
+    c.setFont(FONT_BOLD, 22)
+    c.drawString(MARGIN, y, "Raport Wydajności Google Ads")
     y -= 40
 
-    c.setFont("Helvetica", 12)
+    c.setFont(FONT_REGULAR, 12)
     c.drawString(MARGIN, y, f"Konto: {account_id}")
     y -= 20
     c.drawString(MARGIN, y, f"Okres: {period_start} - {period_end}")
@@ -101,26 +121,26 @@ def render_performance_report_pdf(report_data: dict) -> bytes:
     # Page 2: Executive summary + KPI boxes
     # ------------------------------------------------------------------
     y = PAGE_H - MARGIN
-    y = _draw_title(c, "Podsumowanie Zarzadcze", y, 16)
+    y = _draw_title(c, "Podsumowanie zarządcze", y, 16)
     y -= 10
 
     if summary_pl:
         y = _draw_body(c, summary_pl, y, font_size=10)
 
     y -= 20
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(MARGIN, y, "Kluczowe wskazniki (KPI):")
+    c.setFont(FONT_BOLD, 12)
+    c.drawString(MARGIN, y, "Kluczowe wskaźniki (KPI):")
     y -= 20
 
     kpis = [
         ("Wydatki (PLN)", metrics.get("spend_pln"), comparison.get("spend_pln")),
-        ("Klikniecia", metrics.get("clicks"), comparison.get("clicks")),
+        ("Kliknięcia", metrics.get("clicks"), comparison.get("clicks")),
         ("Konwersje", metrics.get("conversions"), comparison.get("conversions")),
         ("CTR (%)", metrics.get("ctr"), comparison.get("ctr")),
         ("CPA (PLN)", metrics.get("cpa"), comparison.get("cpa")),
     ]
 
-    c.setFont("Helvetica", 10)
+    c.setFont(FONT_REGULAR, 10)
     for label, current, previous in kpis:
         delta = _delta_str(current, previous)
         val_str = str(current) if current is not None else "brak danych"
@@ -136,19 +156,19 @@ def render_performance_report_pdf(report_data: dict) -> bytes:
     # Page 3: Executed actions (top recommendations)
     # ------------------------------------------------------------------
     y = PAGE_H - MARGIN
-    y = _draw_title(c, "Wykonane Dzialania", y, 16)
+    y = _draw_title(c, "Wykonane działania", y, 16)
     y -= 10
 
     if not top_recs:
-        c.setFont("Helvetica", 10)
-        c.drawString(MARGIN, y, "Brak wykonanych dzialan w tym okresie.")
+        c.setFont(FONT_REGULAR, 10)
+        c.drawString(MARGIN, y, "Brak wykonanych działań w tym okresie.")
         y -= 20
     else:
-        c.setFont("Helvetica-Bold", 10)
-        c.drawString(MARGIN, y, "Rodzaj dzialania")
-        c.drawString(MARGIN + 300, y, "Szacowane oszczednosci (PLN)")
+        c.setFont(FONT_BOLD, 10)
+        c.drawString(MARGIN, y, "Rodzaj działania")
+        c.drawString(MARGIN + 300, y, "Szacowane oszczędności (PLN)")
         y -= 16
-        c.setFont("Helvetica", 10)
+        c.setFont(FONT_REGULAR, 10)
         for rec in top_recs:
             kind = rec.get("kind", "")
             savings = rec.get("estimated_savings_pln", 0)
@@ -165,19 +185,19 @@ def render_performance_report_pdf(report_data: dict) -> bytes:
     # Page 4: QS plan status
     # ------------------------------------------------------------------
     y = PAGE_H - MARGIN
-    y = _draw_title(c, "Status Planow QS", y, 16)
+    y = _draw_title(c, "Status planów QS", y, 16)
     y -= 10
 
     if not qs_summary:
-        c.setFont("Helvetica", 10)
-        c.drawString(MARGIN, y, "Brak planow QS dla tego konta.")
+        c.setFont(FONT_REGULAR, 10)
+        c.drawString(MARGIN, y, "Brak planów QS dla tego konta.")
         y -= 20
     else:
-        c.setFont("Helvetica-Bold", 10)
+        c.setFont(FONT_BOLD, 10)
         c.drawString(MARGIN, y, "Status")
-        c.drawString(MARGIN + 200, y, "Liczba planow")
+        c.drawString(MARGIN + 200, y, "Liczba planów")
         y -= 16
-        c.setFont("Helvetica", 10)
+        c.setFont(FONT_REGULAR, 10)
         for status, count in qs_summary.items():
             c.drawString(MARGIN, y, str(status))
             c.drawString(MARGIN + 200, y, str(count))
@@ -192,13 +212,13 @@ def render_performance_report_pdf(report_data: dict) -> bytes:
     # Page 5: Next steps
     # ------------------------------------------------------------------
     y = PAGE_H - MARGIN
-    y = _draw_title(c, "Nastepne Kroki", y, 16)
+    y = _draw_title(c, "Następne kroki", y, 16)
     y -= 20
 
     next_steps = (
         "Adswise automatycznie monitoruje Twoje kampanie. "
         "Kolejny raport zostanie wygenerowany automatycznie. "
-        "W razie pytan skontaktuj sie z nami przez panel uzytkownika lub Telegrama."
+        "W razie pytań skontaktuj się z nami przez panel użytkownika."
     )
     _draw_body(c, next_steps, y, font_size=11)
 
