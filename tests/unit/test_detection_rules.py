@@ -282,8 +282,9 @@ def _ad(**kwargs) -> AdSnapshot:
 #   - clicks >= 5
 #   - conversions == 0
 #   - cost_micros > avg_cpa * 0.3
-#   - search_term contains a waste signal (free, jobs, salary, how to, diy,
-#     wikipedia, youtube)
+#   - search_term contains a junk-intent waste signal (Polish + English,
+#     e.g. "darmowy", "praca", "free", "jobs", "how to") OR the cost is
+#     egregious (> one full acceptable CPA with zero conversions).
 # ===========================================================================
 
 
@@ -306,6 +307,32 @@ class TestRule01WastedSearchTerm:
         assert len(recs) == 1
         assert recs[0].kind == RecommendationKind.ADD_NEGATIVE_KEYWORD
         assert recs[0].evidence["search_term"] == "free trial offer"
+
+    def test_triggers_for_polish_waste_signal(self):
+        # Polish "darmowy" (free) must trigger — the core ADW-006 fix.
+        st = _search_term(
+            search_term="darmowy program do faktur",
+            clicks=10,
+            cost_micros=5_000_000,
+            conversions=0.0,
+        )
+        ctx = _ctx(search_terms=[st], history=_history(avg_cpa_micros=10_000_000))
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
+        assert recs[0].evidence["search_term"] == "darmowy program do faktur"
+
+    def test_triggers_for_egregious_cost_without_signal(self):
+        # No junk word, but spent > one full CPA (10_000_000) with zero
+        # conversions → fires on egregious waste alone.
+        st = _search_term(
+            search_term="kancelaria prawna premium",
+            clicks=12,
+            cost_micros=12_000_000,
+            conversions=0.0,
+        )
+        ctx = _ctx(search_terms=[st], history=_history(avg_cpa_micros=10_000_000))
+        recs = self.rule.detect(ctx)
+        assert len(recs) == 1
 
     def test_triggers_for_youtube_signal(self):
         st = _search_term(

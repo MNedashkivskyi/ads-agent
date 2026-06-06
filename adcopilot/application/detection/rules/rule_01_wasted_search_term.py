@@ -15,7 +15,47 @@ from adcopilot.domain.recommendation import (
     RecommendationStatus,
 )
 
-_WASTE_SIGNALS = ["free", "jobs", "salary", "how to", "diy", "wikipedia", "youtube"]
+# Junk-intent signal words/phrases. The product serves the Polish market, so
+# the original English-only list almost never matched real Polish search terms,
+# leaving this rule effectively dead on PL accounts. Polish terms come first,
+# English ones are kept for mixed-language accounts. Matched as a
+# case-insensitive substring, so multi-word phrases are fine. Conservative and
+# extendable.
+_WASTE_SIGNALS = [
+    # Polish — "free / for free"
+    "darmowy",
+    "darmowe",
+    "darmowa",
+    "darmo",
+    "za darmo",
+    "bezpłatny",
+    "bezpłatne",
+    "gratis",
+    # Polish — job seekers (not customers)
+    "praca",
+    "oferty pracy",
+    "zarobki",
+    "wynagrodzenie",
+    "pensja",
+    # Polish — research / how-to / informational intent
+    "jak zrobić",
+    "jak działa",
+    "instrukcja",
+    "przepis",
+    "definicja",
+    "co to jest",
+    "opinie",
+    "forum",
+    "wzór",
+    # English — kept for mixed-language accounts
+    "free",
+    "jobs",
+    "salary",
+    "how to",
+    "diy",
+    "wikipedia",
+    "youtube",
+]
 
 
 class WastedSearchTermRule:
@@ -42,8 +82,15 @@ class WastedSearchTermRule:
             if st.cost_micros <= cost_threshold:
                 continue
 
+            # Signal words are a booster, not a hard gate: the cost/zero-conv
+            # criteria are the primary trigger. We still require either a
+            # junk-intent signal OR egregious waste — spending more than a full
+            # acceptable conversion cost (one whole CPA) with zero conversions
+            # is strong evidence of waste regardless of the wording.
             term_lower = st.search_term.lower()
-            if not any(signal in term_lower for signal in _WASTE_SIGNALS):
+            has_signal = any(signal in term_lower for signal in _WASTE_SIGNALS)
+            egregious = st.cost_micros > basis_micros
+            if not (has_signal or egregious):
                 continue
 
             target = {"ad_group_id": st.ad_group_id, "search_term": st.search_term}
