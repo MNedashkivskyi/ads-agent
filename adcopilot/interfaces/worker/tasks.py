@@ -2742,6 +2742,13 @@ def check_rlsa_eligibility_task() -> dict[str, object]:
 
     settings = get_settings()
 
+    # ADW-010: deferred from MVP and OFF by default — this automation writes to
+    # Google Ads without going through the approve→execute model. Skip cleanly
+    # unless an operator explicitly enables it.
+    if not settings.ENABLE_RLSA_AUTOMATION:
+        logger.info("rlsa_eligibility_check.skipped — ENABLE_RLSA_AUTOMATION is off")
+        return {"status": "disabled", "accounts_processed": 0}
+
     async def _run() -> dict[str, object]:
         from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 

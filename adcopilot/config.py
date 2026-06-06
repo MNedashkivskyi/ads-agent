@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     GOOGLE_ADS_MAX_CONCURRENCY: int = 8
     PAGESPEED_API_KEY: str | None = None
 
+    # ADW-010: RLSA audience auto-add silently writes to Google Ads, bypassing
+    # the approve→execute trust model the rest of the product uses. It is
+    # deferred from the MVP and OFF by default; set to True to re-enable the
+    # weekly automation. (The use case itself is unchanged and still tested.)
+    ENABLE_RLSA_AUTOMATION: bool = False
+
     # Comma-separated list of user UUIDs that have admin access to /api/admin/* endpoints.
     ADMIN_USER_IDS: str = ""
 
