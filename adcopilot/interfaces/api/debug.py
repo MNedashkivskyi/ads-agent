@@ -123,7 +123,7 @@ async def google_ads_test(refresh_token: str) -> GoogleAdsTestResponse:
 class CreateTestAccountRequest(BaseModel):
     mcc_customer_id: str
     refresh_token: str
-    account_name: str = "AdsWise Test Account"
+    account_name: str = "Adswise Test Account"
     currency_code: str = "PLN"
     time_zone: str = "Europe/Warsaw"
 

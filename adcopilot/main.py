@@ -76,7 +76,7 @@ def create_app() -> FastAPI:
     # integrations hook into the request lifecycle.  Idempotent.
     init_sentry(component="api")
 
-    application = FastAPI(title="AdsWise", version="0.1.0", lifespan=lifespan)
+    application = FastAPI(title="Adswise", version="0.1.0", lifespan=lifespan)
     # Rate limiting — must be registered before SlowAPIMiddleware is added.
     application.state.limiter = limiter
     application.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
