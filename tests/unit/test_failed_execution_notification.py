@@ -180,6 +180,77 @@ def test_execute_recommendation_task_campaign_removed_expires_without_raising() 
     mock_expire.assert_awaited_once_with("rec-removed")
 
 
+@pytest.mark.asyncio
+async def test_handle_execution_failure_sends_web_notification() -> None:
+    """ADW-002: a failed execution marks the rec FAILED and notifies the user."""
+    from adcopilot.interfaces.worker.tasks import _handle_execution_failure
+
+    class _FakeSession:
+        async def __aenter__(self) -> "_FakeSession":
+            return self
+
+        async def __aexit__(self, *_a: object) -> bool:
+            return False
+
+        def begin(self) -> object:
+            session = self
+
+            class _Ctx:
+                async def __aenter__(self_) -> "_FakeSession":
+                    return session
+
+                async def __aexit__(self_, *_a: object) -> bool:
+                    return False
+
+            return _Ctx()
+
+    rec = MagicMock()
+    rec.account_id = "acc-1"
+    rec.kind.value = "PAUSE_KEYWORD"
+    account = MagicMock()
+    account.user_id = "user-7"
+
+    rec_repo = MagicMock()
+    rec_repo.get = AsyncMock(return_value=rec)
+    rec_repo.update_status = AsyncMock()
+    acc_repo = MagicMock()
+    acc_repo.get = AsyncMock(return_value=account)
+    notifier = MagicMock()
+    notifier.send_execution_result = AsyncMock()
+
+    engine = MagicMock()
+    engine.dispose = AsyncMock()
+
+    with (
+        patch("sqlalchemy.ext.asyncio.create_async_engine", return_value=engine),
+        patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=_FakeSession()),
+        patch(
+            "adcopilot.infrastructure.db.repositories.recommendation_repository.SqlRecommendationRepository",
+            return_value=rec_repo,
+        ),
+        patch(
+            "adcopilot.infrastructure.db.repositories.google_ads_account_repository.SqlGoogleAdsAccountRepository",
+            return_value=acc_repo,
+        ),
+        patch(
+            "adcopilot.infrastructure.notifications.web_notifier_adapter.SqlWebNotifier",
+            return_value=notifier,
+        ),
+    ):
+        await _handle_execution_failure("rec-1", "boom")
+
+    from adcopilot.domain.recommendation import RecommendationStatus
+
+    rec_repo.update_status.assert_awaited_once()
+    assert rec_repo.update_status.await_args.args[1] == RecommendationStatus.FAILED
+    notifier.send_execution_result.assert_awaited_once()
+    kwargs = notifier.send_execution_result.await_args.kwargs
+    assert kwargs["user_id"] == "user-7"
+    assert kwargs["metadata"]["action"] == "execution_failed"
+    # Polish, user-facing, no raw error leak.
+    assert "boom" not in kwargs["body"]
+
+
 def test_execute_recommendation_task_handle_failure_exception_is_swallowed() -> None:
     """If _handle_execution_failure raises, the original exc is still propagated."""
     task_self = _make_bound_task(max_retries=3, current_retry=3)
