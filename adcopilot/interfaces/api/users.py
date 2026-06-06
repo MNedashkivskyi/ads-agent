@@ -71,6 +71,7 @@ class RecommendationResponse(BaseModel):
     created_at: str
     evidence: dict[str, object] | None = None
     is_executable: bool = True
+    is_undoable: bool = False
 
 
 class AuditLogResponse(BaseModel):
@@ -540,6 +541,42 @@ async def list_recommendations(
                 .order_by(RecommendationModel.created_at.desc())
             )
             recs = result.scalars().all()
+
+            # Compute which EXECUTED recommendations are still within the undo
+            # window so the UI can show/hide the Undo action precisely. One
+            # batched query (latest EXECUTE audit per rec) avoids N+1 lookups.
+            undoable_ids: set = set()
+            executed_ids = [
+                r.id for r in recs if r.status == RecommendationStatus.EXECUTED.value
+            ]
+            if executed_ids:
+                from datetime import UTC, datetime, timedelta
+
+                from sqlalchemy import func
+
+                from adcopilot.application.use_cases.undo_recommendation import (
+                    UNDO_WINDOW_DAYS,
+                )
+                from adcopilot.infrastructure.db.models import AuditLogModel
+
+                cutoff = datetime.now(UTC) - timedelta(days=UNDO_WINDOW_DAYS)
+                exec_rows = await session.execute(
+                    select(
+                        AuditLogModel.recommendation_id,
+                        func.max(AuditLogModel.created_at),
+                    )
+                    .where(
+                        AuditLogModel.recommendation_id.in_(executed_ids),
+                        AuditLogModel.action == "EXECUTE",
+                    )
+                    .group_by(AuditLogModel.recommendation_id)
+                )
+                for rec_uuid, last_exec in exec_rows.all():
+                    if last_exec is None:
+                        continue
+                    ts = last_exec if last_exec.tzinfo else last_exec.replace(tzinfo=UTC)
+                    if ts >= cutoff:
+                        undoable_ids.add(rec_uuid)
     finally:
         await engine.dispose()
 
@@ -559,6 +596,7 @@ async def list_recommendations(
             created_at=r.created_at.isoformat(),
             evidence=dict(r.evidence) if r.evidence else None,
             is_executable=r.kind not in non_exec_values,
+            is_undoable=r.id in undoable_ids,
         )
         for r in recs
     ]
@@ -836,6 +874,78 @@ async def decline_recommendation(
 
     logger.info("recommendation.declined", user_id=user_id, rec_id=rec_id)
     return {"status": "declined", "rec_id": rec_id}
+
+
+@router.post("/{user_id}/recommendations/{rec_id}/undo")
+async def undo_recommendation(
+    user_id: str,
+    rec_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, str]:
+    """Reverse a previously EXECUTED recommendation, within the undo window.
+
+    Validates ownership, that the recommendation is EXECUTED, and that the
+    7-day undo window has not expired, then enqueues the reversal task. The
+    actual Google Ads mutation runs asynchronously; the user is notified of the
+    outcome. All user-facing errors are surfaced in Polish (no silent failure).
+    """
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from datetime import UTC, datetime, timedelta
+
+    from adcopilot.application.use_cases.undo_recommendation import UNDO_WINDOW_DAYS
+    from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+    from adcopilot.infrastructure.db.repositories.audit_log_repository import (
+        SqlAuditLogRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session:
+            repo = SqlRecommendationRepository(session)
+            rec = await repo.get(RecommendationId(rec_id))
+            if rec is None:
+                raise HTTPException(status_code=404, detail="Recommendation not found")
+            if rec.status != RecommendationStatus.EXECUTED:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        "Tylko wykonane zmiany można cofnąć "
+                        f"(aktualny status: {rec.status.value})."
+                    ),
+                )
+            audit_log = await SqlAuditLogRepository(session).get_latest_execute(
+                RecommendationId(rec_id)
+            )
+            if audit_log is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Brak zapisu wykonania tej zmiany — nie ma czego cofać.",
+                )
+            log_ts = audit_log.created_at
+            if log_ts.tzinfo is None:
+                log_ts = log_ts.replace(tzinfo=UTC)
+            if log_ts < datetime.now(UTC) - timedelta(days=UNDO_WINDOW_DAYS):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "Okno cofania wygasło — zmianę można cofnąć w ciągu "
+                        f"{UNDO_WINDOW_DAYS} dni od jej wykonania."
+                    ),
+                )
+    finally:
+        await engine.dispose()
+
+    from adcopilot.interfaces.worker.tasks import undo_recommendation_task
+
+    undo_recommendation_task.delay(rec_id)
+    logger.info("recommendation.undo_requested", user_id=user_id, rec_id=rec_id)
+    return {"status": "undoing", "rec_id": rec_id}
 
 
 @router.put("/{user_id}/settings")

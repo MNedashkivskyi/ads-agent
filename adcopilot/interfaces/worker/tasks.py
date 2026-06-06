@@ -1072,6 +1072,149 @@ async def _run_execute_recommendations_bulk(rec_ids: list[str]) -> dict[str, obj
     }
 
 
+@celery_app.task(  # type: ignore[untyped-decorator]
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,
+    retry_backoff=True,
+    retry_backoff_max=300,
+    name="adcopilot.interfaces.worker.tasks.undo_recommendation_task",
+)
+def undo_recommendation_task(self: object, rec_id: str) -> dict[str, object]:
+    """Reverse an EXECUTED recommendation within the undo window.
+
+    On success the recommendation returns to APPROVED and the user is notified.
+    Auth errors are terminal (a bad token can't be retried). All other failures
+    retry with back-off; after the final retry the user is notified that the
+    undo did not complete and the recommendation is left EXECUTED so they can
+    retry. No silent failures.
+    """
+    import asyncio
+
+    from celery import Task  # type: ignore[import-untyped]
+
+    from adcopilot.domain.exceptions import GoogleAdsAuthError
+
+    assert isinstance(self, Task)
+    try:
+        return asyncio.run(_run_undo_recommendation(rec_id))
+    except GoogleAdsAuthError as exc:
+        logger.warning("undo needs reauth — token expired/revoked", rec_id=rec_id, error=str(exc))
+        try:
+            asyncio.run(
+                _handle_undo_failure(
+                    rec_id,
+                    "Połączenie z Google Ads wygasło — połącz ponownie konto, aby cofnąć zmianę.",
+                )
+            )
+        except Exception:
+            logger.exception("failed to handle undo auth failure", rec_id=rec_id)
+        return {"rec_id": rec_id, "status": "failed", "reason": "needs_reauth"}
+    except Exception as exc:
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc) from exc
+        error_message = str(exc) or type(exc).__name__
+        try:
+            asyncio.run(_handle_undo_failure(rec_id, error_message))
+        except Exception:
+            logger.exception("failed to handle undo failure", rec_id=rec_id)
+        raise
+
+
+async def _run_undo_recommendation(rec_id: str) -> dict[str, object]:
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.undo_recommendation import UndoRecommendationUseCase
+    from adcopilot.config import get_settings
+    from adcopilot.domain.recommendation import RecommendationId
+    from adcopilot.infrastructure.db.repositories.audit_log_repository import SqlAuditLogRepository
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+        SqlOAuthCredentialsRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+    from adcopilot.infrastructure.google_ads.mutations_adapter import GoogleAdsMutationsAdapter
+    from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            rec_repo = SqlRecommendationRepository(session)
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            use_case = UndoRecommendationUseCase(
+                rec_repo=rec_repo,
+                audit_log_repo=SqlAuditLogRepository(session),
+                account_repo=account_repo,
+                credentials_repo=SqlOAuthCredentialsRepository(
+                    session, settings.TOKEN_ENCRYPTION_KEY
+                ),
+                mutations=GoogleAdsMutationsAdapter(settings),
+            )
+            result = await use_case.execute(RecommendationId(rec_id))
+
+            # Surface the outcome to the user (bell), in Polish.
+            rec = await rec_repo.get(RecommendationId(rec_id))
+            if rec is not None:
+                account = await account_repo.get(rec.account_id)
+                if account is not None:
+                    await SqlWebNotifier(session).send_execution_result(
+                        user_id=str(account.user_id),
+                        title="Zmiana cofnięta",
+                        body=(
+                            "Cofnęliśmy wcześniej wykonaną zmianę w Twoim koncie Google Ads. "
+                            "Konto zostało przywrócone do stanu sprzed tej zmiany."
+                        ),
+                        metadata={"rec_id": rec_id, "action": "undo"},
+                    )
+    finally:
+        await engine.dispose()
+
+    logger.info("recommendation undone", rec_id=rec_id)
+    return {"rec_id": rec_id, "result": result, "status": "undone"}
+
+
+async def _handle_undo_failure(rec_id: str, error_message: str) -> None:
+    """Notify the user that an undo did not complete; leave the rec EXECUTED."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.domain.recommendation import RecommendationId
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+    from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
+
+    settings = get_settings()
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            rec = await SqlRecommendationRepository(session).get(RecommendationId(rec_id))
+            logger.warning("recommendation undo failed", rec_id=rec_id, error=error_message)
+            if rec is None:
+                return
+            account = await SqlGoogleAdsAccountRepository(session).get(rec.account_id)
+            if account is not None:
+                await SqlWebNotifier(session).send_execution_result(
+                    user_id=str(account.user_id),
+                    title="Nie udało się cofnąć zmiany",
+                    body=(
+                        "Próba cofnięcia zmiany w Twoim koncie Google Ads nie powiodła się. "
+                        "Zmiana pozostaje aktywna — spróbuj cofnąć ją ponownie później."
+                    ),
+                    metadata={"rec_id": rec_id, "action": "undo_failed"},
+                )
+    finally:
+        await engine.dispose()
+
+
 async def _handle_auth_failure(rec_id: str) -> None:
     """Mark rec FAILED, set account.needs_reauth=True, and send a reauth notification."""
     import dataclasses
