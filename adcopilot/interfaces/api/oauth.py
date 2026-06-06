@@ -398,7 +398,9 @@ async def oauth_ga4_callback(
     logger.info("ga4 oauth complete", user_id=user_id, account_id=account_id)
 
     if settings.APP_URL:
+        # Land on the GA4 connect page, which renders the ?ga4=connected
+        # success banner (the previous /app/audiences target showed nothing).
         return RedirectResponse(
-            url=f"{settings.APP_URL.rstrip('/')}/app/audiences?ga4=connected", status_code=302
+            url=f"{settings.APP_URL.rstrip('/')}/app/ga4-connect?ga4=connected", status_code=302
         )
     return {"status": "ok", "account_id": account_id}
