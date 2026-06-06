@@ -296,9 +296,9 @@ async def test_trial_reminders_returns_skipped_count() -> None:
     ):
         result = await _run_trial_reminders(settings)
 
-    # Notifier not yet wired — users are skipped (log-only mode)
-    assert result["sent"] == 0
-    assert result["skipped"] == 1
+    # ADW-017: the notifier is now wired — eligible users get a reminder.
+    assert result["sent"] == 1
+    assert result["skipped"] == 0
 
 
 # ---------------------------------------------------------------------------
