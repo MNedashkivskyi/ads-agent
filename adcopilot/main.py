@@ -36,7 +36,6 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.ad_proposals import router as ad_proposals_router
     from adcopilot.interfaces.api.admin import router as admin_router
     from adcopilot.interfaces.api.audiences import router as audiences_router
-    from adcopilot.interfaces.api.auth import router as auth_router
     from adcopilot.interfaces.api.billing import router as billing_router
     from adcopilot.interfaces.api.conversion_tracking import router as conversion_tracking_router
     from adcopilot.interfaces.api.conversion_tracking_guide import (
@@ -111,7 +110,6 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
-    application.include_router(auth_router)
     application.include_router(oauth_router)
     application.include_router(snapshots_router)
     application.include_router(digest_router)
