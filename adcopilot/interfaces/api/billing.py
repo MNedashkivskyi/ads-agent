@@ -84,9 +84,13 @@ def _price_id_for_plan(plan: str, settings: Settings) -> str:
 async def create_checkout(
     user_id: str,
     body: CheckoutRequest,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> CheckoutResponse:
     """Create a Stripe Checkout session with 14-day trial."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
 
     stripe = _get_stripe(settings)
@@ -127,9 +131,13 @@ async def create_checkout(
 @router.post("/api/billing/{user_id}/portal", response_model=PortalResponse)
 async def create_portal(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> PortalResponse:
     """Create a Stripe Customer Portal session."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
 
     stripe = _get_stripe(settings)
