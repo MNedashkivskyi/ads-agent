@@ -1279,14 +1279,18 @@ async def _handle_auth_failure(rec_id: str) -> None:
 
 
 async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
-    """Mark the recommendation FAILED and log the failure (notification wired in Phase 1)."""
+    """Mark the recommendation FAILED and notify the user (Polish, no silent failure)."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import get_settings
     from adcopilot.domain.recommendation import RecommendationId, RecommendationStatus
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
     from adcopilot.infrastructure.db.repositories.recommendation_repository import (
         SqlRecommendationRepository,
     )
+    from adcopilot.infrastructure.notifications.web_notifier_adapter import SqlWebNotifier
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
@@ -1305,7 +1309,29 @@ async def _handle_execution_failure(rec_id: str, error_message: str) -> None:
                 kind=rec.kind.value,
                 error=error_message,
             )
-            # TODO(phase-1): send execution failed notification via new notifier
+
+            # Surface the failure to the user (bell), in Polish — the change was
+            # NOT applied. Avoid leaking raw API error text into the message.
+            account = await SqlGoogleAdsAccountRepository(session).get(rec.account_id)
+            if account is not None:
+                await SqlWebNotifier(session).send_execution_result(
+                    user_id=str(account.user_id),
+                    title="Nie udało się wykonać zmiany",
+                    body=(
+                        "Zatwierdzona zmiana w Twoim koncie Google Ads nie powiodła się i "
+                        "nie została wprowadzona. Możesz spróbować zatwierdzić ją ponownie."
+                    ),
+                    metadata={
+                        "rec_id": rec_id,
+                        "kind": rec.kind.value,
+                        "action": "execution_failed",
+                    },
+                )
+            else:
+                logger.error(
+                    "account not found while notifying execution failure",
+                    rec_id=rec_id,
+                )
     finally:
         await engine.dispose()
 
