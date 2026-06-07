@@ -93,6 +93,28 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.ENV == "production"
 
+    def assert_secure_for_production(self) -> None:
+        """Refuse to run in production with insecure secret defaults.
+
+        Booting with the default SECRET_KEY makes OAuth-state and internal
+        JWTs forgeable; the default TOKEN_ENCRYPTION_KEY makes stored Google
+        refresh tokens recoverable. Fail loud at startup instead of silently
+        shipping them. (LAUNCH-005)
+        """
+        if not self.is_production:
+            return
+        offenders = []
+        if self.SECRET_KEY == "change-me-in-production":
+            offenders.append("SECRET_KEY")
+        if self.TOKEN_ENCRYPTION_KEY == "change-me-in-production-32-bytes":
+            offenders.append("TOKEN_ENCRYPTION_KEY")
+        if offenders:
+            raise RuntimeError(
+                "Refusing to start in production with insecure default secrets: "
+                + ", ".join(offenders)
+                + ". Set strong random values in the environment."
+            )
+
 
 @lru_cache
 def get_settings() -> Settings:

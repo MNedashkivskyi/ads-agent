@@ -20,6 +20,7 @@ logger = structlog.get_logger(__name__)
 async def lifespan(application: FastAPI) -> AsyncGenerator[None, None]:
     configure_logging()
     settings = get_settings()
+    settings.assert_secure_for_production()
     logger.info("adcopilot starting", env=settings.ENV)
 
     yield
