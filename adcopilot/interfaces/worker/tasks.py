@@ -172,7 +172,33 @@ async def _async_link_google_ads_accounts(
             customers_to_link = select_customers_to_link(
                 customer_ids, set(existing_by_customer), slots_remaining
             )
+
+            # Enforce one-Google-Ads-account-per-Adswise-user: drop any NEW
+            # customer already owned by a different user (a reauth of the
+            # current user's own customer is fine). Prevents dodging a paid
+            # plan by linking the same Ads account from a second Adswise login.
+            claimed_by_other: list[str] = []
+            filtered_to_link: list[str] = []
+            for cid in customers_to_link:
+                if cid in existing_by_customer:
+                    filtered_to_link.append(cid)  # current user's reauth
+                    continue
+                owner = await acc_repo.owner_of_customer_id(cid)
+                if owner is not None and str(owner) != user_id:
+                    claimed_by_other.append(cid)
+                    logger.warning(
+                        "google ads customer already linked to another user — skipping",
+                        customer_id=cid,
+                        requesting_user_id=user_id,
+                    )
+                else:
+                    filtered_to_link.append(cid)
+            customers_to_link = filtered_to_link
+
             if not customers_to_link:
+                if claimed_by_other:
+                    redis.delete(pending_key)
+                    return {"success": False, "error": "account_claimed_by_other_user"}
                 logger.warning(
                     "account limit reached in oauth linking task",
                     user_id=user_id,

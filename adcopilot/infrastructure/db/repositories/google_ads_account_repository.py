@@ -70,6 +70,21 @@ class SqlGoogleAdsAccountRepository:
         )
         return [_model_to_domain(m) for m in result.scalars().all()]
 
+    async def owner_of_customer_id(self, customer_id: str) -> UserId | None:
+        """Return the user_id that owns this Google Ads customer_id, if any.
+
+        Used to enforce one-Google-Ads-account-per-Adswise-user: a customer_id
+        already linked to a different user must not be linked again (otherwise a
+        user could dodge a subscription by opening a second account).
+        """
+        result = await self._session.execute(
+            select(GoogleAdsAccountModel.user_id).where(
+                GoogleAdsAccountModel.customer_id == customer_id
+            )
+        )
+        row = result.first()
+        return UserId(str(row[0])) if row else None
+
     async def list_active(self) -> list[GoogleAdsAccount]:
         """Return all accounts that do not need re-authentication."""
         result = await self._session.execute(

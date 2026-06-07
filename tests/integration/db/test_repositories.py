@@ -139,6 +139,41 @@ async def test_google_ads_account_save_then_get(db_session: AsyncSession) -> Non
 
 
 @pytest.mark.integration
+async def test_owner_of_customer_id(db_session: AsyncSession) -> None:
+    user_repo = SqlUserRepository(db_session)
+    acc_repo = SqlGoogleAdsAccountRepository(db_session)
+
+    user_id = UserId(str(uuid.uuid4()))
+    await user_repo.save(
+        User(
+            id=user_id,
+            email=f"owner-{uuid.uuid4()}@example.com",
+            telegram_chat_id=None,
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            plan=PlanTier.STARTER,
+        )
+    )
+    customer_id = f"999-{uuid.uuid4().int % 10_000_000:07d}"
+    await acc_repo.save(
+        GoogleAdsAccount(
+            id=AccountId(str(uuid.uuid4())),
+            user_id=user_id,
+            customer_id=customer_id,
+            descriptive_name="Owned",
+            currency="PLN",
+            timezone="Europe/Warsaw",
+            is_manager=False,
+            write_enabled=True,
+            connected_at=datetime(2026, 1, 2, tzinfo=UTC),
+        )
+    )
+
+    # The owner is found by customer_id; an unknown customer_id has no owner.
+    assert await acc_repo.owner_of_customer_id(customer_id) == user_id
+    assert await acc_repo.owner_of_customer_id("000-0000000") is None
+
+
+@pytest.mark.integration
 async def test_oauth_credentials_encrypted_at_rest(db_session: AsyncSession) -> None:
     """Verify that the refresh_token stored in DB is not the plaintext value."""
     # First create a user and account
