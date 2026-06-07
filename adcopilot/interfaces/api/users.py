@@ -451,9 +451,12 @@ async def delete_account(
 @router.get("/{user_id}/stats", response_model=StatsResponse)
 async def get_stats(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> StatsResponse:
     """Get cumulative savings and recommendation counts for the user."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     from adcopilot.domain.recommendation import RecommendationStatus
     from adcopilot.infrastructure.db.models import RecommendationModel
@@ -508,9 +511,13 @@ async def get_stats(
 @router.get("/{user_id}/recommendations", response_model=list[RecommendationResponse])
 async def list_recommendations(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[RecommendationResponse]:
     """List all recommendations across the user's accounts."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     import uuid as uuid_mod
 
     from adcopilot.domain.recommendation import RecommendationStatus
@@ -640,6 +647,7 @@ async def refresh_recommendations(
 @router.get("/{user_id}/recommendations/last-refreshed")
 async def recommendations_last_refreshed(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> dict[str, str | None]:
     """Return when recommendation data was last refreshed for the user.
@@ -648,6 +656,9 @@ async def recommendations_last_refreshed(
     upserted on every refresh), which reflects the last successful data pull
     and detection run.
     """
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     import uuid as uuid_mod
 
     from sqlalchemy import func, select
@@ -681,9 +692,13 @@ async def recommendations_last_refreshed(
 @router.get("/{user_id}/audit-log", response_model=list[AuditLogResponse])
 async def list_audit_log(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> list[AuditLogResponse]:
     """List audit log entries for the user's accounts (last 90 days)."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     import uuid as uuid_mod
     from datetime import timedelta
 
