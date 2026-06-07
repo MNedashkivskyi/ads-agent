@@ -32,7 +32,10 @@ class AdminClientResponse(BaseModel):
 
 def _check_admin(user_id: str, settings: Settings) -> None:
     admin_ids = {uid.strip() for uid in settings.ADMIN_USER_IDS.split(",") if uid.strip()}
-    if admin_ids and user_id not in admin_ids:
+    # Fail closed: an empty allow-list means NO admins. Previously this
+    # short-circuited (`if admin_ids and ...`), making every authenticated
+    # user an admin whenever ADMIN_USER_IDS was unset (the default).
+    if user_id not in admin_ids:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
 
 
