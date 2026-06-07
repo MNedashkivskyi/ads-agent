@@ -128,7 +128,15 @@ def test_trigger_snapshot_returns_202() -> None:
     mock_task = MagicMock()
     mock_task.id = "celery-task-uuid-123"
 
-    with patch("adcopilot.interfaces.api.snapshots.snapshot_account_task") as mock_celery_task:
+    from jose import jwt
+
+    from adcopilot.config import get_settings
+
+    token = jwt.encode({"sub": "owner"}, get_settings().SECRET_KEY, algorithm="HS256")
+    with (
+        patch("adcopilot.interfaces.api.snapshots.snapshot_account_task") as mock_celery_task,
+        patch("adcopilot.interfaces.api.snapshots._verify_account_owner", new_callable=AsyncMock),
+    ):
         mock_celery_task.delay.return_value = mock_task
 
         from adcopilot.main import create_app
@@ -138,6 +146,7 @@ def test_trigger_snapshot_returns_202() -> None:
             resp = client.post(
                 "/api/accounts/my-account-id/snapshots",
                 json={"date": "2026-01-15"},
+                headers={"Authorization": f"Bearer {token}"},
             )
 
     assert resp.status_code == 202
@@ -153,14 +162,25 @@ def test_trigger_snapshot_defaults_to_today() -> None:
     mock_task = MagicMock()
     mock_task.id = "task-abc"
 
-    with patch("adcopilot.interfaces.api.snapshots.snapshot_account_task") as mock_celery_task:
+    from jose import jwt
+
+    from adcopilot.config import get_settings
+
+    token = jwt.encode({"sub": "owner"}, get_settings().SECRET_KEY, algorithm="HS256")
+    with (
+        patch("adcopilot.interfaces.api.snapshots.snapshot_account_task") as mock_celery_task,
+        patch("adcopilot.interfaces.api.snapshots._verify_account_owner", new_callable=AsyncMock),
+    ):
         mock_celery_task.delay.return_value = mock_task
 
         from adcopilot.main import create_app
 
         app = create_app()
         with TestClient(app, raise_server_exceptions=True) as client:
-            resp = client.post("/api/accounts/acc-1/snapshots")
+            resp = client.post(
+                "/api/accounts/acc-1/snapshots",
+                headers={"Authorization": f"Bearer {token}"},
+            )
 
     assert resp.status_code == 202
     data = resp.json()

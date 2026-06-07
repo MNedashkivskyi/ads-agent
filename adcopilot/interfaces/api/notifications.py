@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from adcopilot.config import Settings, get_settings
+from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
 
@@ -44,10 +45,14 @@ def _parse_uuid(value: str, field: str = "id") -> uuid.UUID:
 @router.get("", response_model=list[NotificationResponse])
 async def list_notifications(
     user_id: str,
+    current_user: CurrentUser,
     limit: int = 50,
     offset: int = 0,
     settings: Annotated[Settings, Depends(get_settings)] = ...,
 ) -> list[NotificationResponse]:
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.infrastructure.db.repositories.notification_repository import (
@@ -80,6 +85,7 @@ async def list_notifications(
 @router.patch("/{notification_id}/read", status_code=204)
 async def mark_notification_read(
     notification_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)] = ...,
 ) -> None:
     _parse_uuid(notification_id, "notification_id")
@@ -97,6 +103,8 @@ async def mark_notification_read(
             notification = await repo.get(notification_id)
             if notification is None:
                 raise HTTPException(status_code=404, detail="Notification not found")
+            if str(notification.user_id) != current_user:
+                raise HTTPException(status_code=403, detail="Access denied")
             await repo.mark_read(notification_id)
     finally:
         await engine.dispose()
@@ -105,8 +113,12 @@ async def mark_notification_read(
 @router.post("/mark-all-read", status_code=204)
 async def mark_all_read(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)] = ...,
 ) -> None:
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.infrastructure.db.repositories.notification_repository import (
@@ -125,8 +137,12 @@ async def mark_all_read(
 @router.get("/unread-count", response_model=UnreadCountResponse)
 async def unread_count(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)] = ...,
 ) -> UnreadCountResponse:
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.infrastructure.db.repositories.notification_repository import (
@@ -177,8 +193,12 @@ async def _event_generator(user_id: str, settings: Settings):
 @router.get("/stream")
 async def stream_notifications(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)] = ...,
 ) -> StreamingResponse:
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     return StreamingResponse(
         _event_generator(user_id, settings),
         media_type="text/event-stream",

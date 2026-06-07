@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from adcopilot.config import Settings, get_settings
+from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
 
@@ -23,9 +24,13 @@ class DigestResponse(BaseModel):
 @router.post("/{user_id}/digest", response_model=DigestResponse, status_code=202)
 async def trigger_digest(
     user_id: str,
+    current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
 ) -> DigestResponse:
-    """Manually trigger a daily digest for a user (log-only mode)."""
+    """Manually trigger a daily digest for a user."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
     from datetime import datetime
 
     from sqlalchemy import select
