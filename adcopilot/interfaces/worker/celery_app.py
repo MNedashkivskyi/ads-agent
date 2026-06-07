@@ -13,7 +13,7 @@ from adcopilot.observability import celery_sentry, init_sentry  # noqa: F401
 
 def create_celery_app() -> Celery:
     settings = get_settings()
-    settings.assert_secure_for_production()
+    settings.validate_production_config()
 
     # Initialise Sentry for beat/embedded contexts.  Fork worker processes
     # re-init via the worker_process_init signal (see celery_sentry.py).

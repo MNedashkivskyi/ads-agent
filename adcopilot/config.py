@@ -115,6 +115,53 @@ class Settings(BaseSettings):
                 + ". Set strong random values in the environment."
             )
 
+    def validate_production_config(self) -> None:
+        """Fail-fast on missing/invalid critical production configuration.
+
+        Several env vars degrade *silently* if unset (auth 401s everything,
+        OAuth points at localhost, billing 503s). Refuse to boot in production
+        until the critical set is present and not pointing at localhost. See
+        docs/deploy-env.md for the full list incl. recommended (non-fatal) vars.
+        (LAUNCH-007)
+        """
+        if not self.is_production:
+            return
+        self.assert_secure_for_production()
+
+        problems: list[str] = []
+        # Must be present (None/empty by default).
+        required_present = {
+            "APP_URL": self.APP_URL,
+            "SUPABASE_JWKS_URL": self.SUPABASE_JWKS_URL,
+            "SUPABASE_ISSUER": self.SUPABASE_ISSUER,
+            "LLM_API_KEY": self.LLM_API_KEY,
+            "GOOGLE_ADS_DEVELOPER_TOKEN": self.GOOGLE_ADS_DEVELOPER_TOKEN,
+            "GOOGLE_ADS_CLIENT_ID": self.GOOGLE_ADS_CLIENT_ID,
+            "GOOGLE_ADS_CLIENT_SECRET": self.GOOGLE_ADS_CLIENT_SECRET,
+            "STRIPE_SECRET_KEY": self.STRIPE_SECRET_KEY,
+            "STRIPE_WEBHOOK_SECRET": self.STRIPE_WEBHOOK_SECRET,
+            "STRIPE_STARTER_PRICE_ID": self.STRIPE_STARTER_PRICE_ID,
+            "STRIPE_PRO_PRICE_ID": self.STRIPE_PRO_PRICE_ID,
+            "STRIPE_BUSINESS_PRICE_ID": self.STRIPE_BUSINESS_PRICE_ID,
+        }
+        problems += [f"{name} is not set" for name, val in required_present.items() if not val]
+
+        # Must not point at localhost in production.
+        for name, val in {
+            "DATABASE_URL": self.DATABASE_URL,
+            "REDIS_URL": self.REDIS_URL,
+            "OAUTH_REDIRECT_URI": self.OAUTH_REDIRECT_URI,
+        }.items():
+            if val and "localhost" in val:
+                problems.append(f"{name} points at localhost")
+
+        if problems:
+            raise RuntimeError(
+                "Invalid production configuration — refusing to start:\n  - "
+                + "\n  - ".join(problems)
+                + "\nSee docs/deploy-env.md."
+            )
+
 
 @lru_cache
 def get_settings() -> Settings:
