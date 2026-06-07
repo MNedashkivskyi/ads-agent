@@ -745,6 +745,45 @@ async def list_audit_log(
     ]
 
 
+_INACTIVE_SUBSCRIPTION_STATUSES = {"past_due", "canceled", "unpaid", "incomplete_expired"}
+
+
+async def _assert_active_subscription(session: AsyncSession, user_id: str) -> None:
+    """Reject (402) when the user's subscription is inactive or the trial expired.
+
+    LAUNCH-015: subscription_status was recorded but never enforced — users
+    (incl. canceled/past_due/expired-trial) could approve & execute changes for
+    free. This is the paywall on the value-delivering action.
+    """
+    from datetime import UTC, datetime
+
+    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
+
+    user = await SqlUserRepository(session).get_by_id(UserId(user_id))
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.subscription_status in _INACTIVE_SUBSCRIPTION_STATUSES:
+        raise HTTPException(
+            status_code=402,
+            detail=(
+                "Twoja subskrypcja jest nieaktywna. Wybierz lub odnów plan w "
+                "Ustawieniach, aby zatwierdzać zmiany."
+            ),
+        )
+    if user.subscription_status == "trialing" and user.trial_ends_at is not None:
+        ends = user.trial_ends_at
+        if ends.tzinfo is None:
+            ends = ends.replace(tzinfo=UTC)
+        if ends < datetime.now(UTC):
+            raise HTTPException(
+                status_code=402,
+                detail=(
+                    "Okres próbny zakończył się. Wybierz plan w Ustawieniach, "
+                    "aby kontynuować."
+                ),
+            )
+
+
 @router.post("/{user_id}/recommendations/{rec_id}/approve")
 async def approve_recommendation(
     user_id: str,
@@ -769,6 +808,7 @@ async def approve_recommendation(
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with AsyncSession(engine) as session, session.begin():
+            await _assert_active_subscription(session, user_id)
             repo = SqlRecommendationRepository(session)
             rec = await repo.get(RecommendationId(rec_id))
             if rec is None:
@@ -828,6 +868,7 @@ async def approve_recommendations_bulk(
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with AsyncSession(engine) as session, session.begin():
+            await _assert_active_subscription(session, user_id)
             repo = SqlRecommendationRepository(session)
             for rec_id in body.recommendation_ids:
                 rec = await repo.get(RecommendationId(rec_id))
