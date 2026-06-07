@@ -20,12 +20,22 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from jose import jwt as jose_jwt
+from jose.exceptions import ExpiredSignatureError as JoseExpiredSignatureError
 
 from adcopilot.config import Settings, get_settings
 
 logger = structlog.get_logger(__name__)
 
 _JWT_ALGORITHM = "HS256"
+
+
+class _TokenExpired(Exception):
+    """Raised when a structurally-valid token has simply expired.
+
+    This is an EXPECTED condition (Supabase access tokens are short-lived),
+    not a misconfiguration — the caller maps it to a clean 401 so the client
+    re-authenticates, without noisy error logs.
+    """
 
 # Supabase projects may use any HMAC-SHA variant.
 _SUPABASE_HMAC_ALGORITHMS = ["HS256", "HS384", "HS512"]
@@ -85,8 +95,10 @@ def _decode_supabase_jwks(token: str, jwks_url: str, issuer: str | None) -> str 
         if user_id:
             logger.debug("supabase jwt verified via JWKS", user_id=user_id)
         return user_id
+    except pyjwt.ExpiredSignatureError as exc:
+        raise _TokenExpired from exc
     except Exception as exc:
-        logger.warning("supabase JWKS jwt verification failed", error=str(exc))
+        logger.debug("supabase JWKS jwt verification failed", error=str(exc))
         return None
 
 
@@ -106,8 +118,10 @@ def _decode_supabase_hmac(token: str, secret: str) -> str | None:
         if user_id:
             logger.debug("supabase jwt verified via shared secret", user_id=user_id)
         return user_id
+    except JoseExpiredSignatureError as exc:
+        raise _TokenExpired from exc
     except JWTError as exc:
-        logger.warning("supabase HMAC jwt verification failed", error=str(exc))
+        logger.debug("supabase HMAC jwt verification failed", error=str(exc))
         return None
 
 
@@ -132,42 +146,58 @@ def get_current_user(
         )
     token = credentials.credentials
 
+    # Route by the token's algorithm so we only run the matching strategy.
+    # This avoids noisy cross-strategy failures (e.g. trying HMAC on an
+    # asymmetric Supabase token logs "alg not allowed" every request).
+    try:
+        alg = str(jose_jwt.get_unverified_header(token).get("alg", ""))
+    except Exception:
+        alg = ""
+
     user_id: str | None = None
+    try:
+        if alg.startswith(("RS", "ES", "PS")):
+            # Asymmetric → Supabase JWKS only.
+            if settings.SUPABASE_JWKS_URL:
+                user_id = _decode_supabase_jwks(
+                    token, settings.SUPABASE_JWKS_URL, settings.SUPABASE_ISSUER
+                )
+        else:
+            # HMAC (HS*) → Supabase shared secret, then internal SECRET_KEY.
+            if settings.SUPABASE_JWT_SECRET:
+                user_id = _decode_supabase_hmac(token, settings.SUPABASE_JWT_SECRET)
+            if not user_id:
+                try:
+                    payload = jose_jwt.decode(
+                        token, settings.SECRET_KEY, algorithms=[_JWT_ALGORITHM]
+                    )
+                    user_id = payload.get("sub")
+                except JoseExpiredSignatureError as exc:
+                    raise _TokenExpired from exc
+                except JWTError:
+                    user_id = None
+    except _TokenExpired as exc:
+        # Expected: short-lived token expired. Clean 401, no error noise.
+        logger.info("auth token expired")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
 
-    # Strategy 1 — JWKS (asymmetric, recommended)
-    if settings.SUPABASE_JWKS_URL:
-        user_id = _decode_supabase_jwks(
-            token,
-            settings.SUPABASE_JWKS_URL,
-            settings.SUPABASE_ISSUER,
-        )
-
-    # Strategy 2 — shared HMAC secret (legacy / fallback)
-    if not user_id and settings.SUPABASE_JWT_SECRET:
-        user_id = _decode_supabase_hmac(token, settings.SUPABASE_JWT_SECRET)
-
-    # Strategy 3 — internal JWT (Telegram bot, tooling)
     if not user_id:
-        try:
-            payload = jose_jwt.decode(token, settings.SECRET_KEY, algorithms=[_JWT_ALGORITHM])
-            user_id = payload.get("sub")
-        except JWTError as exc:
-            has_supabase = bool(settings.SUPABASE_JWKS_URL or settings.SUPABASE_JWT_SECRET)
-            if has_supabase:
-                logger.error(
-                    "jwt verification failed with all configured strategies — "
-                    "check SUPABASE_JWKS_URL / SUPABASE_JWT_SECRET",
-                )
-            else:
-                logger.warning(
-                    "No Supabase auth configured (SUPABASE_JWKS_URL / SUPABASE_JWT_SECRET). "
-                    "Set SUPABASE_JWKS_URL in Railway to verify frontend tokens."
-                )
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or expired token",
-                headers={"WWW-Authenticate": "Bearer"},
-            ) from exc
+        if not (settings.SUPABASE_JWKS_URL or settings.SUPABASE_JWT_SECRET):
+            logger.warning(
+                "No Supabase auth configured (SUPABASE_JWKS_URL / SUPABASE_JWT_SECRET). "
+                "Set SUPABASE_JWKS_URL in Railway to verify frontend tokens."
+            )
+        else:
+            logger.warning("jwt verification failed — invalid token", alg=alg)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     if not user_id:
         raise HTTPException(
