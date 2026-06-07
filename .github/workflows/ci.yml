@@ -28,8 +28,13 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format --check adcopilot tests
 
-#      - name: mypy
-#        run: uv run mypy adcopilot
+      # Re-enabled (LAUNCH-022). Non-blocking for now: there is a backlog of
+      # ~470 pre-existing type errors. The step runs and reports so new code is
+      # visible in CI; ratchet `continue-on-error` to false (and/or scope to
+      # cleaned packages) as the backlog is burned down. See docs/ci.md.
+      - name: mypy
+        run: uv run mypy adcopilot
+        continue-on-error: true
 
   test:
     runs-on: ubuntu-latest
