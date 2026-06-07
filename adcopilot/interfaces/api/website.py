@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from adcopilot.infrastructure.adapters.http_website_crawler import HttpWebsiteCrawlerAdapter
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
+from adcopilot.rate_limit import limiter
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/website", tags=["website"])
+
+# Expensive (crawl + LLM extraction) — cap per IP on top of the blanket /api cap.
+_ANALYZE_LIMIT = "10/minute"
 
 _crawler = HttpWebsiteCrawlerAdapter()
 
@@ -32,7 +36,9 @@ class AnalyzeResponse(BaseModel):
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
+@limiter.limit(_ANALYZE_LIMIT)
 async def analyze_website(
+    request: Request,
     body: AnalyzeRequest,
     user_id: CurrentUser,
 ) -> AnalyzeResponse:
