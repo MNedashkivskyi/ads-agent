@@ -3,10 +3,9 @@
 ## CI (`.github/workflows/ci.yml`)
 Runs on every PR and push to `master`:
 - **ruff check** + **ruff format --check** — blocking.
-- **mypy** — re-enabled, currently **non-blocking** (`continue-on-error: true`).
-  There is a backlog of ~470 pre-existing type errors. The step runs so type
-  problems are visible; burn the backlog down (or scope mypy to cleaned
-  packages) and then flip `continue-on-error` to `false` to make it a hard gate.
+- **mypy** — **disabled in CI** (large pre-existing type-error backlog). Run it
+  locally with `uv run mypy adcopilot`. Re-introduce as a gate once the backlog
+  is burned down (optionally scoped to cleaned packages first).
 - **pytest** (non-integration) — blocking.
 - **pip-audit** — blocking on HIGH/CRITICAL CVEs.
 
