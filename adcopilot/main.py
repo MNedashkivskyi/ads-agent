@@ -115,7 +115,10 @@ def create_app() -> FastAPI:
     application.include_router(digest_router)
     application.include_router(users_router)
     application.include_router(billing_router)
-    application.include_router(debug_router)
+    # Debug/diagnostics router is DEV-ONLY — never expose it in production
+    # (it has no auth and is only for local plumbing checks). See LAUNCH-001.
+    if not settings.is_production:
+        application.include_router(debug_router)
     application.include_router(launch_router)
     application.include_router(launch_api_router)
     application.include_router(website_router)
