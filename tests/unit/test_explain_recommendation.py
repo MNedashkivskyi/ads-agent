@@ -208,6 +208,31 @@ async def test_explain_uses_system_prompt() -> None:
 
 
 @pytest.mark.asyncio
+async def test_explain_advisory_kind_uses_advisory_prompt() -> None:
+    """Non-executable (advisory) kinds must use the advisory system prompt, which
+    forbids an 'after you approve' closing — those cards have no Approve button."""
+    from adcopilot.application.detection.templates import (
+        ADVISORY_SYSTEM_PROMPT,
+        SYSTEM_PROMPT,
+    )
+    from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS
+
+    assert RecommendationKind.KEYWORD_CANNIBALIZATION in NON_EXECUTABLE_KINDS
+    llm = FakeLLMClient(default="ok")
+    rec = _rec(
+        RecommendationKind.KEYWORD_CANNIBALIZATION,
+        evidence={"keyword_text": "x"},
+    )
+    repo = _repo(rec)
+    uc = ExplainRecommendationUseCase(llm=llm, repo=repo)
+
+    await uc.execute(rec.id)
+
+    assert llm.calls[0]["system"] == ADVISORY_SYSTEM_PROMPT
+    assert llm.calls[0]["system"] != SYSTEM_PROMPT
+
+
+@pytest.mark.asyncio
 async def test_explain_polish_language_uses_pl_template() -> None:
     """Polish language ('pl') selects the PL template."""
     llm = FakeLLMClient(default="Po polsku: zatrzymaj to słowo.")
