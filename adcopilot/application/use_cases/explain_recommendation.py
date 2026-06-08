@@ -9,13 +9,14 @@ import string
 import structlog
 
 from adcopilot.application.detection.templates import (
+    ADVISORY_SYSTEM_PROMPT,
     SYSTEM_PROMPT,
     TEMPLATES,
     format_micros_as_currency,
 )
 from adcopilot.application.ports.llm import LLMClient
 from adcopilot.application.ports.recommendation_repository import RecommendationRepository
-from adcopilot.domain.recommendation import RecommendationId
+from adcopilot.domain.recommendation import NON_EXECUTABLE_KINDS, RecommendationId
 
 logger = structlog.get_logger(__name__)
 
@@ -126,8 +127,13 @@ class ExplainRecommendationUseCase:
         if context_line:
             user_prompt = f"{user_prompt}\n\n{context_line}"
 
+        # Advisory (non-executable) recommendations have no Approve button, so the
+        # explanation must not promise a one-click action ("Po zatwierdzeniu…").
+        system_prompt = (
+            ADVISORY_SYSTEM_PROMPT if rec.kind in NON_EXECUTABLE_KINDS else SYSTEM_PROMPT
+        )
         explanation = await self._llm.complete(
-            system=SYSTEM_PROMPT,
+            system=system_prompt,
             user=user_prompt,
             max_tokens=400,
             temperature=0.3,
