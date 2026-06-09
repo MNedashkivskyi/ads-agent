@@ -83,7 +83,7 @@ class TestUserMeResponse:
             email="test@example.com",
             telegram_chat_id=None,
             role="client",
-            plan="professional",
+            plan="business",
             max_accounts=3,
             subscription_status="trialing",
             trial_started_at=ts,
@@ -100,11 +100,11 @@ class TestPlanMaxAccounts:
     def test_starter_allows_1(self) -> None:
         assert PLAN_MAX_ACCOUNTS["starter"] == 1
 
-    def test_professional_allows_3(self) -> None:
-        assert PLAN_MAX_ACCOUNTS["professional"] == 3
+    def test_professional_allows_1(self) -> None:
+        assert PLAN_MAX_ACCOUNTS["professional"] == 1
 
-    def test_business_allows_10(self) -> None:
-        assert PLAN_MAX_ACCOUNTS["business"] == 10
+    def test_business_allows_3(self) -> None:
+        assert PLAN_MAX_ACCOUNTS["business"] == 3
 
     def test_unknown_plan_defaults_to_1(self) -> None:
         assert _max_accounts_for_plan("unknown") == 1
@@ -182,6 +182,22 @@ class TestOAuthStartQuota:
             assert PLAN_MAX_ACCOUNTS.get(plan) == limit, (
                 f"Mismatch for plan {plan}: oauth={limit}, users={PLAN_MAX_ACCOUNTS.get(plan)}"
             )
+
+    def test_worker_limit_map_matches_users_module(self) -> None:
+        from adcopilot.interfaces.worker.tasks import (
+            _PLAN_ACCOUNT_LIMITS as _WORKER_LIMITS,
+        )
+
+        for plan, limit in _WORKER_LIMITS.items():
+            assert PLAN_MAX_ACCOUNTS.get(plan) == limit, (
+                f"Mismatch for plan {plan}: worker={limit}, users={PLAN_MAX_ACCOUNTS.get(plan)}"
+            )
+
+    def test_limits_match_product_rules(self) -> None:
+        # starter & professional: exactly 1 account; business: up to 3.
+        assert PLAN_MAX_ACCOUNTS["starter"] == 1
+        assert PLAN_MAX_ACCOUNTS["professional"] == 1
+        assert PLAN_MAX_ACCOUNTS["business"] == 3
 
 
 # ---------------------------------------------------------------------------

@@ -187,15 +187,15 @@ async def test_oauth_callback_enforces_starter_account_limit() -> None:
 
 
 @pytest.mark.asyncio
-async def test_oauth_callback_allows_professional_second_account() -> None:
-    """PROFESSIONAL plan (limit=3) allows linking when 1 account already exists."""
+async def test_oauth_callback_allows_business_second_account() -> None:
+    """BUSINESS plan (limit=3) allows linking when 1 account already exists."""
     from adcopilot.interfaces.api.oauth import oauth_google_callback
 
-    professional_user = _make_user(plan=PlanTier.PROFESSIONAL)
+    business_user = _make_user(plan=PlanTier.BUSINESS)
     existing_account = MagicMock()
 
     mock_user_repo = MagicMock()
-    mock_user_repo.ensure_exists = AsyncMock(return_value=professional_user)
+    mock_user_repo.ensure_exists = AsyncMock(return_value=business_user)
 
     mock_acc_repo = MagicMock()
     mock_acc_repo.list_for_user = AsyncMock(return_value=[existing_account])  # 1 of 3 limit

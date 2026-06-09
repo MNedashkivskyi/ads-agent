@@ -26,8 +26,8 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 
 PLAN_MAX_ACCOUNTS: dict[str, int] = {
     PlanTier.STARTER.value: 1,
-    PlanTier.PROFESSIONAL.value: 3,
-    PlanTier.BUSINESS.value: 10,
+    PlanTier.PROFESSIONAL.value: 1,
+    PlanTier.BUSINESS.value: 3,
 }
 
 
