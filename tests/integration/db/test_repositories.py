@@ -174,6 +174,72 @@ async def test_owner_of_customer_id(db_session: AsyncSession) -> None:
 
 
 @pytest.mark.integration
+async def test_get_by_customer_id_and_transfer(db_session: AsyncSession) -> None:
+    """The account row can be looked up by customer_id and transferred to a new
+    owner by re-saving with the same row id and a different user_id (the move the
+    linking task performs on a self-service takeover)."""
+    user_repo = SqlUserRepository(db_session)
+    acc_repo = SqlGoogleAdsAccountRepository(db_session)
+
+    owner_a = UserId(str(uuid.uuid4()))
+    owner_b = UserId(str(uuid.uuid4()))
+    for uid in (owner_a, owner_b):
+        await user_repo.save(
+            User(
+                id=uid,
+                email=f"user-{uuid.uuid4()}@example.com",
+                telegram_chat_id=None,
+                created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                plan=PlanTier.STARTER,
+            )
+        )
+
+    account_id = AccountId(str(uuid.uuid4()))
+    customer_id = f"888-{uuid.uuid4().int % 10_000_000:07d}"
+    await acc_repo.save(
+        GoogleAdsAccount(
+            id=account_id,
+            user_id=owner_a,
+            customer_id=customer_id,
+            descriptive_name="Owned by A",
+            currency="PLN",
+            timezone="Europe/Warsaw",
+            is_manager=False,
+            write_enabled=True,
+            connected_at=datetime(2026, 1, 2, tzinfo=UTC),
+        )
+    )
+
+    # Lookup returns the row regardless of who owns it.
+    found = await acc_repo.get_by_customer_id(customer_id)
+    assert found is not None
+    assert found.id == account_id
+    assert found.user_id == owner_a
+    assert await acc_repo.get_by_customer_id("000-0000000") is None
+
+    # Transfer: re-save with the SAME row id but owner B. The unique customer_id
+    # index is respected (no second row), and ownership moves.
+    await acc_repo.save(
+        GoogleAdsAccount(
+            id=found.id,
+            user_id=owner_b,
+            customer_id=customer_id,
+            descriptive_name="Owned by B",
+            currency="PLN",
+            timezone="Europe/Warsaw",
+            is_manager=False,
+            write_enabled=True,
+            connected_at=datetime(2026, 1, 3, tzinfo=UTC),
+        )
+    )
+
+    assert await acc_repo.owner_of_customer_id(customer_id) == owner_b
+    assert [a.id for a in await acc_repo.list_for_user(owner_a)] == []
+    b_accounts = await acc_repo.list_for_user(owner_b)
+    assert [a.id for a in b_accounts] == [account_id]
+
+
+@pytest.mark.integration
 async def test_oauth_credentials_encrypted_at_rest(db_session: AsyncSession) -> None:
     """Verify that the refresh_token stored in DB is not the plaintext value."""
     # First create a user and account

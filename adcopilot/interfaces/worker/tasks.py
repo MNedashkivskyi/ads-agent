@@ -28,22 +28,6 @@ def _redis_client() -> Redis:  # type: ignore[type-arg]
     return Redis.from_url(settings.REDIS_URL)
 
 
-def _mask_email(email: str) -> str:
-    """Partially mask an email for display in a cross-account notification.
-
-    The Ads account is almost always being reconnected by the same person from a
-    second Adswise login, so the owner needs to recognise *which* of their emails
-    it is registered to — but we must not fully expose another user's address.
-    Keeps the first two local-part characters and the full domain, e.g.
-    ``jan.kowalski@example.com`` → ``ja***@example.com``.
-    """
-    local, _, domain = email.partition("@")
-    if not domain:
-        return email
-    visible = local[:2]
-    return f"{visible}***@{domain}"
-
-
 def select_customers_to_link(
     customer_ids: list[str],
     existing_customer_ids: set[str],
@@ -148,6 +132,10 @@ async def _async_link_google_ads_accounts(
     # --- open DB session ---
     engine = create_async_engine(settings.DATABASE_URL)
     linked_ids: list[str] = []
+    # customer_id -> the account row id actually persisted (differs from the
+    # per-user uuid5 for transferred accounts, which keep the existing row id).
+    linked_account_ids: dict[str, str] = {}
+    transferred_prev_owners: dict[str, str] = {}
     try:
         async with AsyncSession(engine) as session:
             user_repo = SqlUserRepository(session)
@@ -190,72 +178,34 @@ async def _async_link_google_ads_accounts(
                 customer_ids, set(existing_by_customer), slots_remaining
             )
 
-            # Enforce one-Google-Ads-account-per-Adswise-user: drop any NEW
-            # customer already owned by a different user (a reauth of the
-            # current user's own customer is fine). Prevents dodging a paid
-            # plan by linking the same Ads account from a second Adswise login.
-            claimed_by_other: list[str] = []
-            # customer_id -> masked email of the Adswise account it's registered to
-            claimed_owner_emails: dict[str, str] = {}
-            filtered_to_link: list[str] = []
+            # One-Google-Ads-account-per-Adswise-account, with self-service
+            # takeover: a customer already linked to a *different* Adswise user
+            # is *transferred* to this user, who has just proven control of it by
+            # completing Google OAuth. We reuse the existing row id so the move
+            # respects the unique customer_id index instead of inserting a second
+            # row. The previous owner loses the link (it is never on two accounts
+            # at once), and we notify them so the change isn't silent. A reauth of
+            # the current user's own customer stays a plain reauth.
+            #
+            # customer_id -> existing account id to reuse (transfer), and the
+            # previous owner's user id (to notify them of the move).
+            transfer_account_id: dict[str, AccountId] = {}
+            transfer_prev_owner: dict[str, str] = {}
             for cid in customers_to_link:
                 if cid in existing_by_customer:
-                    filtered_to_link.append(cid)  # current user's reauth
-                    continue
-                owner = await acc_repo.owner_of_customer_id(cid)
-                if owner is not None and str(owner) != user_id:
-                    claimed_by_other.append(cid)
-                    owner_user = await user_repo.get_by_id(owner)
-                    if owner_user is not None:
-                        claimed_owner_emails[cid] = _mask_email(owner_user.email)
-                    logger.warning(
-                        "google ads customer already linked to another user — skipping",
+                    continue  # current user's reauth — nothing special to do
+                other = await acc_repo.get_by_customer_id(cid)
+                if other is not None and str(other.user_id) != user_id:
+                    transfer_account_id[cid] = other.id
+                    transfer_prev_owner[cid] = str(other.user_id)
+                    logger.info(
+                        "transferring google ads customer to user who re-authorised it",
                         customer_id=cid,
-                        requesting_user_id=user_id,
+                        previous_owner_id=str(other.user_id),
+                        new_owner_id=user_id,
                     )
-                else:
-                    filtered_to_link.append(cid)
-            customers_to_link = filtered_to_link
-
-            if claimed_by_other:
-                # Error surfacing rule: account-affecting failures must produce
-                # a human-readable platform notification — never fail silently.
-                from adcopilot.infrastructure.notifications.web_notifier_adapter import (
-                    SqlWebNotifier,
-                )
-
-                # List each claimed account with the (masked) email of the
-                # Adswise account it is registered to, so the user can tell which
-                # of their logins already owns it.
-                def _account_line(cid: str) -> str:
-                    email = claimed_owner_emails.get(cid)
-                    return f"{cid} (zarejestrowane na: {email})" if email else cid
-
-                accounts_desc = ", ".join(_account_line(cid) for cid in claimed_by_other)
-
-                notifier = SqlWebNotifier(session)
-                await notifier.send_alert(
-                    user_id,
-                    "Nie udało się połączyć konta Google Ads",
-                    (
-                        f"Konto Google Ads ({accounts_desc}) jest już "
-                        "połączone z innym kontem Adswise. Jedno konto Google Ads "
-                        "może być powiązane tylko z jednym kontem Adswise i nie "
-                        "może zostać użyte ponownie, np. w ramach kolejnego okresu "
-                        "próbnego. Jeśli uważasz, że to błąd, skontaktuj się z nami."
-                    ),
-                    metadata={
-                        "customer_ids": claimed_by_other,
-                        "registered_emails": claimed_owner_emails,
-                        "reason": "account_claimed_by_other_user",
-                    },
-                )
-                await session.commit()
 
             if not customers_to_link:
-                if claimed_by_other:
-                    redis.delete(pending_key)
-                    return {"success": False, "error": "account_claimed_by_other_user"}
                 logger.warning(
                     "account limit reached in oauth linking task",
                     user_id=user_id,
@@ -265,7 +215,9 @@ async def _async_link_google_ads_accounts(
                 return {"success": False, "error": "account_limit_reached"}
 
             for customer_id in customers_to_link:
-                account_id = AccountId(
+                # Reuse the existing row id when transferring from another user
+                # (move, not duplicate); otherwise derive the per-user id.
+                account_id = transfer_account_id.get(customer_id) or AccountId(
                     str(uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}"))
                 )
                 prior = existing_by_customer.get(customer_id)
@@ -309,54 +261,46 @@ async def _async_link_google_ads_accounts(
                 )
                 await creds_repo.save(creds)
                 linked_ids.append(customer_id)
+                linked_account_ids[customer_id] = str(account_id)
+
+            # Record transfers that actually happened (their previous owners are
+            # notified after the commit succeeds).
+            transferred_prev_owners = {
+                cid: transfer_prev_owner[cid]
+                for cid in linked_ids
+                if cid in transfer_prev_owner
+            }
 
             try:
                 await session.commit()
             except IntegrityError:
-                # A concurrent linking task claimed one of these customer_ids
-                # between our ownership check and the commit — the unique index
-                # uq_google_ads_accounts_customer_id is the final arbiter.
+                # A concurrent linking task touched one of these customer_ids
+                # between our read and the commit — the unique customer_id index
+                # is the final arbiter. This is a transient race, not a policy
+                # rejection (takeover is allowed): roll back, ask the user to
+                # retry, and let them try again.
                 await session.rollback()
                 logger.warning(
-                    "google ads account linking lost race — customer already "
-                    "claimed by another user",
+                    "google ads account linking lost a write race — asking user to retry",
                     user_id=user_id,
                 )
                 from adcopilot.infrastructure.notifications.web_notifier_adapter import (
                     SqlWebNotifier,
                 )
 
-                # Re-query who now owns the customers we tried to link so we can
-                # tell the user which Adswise account won the race.
-                raced_emails: dict[str, str] = {}
-                for cid in customers_to_link:
-                    owner = await acc_repo.owner_of_customer_id(cid)
-                    if owner is not None and str(owner) != user_id:
-                        owner_user = await user_repo.get_by_id(owner)
-                        if owner_user is not None:
-                            raced_emails[cid] = _mask_email(owner_user.email)
-                email_suffix = ""
-                if raced_emails:
-                    pairs = ", ".join(f"{cid} ({email})" for cid, email in raced_emails.items())
-                    email_suffix = f" Konto jest zarejestrowane na: {pairs}."
-
                 notifier = SqlWebNotifier(session)
                 await notifier.send_alert(
                     user_id,
                     "Nie udało się połączyć konta Google Ads",
                     (
-                        "To konto Google Ads zostało właśnie połączone z innym "
-                        "kontem Adswise. Jedno konto Google Ads może być powiązane "
-                        "tylko z jednym kontem Adswise. Jeśli uważasz, że to błąd, "
-                        "skontaktuj się z nami." + email_suffix
+                        "Wystąpił chwilowy problem podczas łączenia konta Google "
+                        "Ads. Spróbuj ponownie za chwilę. Jeśli problem się "
+                        "powtarza, skontaktuj się z nami."
                     ),
-                    metadata={
-                        "reason": "account_claimed_by_other_user",
-                        "registered_emails": raced_emails,
-                    },
+                    metadata={"reason": "link_conflict_retry"},
                 )
                 await session.commit()
-                return {"success": False, "error": "account_claimed_by_other_user"}
+                return {"success": False, "error": "link_conflict_retry"}
     finally:
         await engine.dispose()
         redis.delete(pending_key)
@@ -367,14 +311,51 @@ async def _async_link_google_ads_accounts(
         linked_count=len(linked_ids),
     )
 
+    # Tell the previous owner of any transferred account that it moved, so the
+    # change is never silent (error-surfacing rule). Best-effort: a failure here
+    # must not undo the successful link, so it runs in its own short session.
+    if transferred_prev_owners:
+        try:
+            from adcopilot.infrastructure.notifications.web_notifier_adapter import (
+                SqlWebNotifier,
+            )
+
+            engine2 = create_async_engine(settings.DATABASE_URL)
+            try:
+                async with AsyncSession(engine2) as notify_session:
+                    notifier = SqlWebNotifier(notify_session)
+                    for cid, prev_owner in transferred_prev_owners.items():
+                        await notifier.send_alert(
+                            prev_owner,
+                            "Konto Google Ads zostało odłączone",
+                            (
+                                f"Konto Google Ads ({cid}) zostało połączone z innym "
+                                "kontem Adswise i nie jest już powiązane z Twoim "
+                                "kontem. Jedno konto Google Ads może być powiązane "
+                                "tylko z jednym kontem Adswise. Jeśli to nie Ty, "
+                                "skontaktuj się z nami."
+                            ),
+                            metadata={"customer_id": cid, "reason": "account_transferred"},
+                        )
+                    await notify_session.commit()
+            finally:
+                await engine2.dispose()
+        except Exception as exc:  # noqa: BLE001 — notification is best-effort
+            logger.warning(
+                "failed to notify previous owner of transferred account",
+                error=str(exc),
+            )
+
     # Kick off an initial snapshot for each newly linked account so the user
     # sees data immediately instead of waiting for the 3 AM nightly run.
     today_iso = date.today().isoformat()
     redis = _redis_client()
     now_iso = datetime.now(UTC).isoformat()
     for customer_id in linked_ids:
-        account_id = str(
-            uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}")
+        # Use the id actually persisted — transferred accounts keep the existing
+        # row id, which differs from the per-user uuid5.
+        account_id = linked_account_ids.get(
+            customer_id, str(uuid.uuid5(uuid.NAMESPACE_URL, f"{user_id}/{customer_id}"))
         )
         # Mark the account as "initial sync in progress" in Redis.
         # TTL of 10 min — if the task hangs, the marker auto-expires so the
