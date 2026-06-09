@@ -37,6 +37,30 @@ class _TokenExpired(Exception):
     re-authenticates, without noisy error logs.
     """
 
+
+class _EmailNotConfirmed(Exception):
+    """Raised when a valid Supabase token belongs to an unconfirmed email.
+
+    Registration is complete only after the user clicks the confirmation
+    link — until then the account must not be able to use the API.
+    """
+
+
+def _ensure_email_confirmed(payload: dict[str, object], user_id: str) -> None:
+    """Reject Supabase tokens whose email is not yet confirmed.
+
+    GoTrue copies ``email_verified`` into ``user_metadata`` and keeps it in
+    sync with ``email_confirmed_at``. Only an explicit ``False`` blocks the
+    request — tokens without the claim (internal tokens, other providers)
+    are unaffected, so this cannot lock out legacy sessions.
+    """
+    meta = payload.get("user_metadata")
+    if isinstance(meta, dict) and meta.get("email_verified") is False:
+        # Tracked: every blocked request is logged with the user id.
+        logger.warning("request rejected — email not confirmed", user_id=user_id)
+        raise _EmailNotConfirmed(user_id)
+
+
 # Supabase projects may use any HMAC-SHA variant.
 _SUPABASE_HMAC_ALGORITHMS = ["HS256", "HS384", "HS512"]
 
@@ -93,10 +117,13 @@ def _decode_supabase_jwks(token: str, jwks_url: str, issuer: str | None) -> str 
         payload = pyjwt.decode(token, signing_key.key, **kwargs)
         user_id = payload.get("sub")
         if user_id:
+            _ensure_email_confirmed(payload, user_id)
             logger.debug("supabase jwt verified via JWKS", user_id=user_id)
         return user_id
     except pyjwt.ExpiredSignatureError as exc:
         raise _TokenExpired from exc
+    except _EmailNotConfirmed:
+        raise
     except Exception as exc:
         logger.debug("supabase JWKS jwt verification failed", error=str(exc))
         return None
@@ -116,6 +143,7 @@ def _decode_supabase_hmac(token: str, secret: str) -> str | None:
         )
         user_id = payload.get("sub")
         if user_id:
+            _ensure_email_confirmed(payload, user_id)
             logger.debug("supabase jwt verified via shared secret", user_id=user_id)
         return user_id
     except JoseExpiredSignatureError as exc:
@@ -183,6 +211,11 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token expired",
             headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+    except _EmailNotConfirmed as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Email not confirmed — please confirm your email address first",
         ) from exc
 
     if not user_id:
