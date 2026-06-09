@@ -70,6 +70,21 @@ class SqlGoogleAdsAccountRepository:
         )
         return [_model_to_domain(m) for m in result.scalars().all()]
 
+    async def get_by_customer_id(self, customer_id: str) -> GoogleAdsAccount | None:
+        """Return the account row for a Google Ads customer_id, whoever owns it.
+
+        Used by the linking task to detect a cross-user link and *transfer* the
+        account to the user who just proved control of it via OAuth (reusing the
+        existing row id so the move doesn't violate the unique customer_id index).
+        """
+        result = await self._session.execute(
+            select(GoogleAdsAccountModel).where(
+                GoogleAdsAccountModel.customer_id == customer_id
+            )
+        )
+        model = result.scalar_one_or_none()
+        return _model_to_domain(model) if model else None
+
     async def owner_of_customer_id(self, customer_id: str) -> UserId | None:
         """Return the user_id that owns this Google Ads customer_id, if any.
 
