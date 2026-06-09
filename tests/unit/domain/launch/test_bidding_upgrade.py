@@ -52,7 +52,9 @@ def _make_use_case(
     snap_repo.get_campaigns_by_date.return_value = campaigns
 
     rec_repo = AsyncMock()
-    rec_repo.list_pending.return_value = pending_recs or []
+    rec_repo.list_active_dedup_keys.return_value = {
+        (r.kind, r.target_hash) for r in (pending_recs or [])
+    }
     rec_repo.save = AsyncMock()
 
     uc = CheckBiddingUpgradeUseCase(snapshot_repo=snap_repo, rec_repo=rec_repo)
@@ -128,7 +130,7 @@ class TestMaximizeConversionsUpgrade:
 
 class TestDeduplication:
     @pytest.mark.asyncio
-    async def test_skips_campaign_with_pending_recommendation(self) -> None:
+    async def test_skips_campaign_with_existing_recommendation(self) -> None:
         from adcopilot.domain.recommendation import (
             Recommendation,
             RecommendationId,
@@ -151,6 +153,34 @@ class TestDeduplication:
             created_at=datetime.now(UTC),
         )
         uc, rec_repo = _make_use_case([campaign], pending_recs=[existing_rec])
+        recs = await uc.execute(AccountId("acc-1"))
+        assert recs == []
+        rec_repo.save.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_skips_campaign_with_declined_recommendation(self) -> None:
+        from adcopilot.domain.recommendation import (
+            Recommendation,
+            RecommendationId,
+            RecommendationSeverity,
+        )
+
+        campaign = _make_campaign(
+            campaign_id=7, conversions=35.0, bidding_strategy="MAXIMIZE_CLICKS"
+        )
+        declined_rec = Recommendation(
+            id=RecommendationId("declined"),
+            account_id=AccountId("acc-1"),
+            kind=RecommendationKind.ADJUST_BIDDING_STRATEGY,
+            severity=RecommendationSeverity.HIGH,
+            status=RecommendationStatus.DECLINED,
+            target={"campaign_id": 7},
+            payload={"campaign_id": 7, "suggested_strategy": "MAXIMIZE_CONVERSIONS"},
+            estimated_monthly_savings_micros=0,
+            evidence={},
+            created_at=datetime.now(UTC),
+        )
+        uc, rec_repo = _make_use_case([campaign], pending_recs=[declined_rec])
         recs = await uc.execute(AccountId("acc-1"))
         assert recs == []
         rec_repo.save.assert_not_called()

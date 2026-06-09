@@ -31,6 +31,7 @@ from adcopilot.domain.recommendation import (
     RecommendationKind,
     RecommendationSeverity,
     RecommendationStatus,
+    compute_target_hash,
 )
 
 logger = structlog.get_logger(__name__)
@@ -59,14 +60,12 @@ class CheckBiddingUpgradeUseCase:
             return []
 
         campaigns = await self._snapshot_repo.get_campaigns_by_date(account_id, latest_date)
-        pending = await self._rec_repo.list_pending(account_id)
 
-        # Build a set of campaign_ids that already have a pending bidding recommendation
-        pending_campaign_ids: set[int] = {
-            int(r.payload["campaign_id"])
-            for r in pending
-            if r.kind == RecommendationKind.ADJUST_BIDDING_STRATEGY and "campaign_id" in r.payload
-        }
+        # Dedup against ALL non-expired recommendations (PENDING, APPROVED,
+        # EXECUTED, DECLINED, FAILED) — same key the rule engine uses. Checking
+        # only PENDING re-created duplicates for campaigns whose bidding
+        # recommendation the user had already approved or declined.
+        existing_keys = await self._rec_repo.list_active_dedup_keys(account_id)
 
         # Sum conversions across all snapshots in last 30 days for each campaign
         # (We use the latest snapshot as a proxy — it contains 30-day cumulative
@@ -81,7 +80,8 @@ class CheckBiddingUpgradeUseCase:
         for campaign in campaigns:
             if campaign.status != "ENABLED":
                 continue
-            if campaign.campaign_id in pending_campaign_ids:
+            target_hash = compute_target_hash({"campaign_id": campaign.campaign_id})
+            if (RecommendationKind.ADJUST_BIDDING_STRATEGY, target_hash) in existing_keys:
                 continue
 
             strategy = campaign.bidding_strategy
@@ -138,6 +138,7 @@ class CheckBiddingUpgradeUseCase:
 
             if rec is not None:
                 await self._rec_repo.save(rec)
+                existing_keys.add((RecommendationKind.ADJUST_BIDDING_STRATEGY, rec.target_hash))
                 new_recs.append(rec)
                 logger.info(
                     "bidding upgrade recommendation created",
