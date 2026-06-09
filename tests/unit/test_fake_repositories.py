@@ -129,7 +129,7 @@ async def test_get_user_by_email(user_repo: FakeUserRepository) -> None:
         email="bob@example.com",
         telegram_chat_id=12345,
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
-        plan=PlanTier.GROWTH,
+        plan=PlanTier.PROFESSIONAL,
     )
     await user_repo.save(user)
     fetched = await user_repo.get_by_email("bob@example.com")

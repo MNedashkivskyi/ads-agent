@@ -74,8 +74,14 @@ def test_oauth_credentials_is_frozen() -> None:
 
 def test_plan_tier_values() -> None:
     assert PlanTier.STARTER.value == "starter"
-    assert PlanTier.GROWTH.value == "growth"
-    assert PlanTier.PRO.value == "pro"
+    assert PlanTier.PROFESSIONAL.value == "professional"
+    assert PlanTier.BUSINESS.value == "business"
+    # Legacy slugs and unknowns coerce to a safe tier rather than crashing.
+    assert PlanTier.parse("pro") is PlanTier.PROFESSIONAL
+    assert PlanTier.parse("growth") is PlanTier.PROFESSIONAL
+    assert PlanTier.parse("business") is PlanTier.BUSINESS
+    assert PlanTier.parse(None) is PlanTier.STARTER
+    assert PlanTier.parse("nonsense") is PlanTier.STARTER
 
 
 def test_user_id_and_account_id_are_strings() -> None:

@@ -91,7 +91,7 @@ async def test_user_get_by_email(db_session: AsyncSession) -> None:
         email=email,
         telegram_chat_id=42,
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
-        plan=PlanTier.GROWTH,
+        plan=PlanTier.PROFESSIONAL,
     )
     await repo.save(user)
     fetched = await repo.get_by_email(email)

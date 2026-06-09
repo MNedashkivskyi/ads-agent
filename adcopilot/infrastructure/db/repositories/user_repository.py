@@ -16,7 +16,7 @@ def _model_to_domain(model: UserModel) -> User:
         created_at=model.created_at.replace(tzinfo=UTC)
         if model.created_at.tzinfo is None
         else model.created_at,
-        plan=PlanTier(model.plan),
+        plan=PlanTier.parse(model.plan),
         notifications_paused=model.notifications_paused,
         password_hash=model.password_hash,
         notification_hour=model.notification_hour,

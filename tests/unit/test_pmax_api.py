@@ -50,7 +50,7 @@ def _mock_creds() -> MagicMock:
     return creds
 
 
-def _mock_user(plan: str = "growth") -> MagicMock:
+def _mock_user(plan: str = "professional") -> MagicMock:
     from adcopilot.domain.entities import PlanTier
 
     user = MagicMock()
@@ -202,7 +202,7 @@ def test_create_pmax_no_merchant_center():
     import adcopilot.infrastructure.google_ads.queries_adapter as qa_mod
 
     mock_user_repo = AsyncMock()
-    mock_user_repo.get = AsyncMock(return_value=_mock_user(plan="growth"))
+    mock_user_repo.get = AsyncMock(return_value=_mock_user(plan="professional"))
     mock_adapter = AsyncMock()
     mock_adapter.get_merchant_center_link = AsyncMock(return_value=None)
 

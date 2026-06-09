@@ -9,8 +9,32 @@ AccountId = NewType("AccountId", str)
 
 class PlanTier(StrEnum):
     STARTER = "starter"
-    GROWTH = "growth"
-    PRO = "pro"
+    PROFESSIONAL = "professional"
+    BUSINESS = "business"
+
+    @classmethod
+    def parse(cls, value: str | None) -> "PlanTier":
+        """Tolerantly coerce a stored/inbound plan string to a PlanTier.
+
+        Handles legacy slugs ("growth"/"pro" from before the vocabulary was
+        unified) and any unknown/missing value by falling back to the most
+        restrictive tier (STARTER). This keeps user loading from ever crashing
+        on a stale ``users.plan`` value.
+        """
+        if not value:
+            return cls.STARTER
+        normalized = value.strip().lower()
+        aliases = {
+            "pro": cls.PROFESSIONAL,
+            "growth": cls.PROFESSIONAL,
+            "biz": cls.BUSINESS,
+        }
+        if normalized in aliases:
+            return aliases[normalized]
+        try:
+            return cls(normalized)
+        except ValueError:
+            return cls.STARTER
 
 
 @dataclass(frozen=True)

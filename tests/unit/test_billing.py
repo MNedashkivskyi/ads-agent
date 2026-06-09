@@ -187,15 +187,15 @@ async def test_oauth_callback_enforces_starter_account_limit() -> None:
 
 
 @pytest.mark.asyncio
-async def test_oauth_callback_allows_growth_second_account() -> None:
-    """GROWTH plan (limit=3) allows linking when 1 account already exists."""
+async def test_oauth_callback_allows_professional_second_account() -> None:
+    """PROFESSIONAL plan (limit=3) allows linking when 1 account already exists."""
     from adcopilot.interfaces.api.oauth import oauth_google_callback
 
-    growth_user = _make_user(plan=PlanTier.GROWTH)
+    professional_user = _make_user(plan=PlanTier.PROFESSIONAL)
     existing_account = MagicMock()
 
     mock_user_repo = MagicMock()
-    mock_user_repo.ensure_exists = AsyncMock(return_value=growth_user)
+    mock_user_repo.ensure_exists = AsyncMock(return_value=professional_user)
 
     mock_acc_repo = MagicMock()
     mock_acc_repo.list_for_user = AsyncMock(return_value=[existing_account])  # 1 of 3 limit
@@ -575,3 +575,157 @@ async def test_handle_stripe_event_dispatches_checkout_completed() -> None:
         await _handle_stripe_event(event, settings)
 
     mock_handler.assert_awaited_once_with(event["data"]["object"], settings)
+
+
+# ---------------------------------------------------------------------------
+# Plan unlock: subscription webhook maps the purchased price → users.plan
+# ---------------------------------------------------------------------------
+
+
+def test_plan_for_price_id_maps_prices_to_slugs() -> None:
+    from adcopilot.config import Settings
+    from adcopilot.interfaces.api.billing import _plan_for_price_id
+
+    settings = Settings(
+        DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
+        STRIPE_STARTER_PRICE_ID="price_starter",
+        STRIPE_PRO_PRICE_ID="price_pro",
+        STRIPE_BUSINESS_PRICE_ID="price_business",
+    )
+
+    assert _plan_for_price_id("price_starter", settings) == "starter"
+    assert _plan_for_price_id("price_pro", settings) == "professional"
+    assert _plan_for_price_id("price_business", settings) == "business"
+    assert _plan_for_price_id("price_unknown", settings) is None
+    assert _plan_for_price_id(None, settings) is None
+
+
+def test_price_id_from_subscription_reads_first_line_item() -> None:
+    from adcopilot.interfaces.api.billing import _price_id_from_subscription
+
+    sub = {"items": {"data": [{"price": {"id": "price_pro"}}]}}
+    assert _price_id_from_subscription(sub) == "price_pro"
+    # Malformed / missing shapes degrade to None rather than raising.
+    assert _price_id_from_subscription({"items": {"data": []}}) is None
+    assert _price_id_from_subscription({}) is None
+
+
+@pytest.mark.asyncio
+async def test_subscription_event_sets_plan_from_price() -> None:
+    """An active subscription on the Pro price upgrades the user to professional."""
+    from adcopilot.config import Settings
+    from adcopilot.domain.entities import PlanTier
+    from adcopilot.interfaces.api.billing import _handle_subscription_event
+
+    settings = Settings(
+        DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
+        STRIPE_PRO_PRICE_ID="price_pro",
+    )
+
+    starter_user = _make_user(plan=PlanTier.STARTER, stripe_customer_id="cus_abc")
+
+    mock_user_model = MagicMock()
+    mock_user_model.id = uuid.UUID(str(_USER_ID))
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_user_model
+
+    mock_repo = MagicMock()
+    mock_repo.get_by_id = AsyncMock(return_value=starter_user)
+    saved: dict[str, User] = {}
+
+    async def _capture_save(user: User) -> User:
+        saved["user"] = user
+        return user
+
+    mock_repo.save = AsyncMock(side_effect=_capture_save)
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+
+    mock_engine = MagicMock()
+    mock_engine.dispose = AsyncMock()
+
+    subscription = {
+        "id": "sub_123",
+        "customer": "cus_abc",
+        "status": "active",
+        "trial_end": None,
+        "items": {"data": [{"price": {"id": "price_pro"}}]},
+    }
+
+    with (
+        patch("adcopilot.interfaces.api.billing.create_async_engine", return_value=mock_engine),
+        patch("adcopilot.interfaces.api.billing.AsyncSession", return_value=mock_session),
+        patch(
+            "adcopilot.infrastructure.db.repositories.user_repository.SqlUserRepository",
+            return_value=mock_repo,
+        ),
+    ):
+        await _handle_subscription_event("customer.subscription.updated", subscription, settings)
+
+    assert saved["user"].plan is PlanTier.PROFESSIONAL
+    assert saved["user"].subscription_status == "active"
+    assert saved["user"].subscription_id == "sub_123"
+
+
+@pytest.mark.asyncio
+async def test_subscription_deleted_downgrades_to_starter() -> None:
+    """Cancelling a subscription drops the user back to the starter tier."""
+    from adcopilot.config import Settings
+    from adcopilot.domain.entities import PlanTier
+    from adcopilot.interfaces.api.billing import _handle_subscription_event
+
+    settings = Settings(
+        DATABASE_URL="postgresql+asyncpg://x:x@localhost/x",
+        STRIPE_BUSINESS_PRICE_ID="price_business",
+    )
+
+    business_user = _make_user(plan=PlanTier.BUSINESS, stripe_customer_id="cus_abc")
+
+    mock_user_model = MagicMock()
+    mock_user_model.id = uuid.UUID(str(_USER_ID))
+
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_user_model
+
+    mock_repo = MagicMock()
+    mock_repo.get_by_id = AsyncMock(return_value=business_user)
+    saved: dict[str, User] = {}
+
+    async def _capture_save(user: User) -> User:
+        saved["user"] = user
+        return user
+
+    mock_repo.save = AsyncMock(side_effect=_capture_save)
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session.__aexit__ = AsyncMock(return_value=False)
+
+    mock_engine = MagicMock()
+    mock_engine.dispose = AsyncMock()
+
+    subscription = {
+        "id": "sub_123",
+        "customer": "cus_abc",
+        "status": "active",  # deleted event overrides this to canceled
+        "trial_end": None,
+        "items": {"data": [{"price": {"id": "price_business"}}]},
+    }
+
+    with (
+        patch("adcopilot.interfaces.api.billing.create_async_engine", return_value=mock_engine),
+        patch("adcopilot.interfaces.api.billing.AsyncSession", return_value=mock_session),
+        patch(
+            "adcopilot.infrastructure.db.repositories.user_repository.SqlUserRepository",
+            return_value=mock_repo,
+        ),
+    ):
+        await _handle_subscription_event("customer.subscription.deleted", subscription, settings)
+
+    assert saved["user"].plan is PlanTier.STARTER
+    assert saved["user"].subscription_status == "canceled"
