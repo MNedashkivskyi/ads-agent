@@ -13,7 +13,7 @@ from adcopilot.interfaces.worker.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
 
-_PLAN_ACCOUNT_LIMITS: dict[str, int] = {"starter": 1, "professional": 3, "business": 10}
+_PLAN_ACCOUNT_LIMITS: dict[str, int] = {"starter": 1, "professional": 1, "business": 3}
 _OAUTH_PENDING_KEY_PREFIX = "oauth_pending:"
 
 _LOCK_TTL_SECONDS = 7200  # 2 hours
