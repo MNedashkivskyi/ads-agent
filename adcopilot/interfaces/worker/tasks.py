@@ -94,6 +94,7 @@ async def _async_link_google_ads_accounts(
     import json
 
     from cryptography.fernet import Fernet
+    from sqlalchemy.exc import IntegrityError
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
     from adcopilot.config import Settings
@@ -195,6 +196,31 @@ async def _async_link_google_ads_accounts(
                     filtered_to_link.append(cid)
             customers_to_link = filtered_to_link
 
+            if claimed_by_other:
+                # Error surfacing rule: account-affecting failures must produce
+                # a human-readable platform notification — never fail silently.
+                from adcopilot.infrastructure.notifications.web_notifier_adapter import (
+                    SqlWebNotifier,
+                )
+
+                notifier = SqlWebNotifier(session)
+                await notifier.send_alert(
+                    user_id,
+                    "Nie udało się połączyć konta Google Ads",
+                    (
+                        f"Konto Google Ads ({', '.join(claimed_by_other)}) jest już "
+                        "połączone z innym kontem Adswise. Jedno konto Google Ads "
+                        "może być powiązane tylko z jednym kontem Adswise i nie "
+                        "może zostać użyte ponownie, np. w ramach kolejnego okresu "
+                        "próbnego. Jeśli uważasz, że to błąd, skontaktuj się z nami."
+                    ),
+                    metadata={
+                        "customer_ids": claimed_by_other,
+                        "reason": "account_claimed_by_other_user",
+                    },
+                )
+                await session.commit()
+
             if not customers_to_link:
                 if claimed_by_other:
                     redis.delete(pending_key)
@@ -253,7 +279,36 @@ async def _async_link_google_ads_accounts(
                 await creds_repo.save(creds)
                 linked_ids.append(customer_id)
 
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError:
+                # A concurrent linking task claimed one of these customer_ids
+                # between our ownership check and the commit — the unique index
+                # uq_google_ads_accounts_customer_id is the final arbiter.
+                await session.rollback()
+                logger.warning(
+                    "google ads account linking lost race — customer already "
+                    "claimed by another user",
+                    user_id=user_id,
+                )
+                from adcopilot.infrastructure.notifications.web_notifier_adapter import (
+                    SqlWebNotifier,
+                )
+
+                notifier = SqlWebNotifier(session)
+                await notifier.send_alert(
+                    user_id,
+                    "Nie udało się połączyć konta Google Ads",
+                    (
+                        "To konto Google Ads zostało właśnie połączone z innym "
+                        "kontem Adswise. Jedno konto Google Ads może być powiązane "
+                        "tylko z jednym kontem Adswise. Jeśli uważasz, że to błąd, "
+                        "skontaktuj się z nami."
+                    ),
+                    metadata={"reason": "account_claimed_by_other_user"},
+                )
+                await session.commit()
+                return {"success": False, "error": "account_claimed_by_other_user"}
     finally:
         await engine.dispose()
         redis.delete(pending_key)
