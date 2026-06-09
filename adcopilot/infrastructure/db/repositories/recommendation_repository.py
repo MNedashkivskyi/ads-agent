@@ -5,15 +5,16 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adcopilot.domain.entities import AccountId
 from adcopilot.domain.recommendation import (
+    Confidence,
     Recommendation,
     RecommendationId,
     RecommendationKind,
-    Confidence,
     RecommendationSeverity,
     RecommendationStatus,
 )
@@ -83,22 +84,40 @@ class SqlRecommendationRepository:
         return {(RecommendationKind(row.kind), row.target_hash) for row in result.all()}
 
     async def save(self, rec: Recommendation) -> None:
-        m = RecommendationModel()
-        m.id = uuid.UUID(rec.id)
-        m.account_id = uuid.UUID(rec.account_id)
-        m.kind = rec.kind.value
-        m.severity = rec.severity.value
-        m.confidence = rec.confidence.value
-        m.status = rec.status.value
-        m.target = rec.target
-        m.payload = rec.payload
-        m.evidence = rec.evidence
-        m.target_hash = rec.target_hash
-        m.estimated_monthly_savings_micros = rec.estimated_monthly_savings_micros
-        m.explanation = rec.explanation
-        m.created_at = rec.created_at
-        m.updated_at = datetime.now(tz=UTC)
-        self._session.add(m)
+        """Insert a recommendation, silently skipping concurrent duplicates.
+
+        Uses ``INSERT ... ON CONFLICT DO NOTHING`` against the partial unique
+        index ``uq_recommendations_pending`` so two overlapping detection runs
+        (e.g. the nightly snapshot task and a user-triggered manual refresh)
+        can never create the same PENDING recommendation twice. The dedup
+        check in the rule engine happens before the insert, which leaves a
+        race window; this closes it at the database level instead of raising
+        IntegrityError and rolling back the whole batch.
+        """
+        stmt = (
+            pg_insert(RecommendationModel)
+            .values(
+                id=uuid.UUID(rec.id),
+                account_id=uuid.UUID(rec.account_id),
+                kind=rec.kind.value,
+                severity=rec.severity.value,
+                confidence=rec.confidence.value,
+                status=rec.status.value,
+                target=rec.target,
+                payload=rec.payload,
+                evidence=rec.evidence,
+                target_hash=rec.target_hash,
+                estimated_monthly_savings_micros=rec.estimated_monthly_savings_micros,
+                explanation=rec.explanation,
+                created_at=rec.created_at,
+                updated_at=datetime.now(tz=UTC),
+            )
+            .on_conflict_do_nothing(
+                index_elements=["account_id", "kind", "target_hash"],
+                index_where=text("status = 'PENDING'"),
+            )
+        )
+        await self._session.execute(stmt)
 
     async def update_status(self, rec_id: RecommendationId, status: RecommendationStatus) -> None:
         result = await self._session.execute(
