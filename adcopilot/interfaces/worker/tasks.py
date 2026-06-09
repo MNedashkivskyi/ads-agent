@@ -28,6 +28,22 @@ def _redis_client() -> Redis:  # type: ignore[type-arg]
     return Redis.from_url(settings.REDIS_URL)
 
 
+def _mask_email(email: str) -> str:
+    """Partially mask an email for display in a cross-account notification.
+
+    The Ads account is almost always being reconnected by the same person from a
+    second Adswise login, so the owner needs to recognise *which* of their emails
+    it is registered to — but we must not fully expose another user's address.
+    Keeps the first two local-part characters and the full domain, e.g.
+    ``jan.kowalski@example.com`` → ``ja***@example.com``.
+    """
+    local, _, domain = email.partition("@")
+    if not domain:
+        return email
+    visible = local[:2]
+    return f"{visible}***@{domain}"
+
+
 def select_customers_to_link(
     customer_ids: list[str],
     existing_customer_ids: set[str],
@@ -179,6 +195,8 @@ async def _async_link_google_ads_accounts(
             # current user's own customer is fine). Prevents dodging a paid
             # plan by linking the same Ads account from a second Adswise login.
             claimed_by_other: list[str] = []
+            # customer_id -> masked email of the Adswise account it's registered to
+            claimed_owner_emails: dict[str, str] = {}
             filtered_to_link: list[str] = []
             for cid in customers_to_link:
                 if cid in existing_by_customer:
@@ -187,6 +205,9 @@ async def _async_link_google_ads_accounts(
                 owner = await acc_repo.owner_of_customer_id(cid)
                 if owner is not None and str(owner) != user_id:
                     claimed_by_other.append(cid)
+                    owner_user = await user_repo.get_by_id(owner)
+                    if owner_user is not None:
+                        claimed_owner_emails[cid] = _mask_email(owner_user.email)
                     logger.warning(
                         "google ads customer already linked to another user — skipping",
                         customer_id=cid,
@@ -203,12 +224,21 @@ async def _async_link_google_ads_accounts(
                     SqlWebNotifier,
                 )
 
+                # List each claimed account with the (masked) email of the
+                # Adswise account it is registered to, so the user can tell which
+                # of their logins already owns it.
+                def _account_line(cid: str) -> str:
+                    email = claimed_owner_emails.get(cid)
+                    return f"{cid} (zarejestrowane na: {email})" if email else cid
+
+                accounts_desc = ", ".join(_account_line(cid) for cid in claimed_by_other)
+
                 notifier = SqlWebNotifier(session)
                 await notifier.send_alert(
                     user_id,
                     "Nie udało się połączyć konta Google Ads",
                     (
-                        f"Konto Google Ads ({', '.join(claimed_by_other)}) jest już "
+                        f"Konto Google Ads ({accounts_desc}) jest już "
                         "połączone z innym kontem Adswise. Jedno konto Google Ads "
                         "może być powiązane tylko z jednym kontem Adswise i nie "
                         "może zostać użyte ponownie, np. w ramach kolejnego okresu "
@@ -216,6 +246,7 @@ async def _async_link_google_ads_accounts(
                     ),
                     metadata={
                         "customer_ids": claimed_by_other,
+                        "registered_emails": claimed_owner_emails,
                         "reason": "account_claimed_by_other_user",
                     },
                 )
@@ -295,6 +326,20 @@ async def _async_link_google_ads_accounts(
                     SqlWebNotifier,
                 )
 
+                # Re-query who now owns the customers we tried to link so we can
+                # tell the user which Adswise account won the race.
+                raced_emails: dict[str, str] = {}
+                for cid in customers_to_link:
+                    owner = await acc_repo.owner_of_customer_id(cid)
+                    if owner is not None and str(owner) != user_id:
+                        owner_user = await user_repo.get_by_id(owner)
+                        if owner_user is not None:
+                            raced_emails[cid] = _mask_email(owner_user.email)
+                email_suffix = ""
+                if raced_emails:
+                    pairs = ", ".join(f"{cid} ({email})" for cid, email in raced_emails.items())
+                    email_suffix = f" Konto jest zarejestrowane na: {pairs}."
+
                 notifier = SqlWebNotifier(session)
                 await notifier.send_alert(
                     user_id,
@@ -303,9 +348,12 @@ async def _async_link_google_ads_accounts(
                         "To konto Google Ads zostało właśnie połączone z innym "
                         "kontem Adswise. Jedno konto Google Ads może być powiązane "
                         "tylko z jednym kontem Adswise. Jeśli uważasz, że to błąd, "
-                        "skontaktuj się z nami."
+                        "skontaktuj się z nami." + email_suffix
                     ),
-                    metadata={"reason": "account_claimed_by_other_user"},
+                    metadata={
+                        "reason": "account_claimed_by_other_user",
+                        "registered_emails": raced_emails,
+                    },
                 )
                 await session.commit()
                 return {"success": False, "error": "account_claimed_by_other_user"}
