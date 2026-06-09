@@ -106,6 +106,12 @@ class UserModel(Base):
 
 class GoogleAdsAccountModel(Base):
     __tablename__ = "google_ads_accounts"
+    __table_args__ = (
+        # A Google Ads customer_id may only ever be linked to ONE Adswise
+        # user — prevents re-using the same Ads account across accounts to
+        # get repeated free trials.
+        Index("uq_google_ads_accounts_customer_id", "customer_id", unique=True),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
