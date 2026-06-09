@@ -64,7 +64,7 @@ async def _get_db_session(
     await engine.dispose()
 
 
-_PLAN_ACCOUNT_LIMITS: dict[str, int] = {"starter": 1, "growth": 3, "pro": 10}
+_PLAN_ACCOUNT_LIMITS: dict[str, int] = {"starter": 1, "professional": 3, "business": 10}
 
 
 @router.get("/google/start")

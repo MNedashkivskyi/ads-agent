@@ -83,7 +83,7 @@ class TestUserMeResponse:
             email="test@example.com",
             telegram_chat_id=None,
             role="client",
-            plan="growth",
+            plan="professional",
             max_accounts=3,
             subscription_status="trialing",
             trial_started_at=ts,
@@ -100,11 +100,11 @@ class TestPlanMaxAccounts:
     def test_starter_allows_1(self) -> None:
         assert PLAN_MAX_ACCOUNTS["starter"] == 1
 
-    def test_growth_allows_3(self) -> None:
-        assert PLAN_MAX_ACCOUNTS["growth"] == 3
+    def test_professional_allows_3(self) -> None:
+        assert PLAN_MAX_ACCOUNTS["professional"] == 3
 
-    def test_pro_allows_10(self) -> None:
-        assert PLAN_MAX_ACCOUNTS["pro"] == 10
+    def test_business_allows_10(self) -> None:
+        assert PLAN_MAX_ACCOUNTS["business"] == 10
 
     def test_unknown_plan_defaults_to_1(self) -> None:
         assert _max_accounts_for_plan("unknown") == 1

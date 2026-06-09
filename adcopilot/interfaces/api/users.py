@@ -26,8 +26,8 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 
 PLAN_MAX_ACCOUNTS: dict[str, int] = {
     PlanTier.STARTER.value: 1,
-    PlanTier.GROWTH.value: 3,
-    PlanTier.PRO.value: 10,
+    PlanTier.PROFESSIONAL.value: 3,
+    PlanTier.BUSINESS.value: 10,
 }
 
 
@@ -94,7 +94,7 @@ class UserMeResponse(BaseModel):
     email: str
     telegram_chat_id: int | None
     role: str  # "admin" | "client"
-    plan: str  # "starter" | "growth" | "pro"
+    plan: str  # "starter" | "professional" | "business"
     max_accounts: int
     subscription_status: str  # "trialing" | "active" | "canceled" | ...
     trial_started_at: str | None

@@ -75,6 +75,30 @@ def _price_id_for_plan(plan: str, settings: Settings) -> str:
     return price_id
 
 
+def _plan_for_price_id(price_id: str | None, settings: Settings) -> str | None:
+    """Reverse of ``_price_id_for_plan``: map a Stripe price ID to a plan slug.
+
+    Returns ``None`` for an unknown / missing price so the caller can decide
+    whether to leave the existing plan untouched.
+    """
+    if not price_id:
+        return None
+    reverse = {
+        settings.STRIPE_STARTER_PRICE_ID: "starter",
+        settings.STRIPE_PRO_PRICE_ID: "professional",
+        settings.STRIPE_BUSINESS_PRICE_ID: "business",
+    }
+    return reverse.get(price_id)
+
+
+def _price_id_from_subscription(subscription: Any) -> str | None:
+    """Pull the first line-item's price ID out of a Stripe subscription object."""
+    try:
+        return subscription["items"]["data"][0]["price"]["id"]
+    except (KeyError, IndexError, TypeError):
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -265,6 +289,7 @@ async def _handle_subscription_event(
 ) -> None:
     from datetime import UTC, datetime
 
+    from adcopilot.domain.entities import PlanTier
     from adcopilot.infrastructure.db.models import UserModel
     from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
 
@@ -277,6 +302,24 @@ async def _handle_subscription_event(
 
     if event_type == "customer.subscription.deleted":
         new_status = "canceled"
+
+    # Resolve which plan the customer is now on from the subscription's price.
+    # This is what actually unlocks paid features for the user — without it,
+    # purchasing a plan would update billing status but leave plan=starter.
+    plan_slug = _plan_for_price_id(_price_id_from_subscription(subscription), settings)
+
+    # When the subscription is gone or fully inactive, drop access back to the
+    # free/starter tier. Otherwise reflect the purchased plan (if recognised).
+    if event_type == "customer.subscription.deleted" or new_status in {
+        "canceled",
+        "unpaid",
+        "incomplete_expired",
+    }:
+        new_plan: PlanTier | None = PlanTier.STARTER
+    elif plan_slug is not None:
+        new_plan = PlanTier.parse(plan_slug)
+    else:
+        new_plan = None  # unknown price → leave the existing plan untouched
 
     engine = create_async_engine(settings.DATABASE_URL)
     try:
@@ -296,12 +339,15 @@ async def _handle_subscription_event(
             if user is None:
                 return
 
-            updated = dataclasses.replace(
-                user,
-                subscription_status=new_status,
-                subscription_id=sub_id,
-                trial_ends_at=trial_ends_at,
-            )
+            changes: dict[str, Any] = {
+                "subscription_status": new_status,
+                "subscription_id": sub_id,
+                "trial_ends_at": trial_ends_at,
+            }
+            if new_plan is not None:
+                changes["plan"] = new_plan
+
+            updated = dataclasses.replace(user, **changes)
             await repo.save(updated)
             await session.commit()
     finally:
@@ -310,8 +356,9 @@ async def _handle_subscription_event(
     logger.info(
         "subscription updated",
         customer_id=customer_id,
-        event=event_type,
+        stripe_event=event_type,
         status=new_status,
+        plan=new_plan.value if new_plan is not None else None,
     )
 
 
