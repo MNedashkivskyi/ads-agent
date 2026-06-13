@@ -40,8 +40,12 @@ class HookGeneratorPort(Protocol):
         angle_allocation: dict[str, int],
         surfaces: list[str],
         language: str = "pl",
+        focus: str | None = None,
     ) -> list[GeneratedHook]:
-        """Return hooks spanning the requested angles and surfaces, within limits."""
+        """Return hooks spanning the requested angles and surfaces, within limits.
+
+        ``focus`` optionally steers generation toward one ad group's theme.
+        """
         ...
 
 

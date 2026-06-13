@@ -61,6 +61,7 @@ class ClaudeHookGenerator:
         angle_allocation: dict[str, int],
         surfaces: list[str],
         language: str = "pl",
+        focus: str | None = None,
     ) -> list[GeneratedHook]:
         system_tmpl, user_tmpl = await _load_templates(
             self._prompt_repo, hook_generation.HOOK_GENERATION_PROMPT_KEY
@@ -72,6 +73,7 @@ class ClaudeHookGenerator:
             angle_allocation=angle_allocation,
             surfaces=surfaces,
             language=language,
+            focus=focus,
             system_template=system_tmpl,
             user_template=user_tmpl,
         )
