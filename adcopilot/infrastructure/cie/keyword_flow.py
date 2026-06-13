@@ -45,6 +45,157 @@ class DbKeywordFlowService:
     def _engine(self):  # noqa: ANN202
         return create_async_engine(self._settings.DATABASE_URL)
 
+    async def analyze(
+        self,
+        *,
+        campaign_id: str,
+        user_id: str,
+        account_id: str | None = None,
+        vertical: str | None = None,
+        language: str | None = None,
+        service: str | None = None,
+        problems: list[str] | None = None,
+    ) -> KeywordComparison:
+        """Synchronous generate → validate → rank, returning the comparison.
+
+        Runs entirely in-request (no Celery, no polling), so it cannot hang
+        silently waiting on a worker. The LLM call happens outside any DB
+        transaction; only the bounded volume lookups run inside a short
+        transaction. Used by the launch-wizard keyword step.
+        """
+        from adcopilot.application.use_cases.campaign_intelligence.keywords.generate_keyword_candidates import (  # noqa: E501
+            DEFAULT_TOTAL_SLOTS,
+            GenerateKeywordCandidatesUseCase,
+        )
+        from adcopilot.application.use_cases.campaign_intelligence.keywords.validate_keyword_volumes import (  # noqa: E501
+            ValidateKeywordVolumesUseCase,
+        )
+        from adcopilot.domain.campaign_intelligence.keywords.keyword_candidate import (
+            KeywordCandidate,
+        )
+        from adcopilot.domain.campaign_intelligence.keywords.value_objects import (
+            KEYWORD_INTENT_DIMENSION,
+            KeywordIntent,
+        )
+        from adcopilot.domain.campaign_intelligence.shared import dimension_selector
+        from adcopilot.domain.campaign_intelligence.shared.learned_weights import (
+            weights_from_performance,
+        )
+        from adcopilot.domain.entities import AccountId
+        from adcopilot.infrastructure.cie.wiring import (
+            build_dataforseo_adapter,
+            build_keyword_generator,
+            build_kp_volume_adapter,
+            build_volume_cache,
+        )
+        from adcopilot.infrastructure.db.repositories.cie_dimension_performance_repository import (  # noqa: E501
+            SqlCieDimensionPerformanceRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+            SqlGoogleAdsAccountRepository,
+        )
+        from adcopilot.infrastructure.db.repositories.oauth_credentials_repository import (
+            SqlOAuthCredentialsRepository,
+        )
+
+        settings = self._settings
+        engine = self._engine()
+        try:
+            # --- tx1: resolve context, create run, read learned + credentials ---
+            async with AsyncSession(engine) as session, session.begin():
+                ctx = await resolve_campaign_context(
+                    session,
+                    campaign_id=campaign_id,
+                    user_id=user_id,
+                    account_id=account_id,
+                    vertical=vertical,
+                    language=language,
+                    service=service,
+                )
+                account = await SqlGoogleAdsAccountRepository(session).get(
+                    AccountId(ctx.account_id)
+                )
+                creds = await SqlOAuthCredentialsRepository(
+                    session, settings.TOKEN_ENCRYPTION_KEY
+                ).get(AccountId(ctx.account_id))
+                refresh_token = creds.refresh_token if creds else None
+                customer_id = account.customer_id if account else None
+                learned = await SqlCieDimensionPerformanceRepository(session).get_map(
+                    vertical=ctx.vertical,
+                    dimension=KEYWORD_INTENT_DIMENSION,
+                    language=ctx.language,
+                )
+                harvested = await SqlCieSearchTermRepository(session).list_promotion_terms(
+                    ctx.account_id, limit=25
+                )
+                run = KeywordRun(
+                    campaign_id=campaign_id,
+                    account_id=ctx.account_id,
+                    user_id=user_id,
+                    vertical=ctx.vertical,
+                    language=ctx.language,
+                    service=service or ctx.service,
+                    problems=problems or [],
+                    seeds=harvested,
+                    status=KeywordRunStatus.GENERATING,
+                )
+                run_id = await SqlCieKeywordRepository(session).create_run(run)
+
+            # --- generate: LLM call OUTSIDE any DB transaction ---
+            allocation = dimension_selector.allocate(
+                DEFAULT_TOTAL_SLOTS, [i.value for i in KeywordIntent], learned
+            )
+            merged_problems = GenerateKeywordCandidatesUseCase._merge_seeds(
+                run.problems, run.seeds
+            )
+            generator = build_keyword_generator(settings)
+            generated = await generator.generate(
+                service=run.service,
+                vertical=run.vertical,
+                problems=merged_problems,
+                intent_allocation=allocation,
+                language=run.language,
+            )
+            candidates = [
+                KeywordCandidate(
+                    phrase=g.phrase,
+                    intent=KeywordIntent(g.intent),
+                    reasoning=g.reasoning,
+                    source="llm",
+                )
+                for g in generated
+            ]
+
+            # --- tx2: persist generated candidates (short) ---
+            async with AsyncSession(engine) as session, session.begin():
+                repo = SqlCieKeywordRepository(session)
+                await repo.replace_candidates(run_id, run.campaign_id, candidates)
+                await repo.set_run_status(run_id, KeywordRunStatus.GENERATED)
+
+            # --- tx3: validate volumes (bounded external calls) keep_all ---
+            async with AsyncSession(engine) as session, session.begin():
+                repo = SqlCieKeywordRepository(session)
+                run2 = await repo.get_run(run_id)
+                if run2 is not None:
+                    await ValidateKeywordVolumesUseCase(
+                        cache=build_volume_cache(settings),
+                        primary=build_kp_volume_adapter(settings),
+                        fallback=build_dataforseo_adapter(settings),
+                        repo=repo,
+                        min_viable_volume=settings.KEYWORD_MIN_VIABLE_VOLUME,
+                        keep_all=True,
+                    ).run(run2, refresh_token=refresh_token, customer_id=customer_id)
+
+            # --- tx4: rank (read) ---
+            async with AsyncSession(engine) as session:
+                repo = SqlCieKeywordRepository(session)
+                weights = weights_from_performance(learned)
+                return await RankKeywordsUseCase(repo).run(
+                    run_id, learned_weights=weights, performance=learned
+                )
+        finally:
+            await engine.dispose()
+
     async def generate(
         self,
         *,

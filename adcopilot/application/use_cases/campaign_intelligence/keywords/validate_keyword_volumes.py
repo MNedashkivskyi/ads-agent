@@ -24,7 +24,10 @@ import structlog
 
 from adcopilot.application.ports.cie_keyword_repository import CieKeywordRepository
 from adcopilot.application.ports.keyword_volume import KeywordVolumePort, VolumeRequestContext
-from adcopilot.domain.campaign_intelligence.keywords.keyword_candidate import KeywordCandidate
+from adcopilot.domain.campaign_intelligence.keywords.keyword_candidate import (
+    KeywordCandidate,
+    KeywordStatus,
+)
 from adcopilot.domain.campaign_intelligence.keywords.keyword_run import (
     KeywordRun,
     KeywordRunStatus,
@@ -48,6 +51,7 @@ class ValidateKeywordVolumesUseCase:
         *,
         geo: str = "PL",
         min_viable_volume: int = 10,
+        keep_all: bool = False,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self._cache = cache
@@ -56,6 +60,11 @@ class ValidateKeywordVolumesUseCase:
         self._repo = repo
         self._geo = geo
         self._min_viable_volume = min_viable_volume
+        # When True, every candidate is kept (status=validated) with whatever
+        # volume was found (0 if none) rather than rejecting non-viable ones.
+        # Used by the interactive launch step so the comparison is always
+        # populated even if the volume APIs are unavailable in this environment.
+        self._keep_all = keep_all
         self._sleep = sleep
 
     async def run(
@@ -88,7 +97,10 @@ class ValidateKeywordVolumesUseCase:
 
         for candidate in candidates:
             volume = resolved.get(candidate.phrase.strip().lower())
-            if volume is None:
+            if self._keep_all:
+                candidate.volume = volume or SearchVolume(monthly_searches=0)
+                candidate.status = KeywordStatus.VALIDATED
+            elif volume is None:
                 candidate.mark_rejected()
             else:
                 self._apply_volume(candidate, volume)

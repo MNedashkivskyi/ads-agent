@@ -113,6 +113,28 @@ async def test_cache_hit_skips_api_calls() -> None:
     assert df2.call_count == 0
 
 
+async def test_keep_all_validates_even_without_volume() -> None:
+    # The launch step keeps every candidate so the comparison is always populated,
+    # even when the volume APIs return nothing.
+    repo = FakeKeywordRepository()
+    run = await _seed_run(
+        repo, {"drenaż limfatyczny": KeywordIntent.INTENT, "nieznana fraza": KeywordIntent.PROBLEM}
+    )
+    kp = FakeVolumePort({"drenaż limfatyczny": make_volume(8000)}, name="kp")
+    df = FakeVolumePort({}, name="dataforseo")  # nothing else resolves
+    use_case = ValidateKeywordVolumesUseCase(
+        cache=_cache(FakeRedis()), primary=kp, fallback=df, repo=repo,
+        min_viable_volume=10, keep_all=True, sleep=_noop_sleep,
+    )
+    await use_case.run(run)
+    cands = {c.phrase: c for c in await repo.list_candidates(run.id)}
+    # Both kept as validated; the resolved one carries its real volume.
+    assert cands["drenaż limfatyczny"].status is KeywordStatus.VALIDATED
+    assert cands["drenaż limfatyczny"].volume.monthly_searches == 8000
+    assert cands["nieznana fraza"].status is KeywordStatus.VALIDATED
+    assert cands["nieznana fraza"].volume.monthly_searches == 0
+
+
 async def test_rate_limit_retries_then_fails_cleanly() -> None:
     repo = FakeKeywordRepository()
     run = await _seed_run(repo, {"x": KeywordIntent.INTENT})
