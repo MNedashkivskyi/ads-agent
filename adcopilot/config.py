@@ -68,6 +68,25 @@ class Settings(BaseSettings):
     # Uses the same OAuth client as Google Ads.
     GA4_OAUTH_REDIRECT_URI: str = "http://localhost:8000/oauth/ga4/callback"
 
+    # --- Campaign Intelligence Engine ---------------------------------------
+    # DataForSEO — exact search-volume fallback + keyword expansion. Optional;
+    # when unset the CIE degrades to Keyword Planner only (no exact fallback,
+    # no expansion). Auth is HTTP Basic (login:password).
+    DATAFORSEO_LOGIN: str | None = None
+    DATAFORSEO_PASSWORD: str | None = None
+    # Feature flag + cost guard for the optional expansion step (Phase 2).
+    ENABLE_KEYWORD_EXPANSION: bool = False
+    # Max DataForSEO requests one expansion run may issue (per-request billing).
+    KEYWORD_EXPANSION_MAX_REQUESTS: int = 3
+    # Cache TTL (seconds) for validated keyword volumes — 30 days. Beauty
+    # keywords repeat across nearly every client in a vertical, so the
+    # cross-client hit rate is high and real cost collapses.
+    KEYWORD_VOLUME_CACHE_TTL_SECONDS: int = 60 * 60 * 24 * 30
+    # Min monthly searches for a keyword to be considered viable.
+    KEYWORD_MIN_VIABLE_VOLUME: int = 10
+    # Cache TTL (seconds) for near-identical generation inputs (Phase 7.2).
+    GENERATION_CACHE_TTL_SECONDS: int = 60 * 60 * 24 * 7
+
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_WEBHOOK_SECRET: str | None = None
     STRIPE_STARTER_PRICE_ID: str | None = None

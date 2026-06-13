@@ -68,6 +68,16 @@ __all__ = [
     "QSImprovementPlanModel",
     "PerformanceReportModel",
     "VerticalBenchmarkSnapshotModel",
+    # Campaign Intelligence Engine
+    "DimensionPerformanceModel",
+    "CieKeywordRunModel",
+    "CieKeywordCandidateModel",
+    "CieHookSetModel",
+    "CieHookCandidateModel",
+    "CieShippedKeywordModel",
+    "CieShippedAssetModel",
+    "CieAdsPerformanceFactModel",
+    "CieSearchTermProposalModel",
 ]
 
 
@@ -1426,6 +1436,313 @@ class ListingGroupSnapshotModel(Base):
     dimension_type: Mapped[str] = mapped_column(String(50), nullable=False, default="")
     case_value: Mapped[str] = mapped_column(Text, nullable=False, default="")
     is_catch_all: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+# ===========================================================================
+# Campaign Intelligence Engine (CIE)
+#
+# Unified keyword + hook generation with a shared learning spine. Tables are
+# prefixed ``cie_`` to keep the new subsystem cleanly separated from the legacy
+# launch/snapshot schema. See ``adcopilot.domain.campaign_intelligence``.
+# ===========================================================================
+
+
+class DimensionPerformanceModel(Base):
+    """Learned weights per (vertical, dimension, value, language) — the moat.
+
+    One row says how a dimension value (a keyword intent-type or a creative
+    angle) performs across every campaign in a vertical. ``dimension`` namespaces
+    the two tracks ("keyword_intent" vs "angle") through one table and one
+    learner.
+    """
+
+    __tablename__ = "cie_dimension_performance"
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "vertical",
+            "dimension",
+            "value",
+            "language",
+            name="uq_cie_dimension_performance_key",
+        ),
+        Index("ix_cie_dimperf_vertical_dimension", "vertical", "dimension"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vertical: Mapped[str] = mapped_column(String(64), nullable=False)
+    dimension: Mapped[str] = mapped_column(String(64), nullable=False)
+    value: Mapped[str] = mapped_column(String(64), nullable=False)
+    language: Mapped[str] = mapped_column(String(10), nullable=False, server_default="pl")
+    sample_size: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    clicks: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    conversions: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    weighted_ctr: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    weighted_conv: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    smoothed_score: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class CieKeywordRunModel(Base):
+    """One keyword-generation run for a campaign — the pollable job."""
+
+    __tablename__ = "cie_keyword_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    vertical: Mapped[str] = mapped_column(String(64), nullable=False, server_default="generic")
+    language: Mapped[str] = mapped_column(String(10), nullable=False, server_default="pl")
+    service: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    problems: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    seeds: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="generating", index=True
+    )
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class CieKeywordCandidateModel(Base):
+    """A generated keyword candidate, tagged by intent-type (the dimension)."""
+
+    __tablename__ = "cie_keyword_candidates"
+    __table_args__ = (
+        sa.UniqueConstraint("run_id", "phrase", name="uq_cie_keyword_candidate_phrase"),
+        Index("ix_cie_keyword_candidate_run_status", "run_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("cie_keyword_runs.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    campaign_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    phrase: Mapped[str] = mapped_column(Text, nullable=False)
+    intent: Mapped[str] = mapped_column(String(16), nullable=False)
+    source: Mapped[str] = mapped_column(String(16), nullable=False, server_default="llm")
+    reasoning: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="generated")
+    monthly_searches: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    competition: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    cpc_low_micros: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    cpc_high_micros: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    is_bucketed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class CieHookSetModel(Base):
+    """One hook-generation run for a campaign — owns the candidate hooks."""
+
+    __tablename__ = "cie_hook_sets"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    vertical: Mapped[str] = mapped_column(String(64), nullable=False, server_default="generic")
+    language: Mapped[str] = mapped_column(String(10), nullable=False, server_default="pl")
+    service: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    problems: Mapped[list] = mapped_column(JSONB, nullable=False, server_default="[]")
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="generating", index=True
+    )
+    rsa_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class CieHookCandidateModel(Base):
+    """A generated hook, tagged by angle (the dimension) + surface."""
+
+    __tablename__ = "cie_hook_candidates"
+    __table_args__ = (
+        Index("ix_cie_hook_candidate_set_status", "set_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    set_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("cie_hook_sets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    campaign_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    angle: Mapped[str] = mapped_column(String(32), nullable=False)
+    surface: Mapped[str] = mapped_column(String(20), nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    char_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    policy_risk: Mapped[str] = mapped_column(String(10), nullable=False, server_default="LOW")
+    policy_reason: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    judge_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    heuristic_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    final_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="generated")
+    pinned_slot: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class CieShippedKeywordModel(Base):
+    """A keyword shipped into a live ad group, tagged with its intent-type.
+
+    The attribution map: nightly performance ingest joins per-keyword rows back
+    to ``intent`` through this table. Without it, Layer 3 has nothing to learn
+    from on the keyword track.
+    """
+
+    __tablename__ = "cie_shipped_keywords"
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "account_id", "customer_id", "keyword_text", "ad_group_id",
+            name="uq_cie_shipped_keyword",
+        ),
+        Index("ix_cie_shipped_keyword_text", "keyword_text"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    customer_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    campaign_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    external_campaign_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    ad_group_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    criterion_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    keyword_text: Mapped[str] = mapped_column(Text, nullable=False)
+    intent: Mapped[str] = mapped_column(String(16), nullable=False)
+    vertical: Mapped[str] = mapped_column(String(64), nullable=False, server_default="generic")
+    language: Mapped[str] = mapped_column(String(10), nullable=False, server_default="pl")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class CieShippedAssetModel(Base):
+    """An ad asset shipped into a live RSA, tagged with its angle + surface.
+
+    The attribution map for the creative track (mirror of shipped keywords).
+    """
+
+    __tablename__ = "cie_shipped_assets"
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "account_id", "customer_id", "asset_text", "surface",
+            name="uq_cie_shipped_asset",
+        ),
+        Index("ix_cie_shipped_asset_text", "asset_text"),
+        Index("ix_cie_shipped_asset_id", "asset_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    customer_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    campaign_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    asset_id: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    asset_text: Mapped[str] = mapped_column(Text, nullable=False)
+    angle: Mapped[str] = mapped_column(String(32), nullable=False)
+    surface: Mapped[str] = mapped_column(String(20), nullable=False)
+    vertical: Mapped[str] = mapped_column(String(64), nullable=False, server_default="generic")
+    language: Mapped[str] = mapped_column(String(10), nullable=False, server_default="pl")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class CieAdsPerformanceFactModel(Base):
+    """Idempotent per-(entity, day) performance fact, pre-attributed to a dimension.
+
+    The raw ground-truth ledger. ``recompute_dimension_weights`` aggregates these
+    into ``cie_dimension_performance``. Unique on (account, entity_type, entity_id,
+    day) so re-running an ingest is idempotent.
+    """
+
+    __tablename__ = "cie_ads_performance_facts"
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "account_id", "entity_type", "entity_id", "day",
+            name="uq_cie_perf_fact",
+        ),
+        Index("ix_cie_perf_fact_dim", "vertical", "dimension", "value"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    customer_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    entity_id: Mapped[str] = mapped_column(String(80), nullable=False)
+    day: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    dimension: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    value: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    vertical: Mapped[str] = mapped_column(String(64), nullable=False, server_default="generic")
+    language: Mapped[str] = mapped_column(String(10), nullable=False, server_default="pl")
+    impressions: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    clicks: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    conversions: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    cost_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    performance_label: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    extra: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class CieSearchTermProposalModel(Base):
+    """A harvested search term proposed as a new keyword or a negative.
+
+    Surfaced to the user for one-click adoption. Unique on (account, term, kind)
+    so harvesting is idempotent and doesn't duplicate prior proposals.
+    """
+
+    __tablename__ = "cie_search_term_proposals"
+    __table_args__ = (
+        sa.UniqueConstraint("account_id", "term", "kind", name="uq_cie_search_term_proposal"),
+        Index("ix_cie_search_term_proposal_status", "account_id", "status"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    customer_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    campaign_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    term: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(String(12), nullable=False)
+    intent: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    vertical: Mapped[str] = mapped_column(String(64), nullable=False, server_default="generic")
+    language: Mapped[str] = mapped_column(String(10), nullable=False, server_default="pl")
+    impressions: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    clicks: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    conversions: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    cost_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    ctr: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="proposed")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -26,7 +26,10 @@ def create_celery_app() -> Celery:
             # can find task functions.  Without this, task.delay() from
             # the API enqueues by string name, but the worker rejects
             # with "Received unregistered task".
-            "include": ["adcopilot.interfaces.worker.tasks"],
+            "include": [
+                "adcopilot.interfaces.worker.tasks",
+                "adcopilot.interfaces.worker.cie_tasks",
+            ],
             "broker_url": settings.REDIS_URL,
             "result_backend": settings.REDIS_URL,
             "task_serializer": "json",
