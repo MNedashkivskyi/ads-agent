@@ -114,6 +114,7 @@ class IntentGroupResponse(BaseModel):
     total_monthly_volume: int
     avg_score: float
     top_keywords: list[RankedKeywordResponse]
+    rationale: str = ""
 
 
 class ComparisonResponse(BaseModel):
@@ -277,6 +278,7 @@ def _to_response(c: KeywordComparison) -> ComparisonResponse:
                 keyword_count=g.keyword_count,
                 total_monthly_volume=g.total_monthly_volume,
                 avg_score=g.avg_score,
+                rationale=g.rationale,
                 top_keywords=[
                     RankedKeywordResponse(
                         phrase=k.phrase,

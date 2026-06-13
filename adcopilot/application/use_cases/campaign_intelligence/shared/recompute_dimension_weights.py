@@ -41,8 +41,12 @@ class RecomputeDimensionWeightsUseCase:
     ) -> None:
         self._facts = fact_repo
         self._dim_perf = dim_perf_repo
+        # All DimensionPerformance rows written by the last run() — used by the
+        # caller to run guardrail checks without an extra query.
+        self.last_written: list[DimensionPerformance] = []
 
     async def run(self, dimensions: tuple[str, ...] = DEFAULT_DIMENSIONS) -> dict[str, int]:
+        self.last_written = []
         written: dict[str, int] = {}
         for dimension in dimensions:
             aggregates = await self._facts.aggregate_by_dimension(dimension)
@@ -80,5 +84,6 @@ class RecomputeDimensionWeightsUseCase:
                     language=language,
                 )
                 await self._dim_perf.upsert(perf)
+                self.last_written.append(perf)
                 count += 1
         return count

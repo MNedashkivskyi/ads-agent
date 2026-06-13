@@ -157,7 +157,9 @@ class DbKeywordFlowService:
                     language=run.language,
                 )
                 weights = weights_from_performance(learned)
-                return await RankKeywordsUseCase(repo).run(run.id, learned_weights=weights)
+                return await RankKeywordsUseCase(repo).run(
+                    run.id, learned_weights=weights, performance=learned
+                )
         finally:
             await engine.dispose()
 

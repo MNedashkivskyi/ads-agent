@@ -588,6 +588,20 @@ async def _run_recompute_weights() -> dict[str, object]:
                 SqlCieDimensionPerformanceRepository(session),
             )
             written = await use_case.run()
-            return {"status": "ok", **written}
+
+            # Phase 7.5 — guardrail health checks on the freshly written weights.
+            from adcopilot.domain.campaign_intelligence.shared import guardrails
+
+            alerts = guardrails.check_guardrails(use_case.last_written)
+            for alert in alerts:
+                logger.warning(
+                    "cie.guardrail",
+                    kind=alert.kind,
+                    dimension=alert.dimension,
+                    vertical=alert.vertical,
+                    value=alert.value,
+                    detail=alert.detail,
+                )
+            return {"status": "ok", "alerts": len(alerts), **written}
     finally:
         await engine.dispose()

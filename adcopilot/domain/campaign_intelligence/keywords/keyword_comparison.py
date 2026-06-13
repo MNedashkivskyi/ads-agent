@@ -16,6 +16,9 @@ from adcopilot.domain.campaign_intelligence.keywords.keyword_candidate import (
     KeywordStatus,
 )
 from adcopilot.domain.campaign_intelligence.keywords.value_objects import KeywordIntent
+from adcopilot.domain.campaign_intelligence.shared.dimension_performance import (
+    DimensionPerformance,
+)
 
 _TOP_N = 8
 
@@ -36,6 +39,7 @@ class IntentGroup:
     total_monthly_volume: int
     avg_score: float
     top_keywords: list[RankedKeyword] = field(default_factory=list)
+    rationale: str = ""  # "Why this?" — the dimension's vertical track record
 
 
 @dataclass(frozen=True)
@@ -51,8 +55,13 @@ def build_comparison(
     candidates: list[KeywordCandidate],
     *,
     learned_weights: dict[str, float] | None = None,
+    performance: dict[str, DimensionPerformance] | None = None,
 ) -> KeywordComparison:
-    """Build the brand-vs-intent comparison from validated candidates."""
+    """Build the brand-vs-intent comparison from validated candidates.
+
+    When ``performance`` (learned per-vertical metrics) is supplied, each group
+    gets a "Why this?" rationale citing its track record in the vertical.
+    """
     validated = [c for c in candidates if c.status is KeywordStatus.VALIDATED and c.volume]
     for c in validated:
         keyword_scorer.score_candidate(c, learned_weights)
@@ -88,6 +97,7 @@ def build_comparison(
                 total_monthly_volume=total_volume,
                 avg_score=round(avg_score, 4),
                 top_keywords=ranked[:_TOP_N],
+                rationale=_rationale(intent, performance),
             )
         )
 
@@ -103,6 +113,21 @@ def build_comparison(
         verdict=_verdict(brand_total, intent_total, multiplier),
         multiplier=round(multiplier, 1),
     )
+
+
+def _rationale(
+    intent: KeywordIntent, performance: dict[str, DimensionPerformance] | None
+) -> str:
+    """The 'Why this?' line: this intent-type's track record in the vertical."""
+    if not performance:
+        return ""
+    perf = performance.get(intent.value)
+    if perf is None or not perf.is_trusted:
+        return ""
+    return (
+        f"Typ '{intent.value}' ma historię w tej branży: "
+        f"{perf.sample_size:,} wyświetleń, {perf.weighted_conv:.1%} konwersji."
+    ).replace(",", " ")
 
 
 def _verdict(brand_total: int, intent_total: int, multiplier: float) -> str:

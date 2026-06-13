@@ -39,8 +39,17 @@ def build_volume_cache(settings: Settings, redis: Any | None = None) -> KeywordV
     )
 
 
-def build_keyword_generator(settings: Settings, prompt_repo: Any | None = None) -> Any:
-    return ClaudeKeywordGenerator(build_llm(settings), prompt_repo=prompt_repo)
+def build_keyword_generator(
+    settings: Settings, prompt_repo: Any | None = None, *, cache: bool = True
+) -> Any:
+    generator: Any = ClaudeKeywordGenerator(build_llm(settings), prompt_repo=prompt_repo)
+    if cache:
+        from adcopilot.infrastructure.cache.generation_cache import CachingKeywordGenerator
+
+        generator = CachingKeywordGenerator(
+            generator, build_redis(settings), settings.GENERATION_CACHE_TTL_SECONDS
+        )
+    return generator
 
 
 def build_kp_volume_adapter(settings: Settings) -> GoogleKeywordPlannerVolumeAdapter:
