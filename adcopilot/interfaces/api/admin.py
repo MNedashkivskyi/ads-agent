@@ -123,6 +123,81 @@ async def list_clients(
     ]
 
 
+_VALID_PLANS = {"starter", "professional", "business"}
+
+
+class SetPlanRequest(BaseModel):
+    plan: str  # "starter" | "professional" | "business"
+    user_id: str | None = None
+    email: str | None = None  # convenience: target by email instead of uuid
+
+
+class SetPlanResponse(BaseModel):
+    user_id: str
+    email: str
+    plan: str
+
+
+@router.post("/users/plan", response_model=SetPlanResponse)
+async def set_user_plan(
+    body: SetPlanRequest,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> SetPlanResponse:
+    """Admin-only: set a user's subscription plan (test/dev tier management).
+
+    Lets an admin grant a user a paid tier (e.g. ``business``) without a real
+    Stripe subscription — useful for testing and for onboarding before billing
+    is wired. Guarded by ``_check_admin`` (caller must be in ADMIN_USER_IDS).
+    """
+    _check_admin(current_user, settings)
+
+    plan = body.plan.strip().lower()
+    if plan not in _VALID_PLANS:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid plan; must be one of {sorted(_VALID_PLANS)}",
+        )
+    if not body.user_id and not body.email:
+        raise HTTPException(status_code=422, detail="Provide user_id or email")
+
+    target_uuid: uuid.UUID | None = None
+    if body.user_id:
+        try:
+            target_uuid = uuid.UUID(body.user_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Invalid user_id format") from None
+
+    from adcopilot.infrastructure.db.models import UserModel
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            user_model: UserModel | None = None
+            if target_uuid is not None:
+                user_model = await session.get(UserModel, target_uuid)
+            else:
+                result = await session.execute(
+                    select(UserModel).where(UserModel.email == body.email)
+                )
+                user_model = result.scalar_one_or_none()
+
+            if user_model is None:
+                raise HTTPException(status_code=404, detail="User not found")
+
+            user_model.plan = plan
+            response = SetPlanResponse(
+                user_id=str(user_model.id), email=user_model.email, plan=plan
+            )
+    finally:
+        await engine.dispose()
+
+    logger.info(
+        "admin set plan", target_user_id=response.user_id, plan=plan, by=current_user
+    )
+    return response
+
+
 class SeedDemoRequest(BaseModel):
     # If omitted, demo accounts are attached to the calling admin user (Approach A),
     # so one login manages all of them via the account switcher.
