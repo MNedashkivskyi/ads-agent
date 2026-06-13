@@ -47,6 +47,22 @@ class PatchAdsRequest(BaseModel):
     headlines: list[str]
     descriptions: list[str]
     ad_index: int = 0  # which RSA variant within the ad group to edit
+    final_url: str | None = None  # destination/landing-page URL for this ad
+
+
+def _derive_display_paths(url: str) -> tuple[str, str]:
+    """Build the two cosmetic display-path segments (≤15 chars) from a URL path."""
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url if "://" in url else f"https://{url}")
+        segs = [s for s in parsed.path.split("/") if s][:2]
+        segs = [s[:15] for s in segs]
+        while len(segs) < 2:
+            segs.append("")
+        return (segs[0], segs[1])
+    except Exception:  # noqa: BLE001
+        return ("", "")
 
 
 class PatchTargetingRequest(BaseModel):
@@ -260,11 +276,16 @@ async def patch_ads(
                 raise HTTPException(status_code=400, detail="ad_index out of range")
 
             old_ad = old_group.ads[body.ad_index]
+            requested_url = (body.final_url or "").strip()
+            new_final_url = requested_url or old_ad.final_url
+            new_paths = (
+                _derive_display_paths(requested_url) if requested_url else old_ad.path_segments
+            )
             new_ad = AdProposal(
                 headlines=body.headlines[:15],
                 descriptions=body.descriptions[:4],
-                final_url=old_ad.final_url,
-                path_segments=old_ad.path_segments,
+                final_url=new_final_url,
+                path_segments=new_paths,
             )
             from dataclasses import replace as dc_replace
 
