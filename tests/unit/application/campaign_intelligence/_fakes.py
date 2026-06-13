@@ -156,6 +156,144 @@ class FakeKeywordRepository:
                     run_candidates[i] = candidate
                     return
 
+    async def list_phrases_for_campaign(self, campaign_id: str) -> set[str]:
+        phrases: set[str] = set()
+        for run in self.runs.values():
+            if run.campaign_id != campaign_id or run.id is None:
+                continue
+            phrases.update(c.phrase.strip().lower() for c in self.candidates.get(run.id, []))
+        return phrases
+
+
+class FakeHookGenerator:
+    """Generates one HEADLINE + one DESCRIPTION per allocated angle."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []
+
+    async def generate(
+        self,
+        *,
+        service: str,
+        vertical: str,
+        problems: list[str],
+        angle_allocation: dict[str, int],
+        surfaces: list[str],
+        language: str = "pl",
+    ):  # noqa: ANN201
+        from adcopilot.application.ports.hook_generator import GeneratedHook
+
+        self.calls.append({"allocation": dict(angle_allocation), "surfaces": list(surfaces)})
+        out: list[GeneratedHook] = []
+        for angle in angle_allocation:
+            if "HEADLINE" in surfaces:
+                out.append(GeneratedHook(f"{angle[:10].title()} hook?", angle, "HEADLINE"))
+            if "DESCRIPTION" in surfaces:
+                out.append(
+                    GeneratedHook(f"{angle.title()} opis który konwertuje dobrze", angle, "DESCRIPTION")
+                )
+        return out
+
+
+class FakeHookJudge:
+    """Scores hooks; a chosen ``winner_angle`` gets the top marks."""
+
+    def __init__(self, winner_angle: str = "PAIN") -> None:
+        self._winner = winner_angle
+        self.calls = 0
+
+    async def judge(self, hooks, *, service, vertical, language="pl"):  # noqa: ANN001
+        from adcopilot.application.ports.hook_generator import JudgeResult
+
+        self.calls += 1
+        out = []
+        for h in hooks:
+            base = 0.9 if h.angle == self._winner else 0.5
+            out.append(
+                JudgeResult(
+                    text=h.text,
+                    specificity=base,
+                    tension=base,
+                    pain_truth=base,
+                    clarity=base,
+                )
+            )
+        return out
+
+
+class FakeHookRepository:
+    """In-memory CieHookRepository."""
+
+    def __init__(self) -> None:
+        self.runs: dict = {}
+        self.candidates: dict = {}
+        self.shipped_assets: list = []
+
+    async def create_run(self, run) -> str:  # noqa: ANN001
+        run.id = run.id or str(uuid.uuid4())
+        self.runs[run.id] = run
+        self.candidates.setdefault(run.id, [])
+        return run.id
+
+    async def get_run(self, run_id):  # noqa: ANN001
+        return self.runs.get(run_id)
+
+    async def get_latest_run_for_campaign(self, campaign_id, user_id):  # noqa: ANN001
+        matches = [
+            r for r in self.runs.values()
+            if r.campaign_id == campaign_id and r.user_id == user_id
+        ]
+        return matches[-1] if matches else None
+
+    async def set_run_status(self, run_id, status, error=None):  # noqa: ANN001
+        run = self.runs.get(run_id)
+        if run:
+            run.status = status
+            if error:
+                run.error = error
+
+    async def set_rsa_payload(self, run_id, payload):  # noqa: ANN001
+        run = self.runs.get(run_id)
+        if run:
+            run.rsa_payload = payload
+
+    async def replace_candidates(self, run_id, campaign_id, candidates):  # noqa: ANN001
+        for i, c in enumerate(candidates):
+            c.id = c.id or f"{run_id}:{i}"
+        self.candidates[run_id] = list(candidates)
+
+    async def list_candidates(self, run_id, *, statuses=None):  # noqa: ANN001
+        items = self.candidates.get(run_id, [])
+        if statuses:
+            items = [c for c in items if c.status.value in statuses]
+        return list(items)
+
+    async def save_candidate(self, candidate):  # noqa: ANN001
+        for run_candidates in self.candidates.values():
+            for i, c in enumerate(run_candidates):
+                if c.id == candidate.id:
+                    run_candidates[i] = candidate
+                    return
+
+    async def record_shipped_assets(self, *, account_id, customer_id, campaign_id,
+                                    vertical, language, assets):  # noqa: ANN001
+        for c in assets:
+            key = (account_id, c.text, c.surface.value)
+            if any((a["account_id"], a["asset_text"], a["surface"]) == key for a in self.shipped_assets):
+                continue
+            self.shipped_assets.append(
+                {
+                    "account_id": account_id,
+                    "customer_id": customer_id,
+                    "campaign_id": campaign_id,
+                    "asset_text": c.text,
+                    "angle": c.angle.value,
+                    "surface": c.surface.value,
+                    "vertical": vertical,
+                    "language": language,
+                }
+            )
+
 
 def make_volume(searches: int, *, bucketed: bool = False, competition: str = "MEDIUM") -> SearchVolume:
     return SearchVolume(

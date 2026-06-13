@@ -11,8 +11,6 @@ directly into the existing campaign-creation flow; request-body fields override.
 
 from __future__ import annotations
 
-import uuid
-
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -25,22 +23,16 @@ from adcopilot.domain.campaign_intelligence.keywords.keyword_run import (
     KeywordRun,
     KeywordRunStatus,
 )
-from adcopilot.domain.campaign_intelligence.shared.vertical import Vertical
-from adcopilot.domain.entities import AccountId
-from adcopilot.infrastructure.db.repositories.cie_keyword_repository import SqlCieKeywordRepository
-from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
-    SqlGoogleAdsAccountRepository,
+from adcopilot.infrastructure.cie.campaign_context import (
+    CampaignForbidden,
+    CampaignNotFound,
+    resolve_campaign_context,
 )
+from adcopilot.infrastructure.db.repositories.cie_keyword_repository import SqlCieKeywordRepository
 
 logger = structlog.get_logger(__name__)
 
-
-class CampaignNotFound(LookupError):
-    pass
-
-
-class CampaignForbidden(PermissionError):
-    pass
+__all__ = ["CampaignForbidden", "CampaignNotFound", "DbKeywordFlowService"]
 
 
 class DbKeywordFlowService:
@@ -65,16 +57,22 @@ class DbKeywordFlowService:
         engine = self._engine()
         try:
             async with AsyncSession(engine) as session, session.begin():
-                resolved = await self._resolve_campaign_context(
-                    session, campaign_id, user_id, account_id, vertical, language, service
+                ctx = await resolve_campaign_context(
+                    session,
+                    campaign_id=campaign_id,
+                    user_id=user_id,
+                    account_id=account_id,
+                    vertical=vertical,
+                    language=language,
+                    service=service,
                 )
                 run = KeywordRun(
                     campaign_id=campaign_id,
-                    account_id=resolved["account_id"],
+                    account_id=ctx.account_id,
                     user_id=user_id,
-                    vertical=resolved["vertical"],
-                    language=language or resolved["language"],
-                    service=service or resolved["service"],
+                    vertical=ctx.vertical,
+                    language=ctx.language,
+                    service=ctx.service,
                     problems=problems or [],
                     seeds=seeds or [],
                     status=KeywordRunStatus.GENERATING,
@@ -136,54 +134,3 @@ class DbKeywordFlowService:
                 return await RankKeywordsUseCase(repo).run(run.id)
         finally:
             await engine.dispose()
-
-    async def _resolve_campaign_context(
-        self,
-        session: AsyncSession,
-        campaign_id: str,
-        user_id: str,
-        account_id: str | None,
-        vertical: str | None,
-        language: str | None,
-        service: str | None,
-    ) -> dict[str, str]:
-        """Pull defaults from the launch brief (if any) and verify ownership."""
-        brief = await self._try_get_brief(session, campaign_id, user_id)
-        resolved_account = account_id or (str(brief.account_id) if brief else None)
-        if resolved_account is None:
-            raise CampaignNotFound(
-                "account_id is required when the campaign has no launch brief"
-            )
-
-        account = await SqlGoogleAdsAccountRepository(session).get(AccountId(resolved_account))
-        if account is None:
-            raise CampaignNotFound("Account not found")
-        if str(account.user_id) != user_id:
-            raise CampaignForbidden("Account does not belong to user")
-
-        raw_vertical = vertical or (brief.vertical if brief else None) or account.vertical
-        resolved_vertical = Vertical.from_raw(raw_vertical).value.value
-        resolved_language = language or (brief.language if brief else None) or "pl"
-        resolved_service = service or (brief.business_description if brief else "") or ""
-        return {
-            "account_id": resolved_account,
-            "vertical": resolved_vertical,
-            "language": resolved_language,
-            "service": resolved_service,
-        }
-
-    @staticmethod
-    async def _try_get_brief(session: AsyncSession, campaign_id: str, user_id: str):  # noqa: ANN205
-        try:
-            uuid.UUID(campaign_id)
-        except ValueError:
-            return None
-        from adcopilot.domain.launch.entities import CampaignBriefId
-        from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
-            SqlCampaignBriefRepository,
-        )
-
-        brief = await SqlCampaignBriefRepository(session).get(CampaignBriefId(campaign_id))
-        if brief is not None and str(brief.user_id) == user_id:
-            return brief
-        return None

@@ -49,3 +49,22 @@ def build_kp_volume_adapter(settings: Settings) -> GoogleKeywordPlannerVolumeAda
 
 def build_dataforseo_adapter(settings: Settings) -> DataForSeoAdapter:
     return DataForSeoAdapter(settings)
+
+
+def build_hook_generator(settings: Settings, prompt_repo: Any | None = None) -> Any:
+    from adcopilot.infrastructure.adapters.claude_hook_adapter import ClaudeHookGenerator
+
+    return ClaudeHookGenerator(build_llm(settings), prompt_repo=prompt_repo)
+
+
+def build_hook_judge(settings: Settings, prompt_repo: Any | None = None) -> Any:
+    """The judge is the highest-leverage critic pass and runs on ~14 candidates,
+    so it uses the premium model when one is configured (negligible cost)."""
+    from adcopilot.infrastructure.adapters.claude_hook_adapter import ClaudeHookJudge
+
+    llm: Any
+    if settings.LLM_API_KEY:
+        llm = AnthropicClient(api_key=settings.LLM_API_KEY, model=settings.LLM_MODEL_PREMIUM)
+    else:
+        llm = FakeLLMClient(default="[]")
+    return ClaudeHookJudge(llm, prompt_repo=prompt_repo)
