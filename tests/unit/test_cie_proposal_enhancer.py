@@ -8,6 +8,7 @@ on error.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import uuid
 from datetime import UTC, datetime
@@ -161,6 +162,46 @@ async def test_keywords_are_intent_anchored() -> None:
     all_keywords = {kw.text for ag in enhanced.ad_groups for kw in ag.keywords}
     assert "drenaż limfatyczny" in all_keywords
     assert "cellulit po ciąży" in all_keywords
+
+
+async def test_enhancer_removes_keyword_negative_conflicts() -> None:
+    brief = _brief()
+    base = build_proposal_from_template(brief)
+    # Inject a negative that would block a brand keyword + a harmless one.
+    base = dataclasses.replace(
+        base, negative_keywords=[*base.negative_keywords, "icoone opinie", "praca"]
+    )
+    enhanced = await CieProposalEnhancer(Settings(LLM_API_KEY="k"), llm=_FakeLLM()).enhance(
+        brief=brief, proposal=base
+    )
+
+    all_keywords = {kw.text.lower() for ag in enhanced.ad_groups for kw in ag.keywords}
+    negatives = {n.lower() for n in enhanced.negative_keywords}
+    assert "icoone opinie" in all_keywords  # the brand keyword is targeted
+    assert "icoone opinie" not in negatives  # …so the conflicting negative is gone
+    assert "praca" in negatives  # non-conflicting negatives are kept
+
+
+def test_reconcile_negatives_unit() -> None:
+    from adcopilot.domain.launch.entities import AdGroupProposal, MatchType, KeywordProposal
+    from adcopilot.infrastructure.cie.proposal_enhancer import _reconcile_negatives
+
+    ag = AdGroupProposal(
+        name="Marka",
+        keywords=[
+            KeywordProposal(text="icoone opinie", match_type=MatchType.PHRASE, estimated_cpc_micros=0),
+            KeywordProposal(text="icoone cena", match_type=MatchType.PHRASE, estimated_cpc_micros=0),
+        ],
+        ads=[],
+    )
+    kept = _reconcile_negatives(
+        ["icoone opinie", "-ems opinie", "opinia", "praca", "tani icoone"], [ag]
+    )
+    assert "icoone opinie" not in kept  # blocks the keyword → removed
+    assert "opinia" in kept  # 'opinia' ≠ 'opinie' → kept
+    assert "praca" in kept
+    assert "tani icoone" in kept  # no keyword has both tokens
+    assert "-ems opinie" in kept  # no 'ems opinie' keyword
 
 
 async def test_enhancer_falls_back_on_llm_failure() -> None:

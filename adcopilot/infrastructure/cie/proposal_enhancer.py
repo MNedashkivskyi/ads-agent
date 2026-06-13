@@ -174,13 +174,22 @@ class CieProposalEnhancer:
 
         if groups:
             groups = groups[:max_groups]
+            # Drop any campaign negative that would block one of our keywords —
+            # a keyword and a negative for the same term is a conflict (the
+            # keyword would never serve). E.g. dropping "-icoone opinie" when the
+            # brand group bids on "icoone opinie".
+            negatives = _reconcile_negatives(proposal.negative_keywords, groups)
+            removed = len(proposal.negative_keywords) - len(negatives)
             logger.info(
                 "cie.proposal_enhance.applied",
                 brief_id=str(brief.id),
                 ad_groups=len(groups),
                 ads_per_group=[len(g.ads) for g in groups],
+                negatives_removed=removed,
             )
-            return dataclasses.replace(proposal, ad_groups=groups)
+            return dataclasses.replace(
+                proposal, ad_groups=groups, negative_keywords=negatives
+            )
 
         if hooks_only_ads:
             logger.info("cie.proposal_enhance.hooks_only", brief_id=str(brief.id))
@@ -384,6 +393,28 @@ class CieProposalEnhancer:
 # ---------------------------------------------------------------------------
 # Pure helpers
 # ---------------------------------------------------------------------------
+
+
+def _reconcile_negatives(
+    negatives: list[str], ad_groups: list[AdGroupProposal]
+) -> list[str]:
+    """Remove negatives that would block any keyword in the new ad groups.
+
+    A negative blocks a keyword when all of the negative's tokens appear in the
+    keyword (phrase/broad-negative semantics). Keeping both is a self-defeating
+    conflict, so the negative is dropped in favour of the deliberately-targeted
+    keyword.
+    """
+    keyword_token_sets = [
+        set(kw.text.lower().split()) for ag in ad_groups for kw in ag.keywords
+    ]
+    kept: list[str] = []
+    for neg in negatives:
+        neg_tokens = set(neg.lower().lstrip("-").split())
+        if neg_tokens and any(neg_tokens <= kt for kt in keyword_token_sets):
+            continue  # conflicts with a keyword → drop it
+        kept.append(neg)
+    return kept
 
 
 def _kw_sort_key(c: KeywordCandidate) -> tuple[float, int]:

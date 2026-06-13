@@ -46,6 +46,7 @@ class PatchAdsRequest(BaseModel):
     ad_group_index: int
     headlines: list[str]
     descriptions: list[str]
+    ad_index: int = 0  # which RSA variant within the ad group to edit
 
 
 class PatchTargetingRequest(BaseModel):
@@ -228,7 +229,7 @@ async def patch_ads(
     body: PatchAdsRequest,
     user_id: CurrentUser,
 ) -> EditResponse:
-    """Replace headlines and descriptions for the first ad in an ad group."""
+    """Replace headlines and descriptions for a specific ad (RSA variant) in a group."""
     try:
         uuid.UUID(proposal_id)
     except ValueError:
@@ -255,8 +256,10 @@ async def patch_ads(
 
             if not old_group.ads:
                 raise HTTPException(status_code=400, detail="Ad group has no ads to edit")
+            if body.ad_index < 0 or body.ad_index >= len(old_group.ads):
+                raise HTTPException(status_code=400, detail="ad_index out of range")
 
-            old_ad = old_group.ads[0]
+            old_ad = old_group.ads[body.ad_index]
             new_ad = AdProposal(
                 headlines=body.headlines[:15],
                 descriptions=body.descriptions[:4],
@@ -265,7 +268,8 @@ async def patch_ads(
             )
             from dataclasses import replace as dc_replace
 
-            new_ads = [new_ad] + list(old_group.ads[1:])
+            new_ads = list(old_group.ads)
+            new_ads[body.ad_index] = new_ad
             groups[body.ad_group_index] = dc_replace(old_group, ads=new_ads)
             updated = dc_replace(proposal, ad_groups=groups)
             await repo.save(updated)
