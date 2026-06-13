@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
 from adcopilot.infrastructure.adapters.http_website_crawler import HttpWebsiteCrawlerAdapter
@@ -39,6 +39,7 @@ class AnalyzeResponse(BaseModel):
 @limiter.limit(_ANALYZE_LIMIT)
 async def analyze_website(
     request: Request,
+    response: Response,
     body: AnalyzeRequest,
     user_id: CurrentUser,
 ) -> AnalyzeResponse:
