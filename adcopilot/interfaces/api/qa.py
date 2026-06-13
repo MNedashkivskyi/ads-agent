@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from adcopilot.config import Settings, get_settings
@@ -47,6 +47,7 @@ class QaHistoryResponse(BaseModel):
 @limiter.limit(_QA_LIMIT)
 async def ask(
     request: Request,
+    response: Response,
     user_id: str,
     body: AskRequest,
     current_user: CurrentUser,

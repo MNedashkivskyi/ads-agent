@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from adcopilot.config import Settings, get_settings
@@ -46,6 +46,7 @@ class LandingPageScoreResponse(BaseModel):
 @limiter.limit(_SCORE_LIMIT)
 async def get_landing_page_score(
     request: Request,
+    response: Response,
     user_id: str,
     url: str,
     current_user: CurrentUser,
