@@ -295,6 +295,123 @@ class FakeHookRepository:
             )
 
 
+class FakePerformancePort:
+    """AdsPerformancePort returning canned fixture rows."""
+
+    def __init__(self, *, assets=None, keywords=None, search_terms=None) -> None:
+        self._assets = assets or []
+        self._keywords = keywords or []
+        self._search_terms = search_terms or []
+
+    async def fetch_asset_performance(self, refresh_token, customer_id, *, start_date, end_date):  # noqa: ANN001
+        return list(self._assets)
+
+    async def fetch_keyword_performance(self, refresh_token, customer_id, *, start_date, end_date):  # noqa: ANN001
+        return list(self._keywords)
+
+    async def fetch_search_terms(self, refresh_token, customer_id, *, start_date, end_date):  # noqa: ANN001
+        return list(self._search_terms)
+
+
+class FakeAttributionRepository:
+    def __init__(self, intent_map=None, angle_map=None) -> None:
+        self._intent_map = intent_map or {}
+        self._angle_map = angle_map or {}
+
+    async def keyword_intent_map(self, account_id):  # noqa: ANN001
+        return dict(self._intent_map)
+
+    async def asset_angle_map(self, account_id):  # noqa: ANN001
+        return dict(self._angle_map)
+
+
+class FakeFactRepository:
+    """Idempotent fact store keyed by (account, entity_type, entity_id, day)."""
+
+    def __init__(self) -> None:
+        self.facts: dict = {}
+
+    async def upsert_facts(self, facts):  # noqa: ANN001
+        for f in facts:
+            self.facts[(f.account_id, f.entity_type, f.entity_id, f.day)] = f
+        return len(facts)
+
+    async def aggregate_by_dimension(self, dimension):  # noqa: ANN001
+        from collections import defaultdict
+
+        from adcopilot.application.ports.cie_performance import DimensionAggregate
+
+        groups: dict = defaultdict(lambda: [0, 0, 0.0])
+        for f in self.facts.values():
+            if f.dimension != dimension or f.value is None:
+                continue
+            key = (f.vertical, f.value, f.language)
+            groups[key][0] += f.impressions
+            groups[key][1] += f.clicks
+            groups[key][2] += f.conversions
+        return [
+            DimensionAggregate(
+                vertical=v, dimension=dimension, value=val, language=lang,
+                impressions=i, clicks=c, conversions=conv,
+            )
+            for (v, val, lang), (i, c, conv) in groups.items()
+        ]
+
+    async def list_search_term_facts(self, account_id):  # noqa: ANN001
+        return [
+            f for f in self.facts.values()
+            if f.account_id == account_id and f.entity_type == "search_term"
+        ]
+
+
+class FakeDimensionPerformanceRepository:
+    def __init__(self) -> None:
+        self.store: dict = {}
+
+    async def upsert(self, p) -> None:  # noqa: ANN001
+        self.store[(p.vertical, p.dimension, p.value, p.language)] = p
+
+    async def get_map(self, *, vertical, dimension, language="pl"):  # noqa: ANN001
+        return {
+            value: p
+            for (v, d, value, lang), p in self.store.items()
+            if v == vertical and d == dimension and lang == language
+        }
+
+
+class FakeSearchTermRepository:
+    def __init__(self) -> None:
+        self.saved: list = []
+        self.statuses: dict = {}
+
+    async def save_proposals(self, *, account_id, customer_id, campaign_id,
+                             vertical, language, proposals):  # noqa: ANN001
+        for p in proposals:
+            key = (account_id, p.term, p.kind)
+            if any((s["account_id"], s["term"], s["kind"]) == key for s in self.saved):
+                continue
+            self.saved.append(
+                {"account_id": account_id, "term": p.term, "kind": p.kind, "proposal": p}
+            )
+        return len(proposals)
+
+    async def list_promotion_terms(self, account_id, *, status="proposed", limit=50):  # noqa: ANN001
+        return [
+            s["term"] for s in self.saved
+            if s["account_id"] == account_id and s["kind"] == "promote"
+        ][:limit]
+
+    async def list_proposals(self, account_id, *, kind=None, status="proposed"):  # noqa: ANN001
+        return [
+            s["proposal"] for s in self.saved
+            if s["account_id"] == account_id and (kind is None or s["kind"] == kind)
+        ]
+
+    async def set_proposal_status(self, account_id, term, kind, status):  # noqa: ANN001
+        self.statuses[(account_id, term, kind)] = status
+        return True
+
+
 def make_volume(searches: int, *, bucketed: bool = False, competition: str = "MEDIUM") -> SearchVolume:
     return SearchVolume(
         monthly_searches=searches,

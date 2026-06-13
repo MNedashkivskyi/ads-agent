@@ -140,6 +140,24 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.tasks.detect_spend_cap_breaches_task",
                     "schedule": crontab(minute=20),
                 },
+                "cie-nightly-performance-sync": {
+                    # 3:30 AM UTC — after the nightly snapshot. Pulls per-asset,
+                    # per-keyword, and search-term performance for both CIE tracks.
+                    "task": "adcopilot.interfaces.worker.cie_tasks.cie_sync_all_accounts_task",
+                    "schedule": crontab(hour=3, minute=30),
+                },
+                "cie-daily-search-term-harvest": {
+                    # 4:15 AM UTC — after the performance sync settles. Proposes
+                    # new keywords + negatives from real search terms.
+                    "task": "adcopilot.interfaces.worker.cie_tasks.cie_harvest_all_accounts_task",
+                    "schedule": crontab(hour=4, minute=15),
+                },
+                "cie-nightly-weight-recompute": {
+                    # 5:30 AM UTC — recompute learned dimension weights for both
+                    # tracks from accumulated performance facts.
+                    "task": "adcopilot.interfaces.worker.cie_tasks.cie_recompute_dimension_weights_task",
+                    "schedule": crontab(hour=5, minute=30),
+                },
                 "daily-campaign-experiment-evaluation": {
                     # 6:30 AM UTC daily — after nightly snapshot. Poll RUNNING
                     # native Google Ads experiments, compute causal verdicts, and

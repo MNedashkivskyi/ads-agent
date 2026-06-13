@@ -60,6 +60,14 @@ class KeywordFlowService(Protocol):
         self, *, campaign_id: str, user_id: str
     ) -> KeywordComparison | None: ...
 
+    async def get_harvest(self, *, campaign_id: str, user_id: str) -> dict | None: ...
+
+    async def trigger_harvest(self, *, campaign_id: str, user_id: str) -> str: ...
+
+    async def adopt_proposal(
+        self, *, campaign_id: str, user_id: str, term: str, kind: str, decision: str
+    ) -> bool: ...
+
 
 def get_keyword_flow() -> KeywordFlowService:
     return DbKeywordFlowService(get_settings())
@@ -193,6 +201,72 @@ async def keyword_comparison(
     if comparison is None:
         raise HTTPException(status_code=404, detail="No keyword run found")
     return _to_response(comparison)
+
+
+class HarvestProposalResponse(BaseModel):
+    term: str
+    kind: str
+    impressions: int
+    clicks: int
+    conversions: float
+    cost_micros: int
+    ctr: float
+    intent: str | None = None
+
+
+class HarvestResponse(BaseModel):
+    promotions: list[HarvestProposalResponse]
+    negatives: list[HarvestProposalResponse]
+
+
+class AdoptProposalRequest(BaseModel):
+    term: str
+    kind: str  # promote | negative
+    decision: str = "adopt"  # adopt | dismiss
+
+
+@router.get("/campaigns/{campaign_id}/keywords/harvest", response_model=HarvestResponse)
+async def keyword_harvest(
+    campaign_id: str, user_id: CurrentUser, flow: FlowDep
+) -> HarvestResponse:
+    """Surface harvested promotion + negative proposals for one-click adoption."""
+    data = await flow.get_harvest(campaign_id=campaign_id, user_id=user_id)
+    if data is None:
+        return HarvestResponse(promotions=[], negatives=[])
+    return HarvestResponse(
+        promotions=[HarvestProposalResponse(**p.__dict__) for p in data["promotions"]],
+        negatives=[HarvestProposalResponse(**p.__dict__) for p in data["negatives"]],
+    )
+
+
+@router.post("/campaigns/{campaign_id}/keywords/harvest/run", response_model=RunResponse, status_code=202)
+async def run_harvest(
+    campaign_id: str, user_id: CurrentUser, flow: FlowDep
+) -> RunResponse:
+    """Trigger a search-term harvest for the campaign's account on demand."""
+    try:
+        account_id = await flow.trigger_harvest(campaign_id=campaign_id, user_id=user_id)
+    except (CampaignNotFound, CampaignForbidden, ValueError) as exc:
+        raise _map_exc(exc) from exc
+    return RunResponse(run_id=account_id, status="harvesting")
+
+
+@router.post("/campaigns/{campaign_id}/keywords/harvest/adopt")
+async def adopt_harvest(
+    campaign_id: str, body: AdoptProposalRequest, user_id: CurrentUser, flow: FlowDep
+) -> dict:
+    """Adopt or dismiss a harvested proposal."""
+    try:
+        updated = await flow.adopt_proposal(
+            campaign_id=campaign_id,
+            user_id=user_id,
+            term=body.term,
+            kind=body.kind,
+            decision=body.decision,
+        )
+    except (CampaignNotFound, CampaignForbidden, ValueError) as exc:
+        raise _map_exc(exc) from exc
+    return {"updated": updated}
 
 
 def _to_response(c: KeywordComparison) -> ComparisonResponse:

@@ -29,6 +29,9 @@ from adcopilot.infrastructure.cie.campaign_context import (
     resolve_campaign_context,
 )
 from adcopilot.infrastructure.db.repositories.cie_keyword_repository import SqlCieKeywordRepository
+from adcopilot.infrastructure.db.repositories.cie_search_term_repository import (
+    SqlCieSearchTermRepository,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -66,6 +69,12 @@ class DbKeywordFlowService:
                     language=language,
                     service=service,
                 )
+                # Phase 5.3 — feed harvested winning terms back as extra seeds.
+                merged_seeds = list(seeds or [])
+                harvested = await SqlCieSearchTermRepository(session).list_promotion_terms(
+                    ctx.account_id, limit=25
+                )
+                merged_seeds.extend(harvested)
                 run = KeywordRun(
                     campaign_id=campaign_id,
                     account_id=ctx.account_id,
@@ -74,7 +83,7 @@ class DbKeywordFlowService:
                     language=ctx.language,
                     service=ctx.service,
                     problems=problems or [],
-                    seeds=seeds or [],
+                    seeds=merged_seeds,
                     status=KeywordRunStatus.GENERATING,
                 )
                 run_id = await SqlCieKeywordRepository(session).create_run(run)
@@ -131,6 +140,77 @@ class DbKeywordFlowService:
                 run = await repo.get_latest_run_for_campaign(campaign_id, user_id)
                 if run is None or run.id is None:
                     return None
-                return await RankKeywordsUseCase(repo).run(run.id)
+                # Phase 6 — rank with learned intent-weights for the vertical.
+                from adcopilot.domain.campaign_intelligence.keywords.value_objects import (
+                    KEYWORD_INTENT_DIMENSION,
+                )
+                from adcopilot.domain.campaign_intelligence.shared.learned_weights import (
+                    weights_from_performance,
+                )
+                from adcopilot.infrastructure.db.repositories.cie_dimension_performance_repository import (  # noqa: E501
+                    SqlCieDimensionPerformanceRepository,
+                )
+
+                learned = await SqlCieDimensionPerformanceRepository(session).get_map(
+                    vertical=run.vertical,
+                    dimension=KEYWORD_INTENT_DIMENSION,
+                    language=run.language,
+                )
+                weights = weights_from_performance(learned)
+                return await RankKeywordsUseCase(repo).run(run.id, learned_weights=weights)
         finally:
             await engine.dispose()
+
+    async def get_harvest(self, *, campaign_id: str, user_id: str) -> dict | None:
+        engine = self._engine()
+        try:
+            async with AsyncSession(engine) as session:
+                account_id = await self._account_for_campaign(session, campaign_id, user_id)
+                if account_id is None:
+                    return None
+                repo = SqlCieSearchTermRepository(session)
+                return {
+                    "promotions": await repo.list_proposals(account_id, kind="promote"),
+                    "negatives": await repo.list_proposals(account_id, kind="negative"),
+                }
+        finally:
+            await engine.dispose()
+
+    async def trigger_harvest(self, *, campaign_id: str, user_id: str) -> str:
+        engine = self._engine()
+        try:
+            async with AsyncSession(engine) as session:
+                account_id = await self._account_for_campaign(session, campaign_id, user_id)
+                if account_id is None:
+                    raise CampaignNotFound("No account found for campaign")
+        finally:
+            await engine.dispose()
+
+        from adcopilot.interfaces.worker.cie_tasks import cie_harvest_search_terms_task
+
+        cie_harvest_search_terms_task.delay(account_id)
+        return account_id
+
+    async def adopt_proposal(
+        self, *, campaign_id: str, user_id: str, term: str, kind: str, decision: str
+    ) -> bool:
+        status = "adopted" if decision == "adopt" else "dismissed"
+        engine = self._engine()
+        try:
+            async with AsyncSession(engine) as session, session.begin():
+                account_id = await self._account_for_campaign(session, campaign_id, user_id)
+                if account_id is None:
+                    raise CampaignNotFound("No account found for campaign")
+                return await SqlCieSearchTermRepository(session).set_proposal_status(
+                    account_id, term, kind, status
+                )
+        finally:
+            await engine.dispose()
+
+    async def _account_for_campaign(
+        self, session: AsyncSession, campaign_id: str, user_id: str
+    ) -> str | None:
+        run = await SqlCieKeywordRepository(session).get_latest_run_for_campaign(
+            campaign_id, user_id
+        )
+        return run.account_id if run else None
