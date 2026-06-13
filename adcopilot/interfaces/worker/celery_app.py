@@ -26,7 +26,10 @@ def create_celery_app() -> Celery:
             # can find task functions.  Without this, task.delay() from
             # the API enqueues by string name, but the worker rejects
             # with "Received unregistered task".
-            "include": ["adcopilot.interfaces.worker.tasks"],
+            "include": [
+                "adcopilot.interfaces.worker.tasks",
+                "adcopilot.interfaces.worker.cie_tasks",
+            ],
             "broker_url": settings.REDIS_URL,
             "result_backend": settings.REDIS_URL,
             "task_serializer": "json",
@@ -136,6 +139,24 @@ def create_celery_app() -> Celery:
                     # auto-pause is enabled, pauses the offending campaign/account.
                     "task": "adcopilot.interfaces.worker.tasks.detect_spend_cap_breaches_task",
                     "schedule": crontab(minute=20),
+                },
+                "cie-nightly-performance-sync": {
+                    # 3:30 AM UTC — after the nightly snapshot. Pulls per-asset,
+                    # per-keyword, and search-term performance for both CIE tracks.
+                    "task": "adcopilot.interfaces.worker.cie_tasks.cie_sync_all_accounts_task",
+                    "schedule": crontab(hour=3, minute=30),
+                },
+                "cie-daily-search-term-harvest": {
+                    # 4:15 AM UTC — after the performance sync settles. Proposes
+                    # new keywords + negatives from real search terms.
+                    "task": "adcopilot.interfaces.worker.cie_tasks.cie_harvest_all_accounts_task",
+                    "schedule": crontab(hour=4, minute=15),
+                },
+                "cie-nightly-weight-recompute": {
+                    # 5:30 AM UTC — recompute learned dimension weights for both
+                    # tracks from accumulated performance facts.
+                    "task": "adcopilot.interfaces.worker.cie_tasks.cie_recompute_dimension_weights_task",
+                    "schedule": crontab(hour=5, minute=30),
                 },
                 "daily-campaign-experiment-evaluation": {
                     # 6:30 AM UTC daily — after nightly snapshot. Poll RUNNING
