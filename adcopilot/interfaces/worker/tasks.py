@@ -1765,6 +1765,25 @@ async def _run_generate_campaign(
                 if premium_llm is not None:
                     await premium_llm.aclose()
 
+        # \u2500\u2500 Step 2.5: rewrite the proposal with CIE intent-keywords + angle-hooks.
+        # This is the whole point of the engine \u2014 the launched campaign uses the
+        # intent-anchored keywords and the angle-based hooks, not generic copy.
+        # Best-effort: any failure leaves the base proposal untouched.
+        if settings.LLM_API_KEY:
+            try:
+                from adcopilot.infrastructure.cie.proposal_enhancer import CieProposalEnhancer
+
+                proposal = await CieProposalEnhancer(settings).enhance(
+                    proposal,
+                    brief,
+                    refresh_token=kw_refresh_token,
+                    customer_id=kw_customer_id,
+                )
+            except Exception:
+                logger.warning(
+                    "generate_campaign_task: CIE enhancement skipped", brief_id=brief_id
+                )
+
         # \u2500\u2500 Step 3: persist proposal + mark brief PROPOSED (short write-tx) \u2500\u2500
         async with AsyncSession(engine) as session, session.begin():
             proposal_repo = SqlCampaignProposalRepository(session)

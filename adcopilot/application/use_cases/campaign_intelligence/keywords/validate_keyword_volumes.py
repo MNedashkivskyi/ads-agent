@@ -123,6 +123,15 @@ class ValidateKeywordVolumesUseCase:
         else:
             candidate.mark_rejected()
 
+    async def resolve_volumes(
+        self, phrases: list[str], ctx: VolumeRequestContext
+    ) -> dict[str, SearchVolume]:
+        """Public entry point for volume resolution (cache → KP → DataForSEO).
+
+        Reused by the proposal enhancer to price keywords without persisting a run.
+        """
+        return await self._resolve_volumes(phrases, ctx)
+
     async def _resolve_volumes(
         self, phrases: list[str], ctx: VolumeRequestContext
     ) -> dict[str, SearchVolume]:
