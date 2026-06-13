@@ -98,6 +98,18 @@ class InMemoryKeywordFlow:
             return None
         return await RankKeywordsUseCase(self.repo).run(run.id)
 
+    async def analyze(self, *, campaign_id, user_id, account_id=None, vertical=None,
+                      language=None, service=None, problems=None) -> KeywordComparison:  # noqa: ANN001
+        # Synchronous: generate → validate → rank in one call.
+        await self.generate(
+            campaign_id=campaign_id, user_id=user_id, account_id=account_id,
+            vertical=vertical, language=language, service=service, problems=problems,
+        )
+        await self.validate(campaign_id=campaign_id, user_id=user_id)
+        result = await self.comparison(campaign_id=campaign_id, user_id=user_id)
+        assert result is not None
+        return result
+
 
 @pytest.fixture
 def client():  # noqa: ANN201
@@ -156,3 +168,18 @@ def test_comparison_404_when_no_run(client) -> None:  # noqa: ANN001
     c, _ = client
     resp = c.get("/api/campaigns/no-run/keywords/comparison")
     assert resp.status_code == 404
+
+
+def test_analyze_returns_comparison_synchronously(client) -> None:  # noqa: ANN001
+    c, flow = client
+    cid = "44444444-4444-4444-4444-444444444444"
+    # One synchronous call returns the full comparison — no polling, no hang.
+    resp = c.post(
+        f"/api/campaigns/{cid}/keywords/analyze",
+        json={"account_id": "acct-1", "vertical": "salon", "service": "icoone"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["intent_total_volume"] > body["brand_total_volume"]
+    assert {g["intent"] for g in body["groups"]} == {"BRAND", "INTENT", "PROBLEM"}
+    assert flow.df.requested == ["icoone warszawa"]  # bucketed → DataForSEO fallback fired

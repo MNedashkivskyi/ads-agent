@@ -60,6 +60,18 @@ class KeywordFlowService(Protocol):
         self, *, campaign_id: str, user_id: str
     ) -> KeywordComparison | None: ...
 
+    async def analyze(
+        self,
+        *,
+        campaign_id: str,
+        user_id: str,
+        account_id: str | None = None,
+        vertical: str | None = None,
+        language: str | None = None,
+        service: str | None = None,
+        problems: list[str] | None = None,
+    ) -> KeywordComparison: ...
+
     async def get_harvest(self, *, campaign_id: str, user_id: str) -> dict | None: ...
 
     async def trigger_harvest(self, *, campaign_id: str, user_id: str) -> str: ...
@@ -163,6 +175,42 @@ async def generate_keywords(
     except (CampaignNotFound, CampaignForbidden, ValueError) as exc:
         raise _map_exc(exc) from exc
     return RunResponse(run_id=run_id, status="generating")
+
+
+@router.post(
+    "/campaigns/{campaign_id}/keywords/analyze",
+    response_model=ComparisonResponse,
+)
+async def analyze_keywords(
+    campaign_id: str,
+    body: GenerateKeywordsRequest,
+    user_id: CurrentUser,
+    flow: FlowDep,
+) -> ComparisonResponse:
+    """Synchronous: generate → validate → rank, returning the brand-vs-intent
+    comparison in one call (used as a launch-wizard step — no polling, can't
+    hang silently)."""
+    from adcopilot.domain.exceptions import AdCopilotError
+
+    try:
+        comparison = await flow.analyze(
+            campaign_id=campaign_id,
+            user_id=user_id,
+            account_id=body.account_id,
+            vertical=body.vertical,
+            language=body.language,
+            service=body.service,
+            problems=body.problems,
+        )
+    except (CampaignNotFound, CampaignForbidden, ValueError) as exc:
+        raise _map_exc(exc) from exc
+    except AdCopilotError as exc:
+        # LLM / volume failures surface as a clean 502 instead of an endless spinner.
+        raise HTTPException(
+            status_code=502,
+            detail="Nie udało się przeanalizować słów kluczowych. Spróbuj ponownie.",
+        ) from exc
+    return _to_response(comparison)
 
 
 @router.post(
