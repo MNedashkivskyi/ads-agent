@@ -17,7 +17,7 @@ from adcopilot.interfaces.api.pmax import _NO_MC_INSTRUCTIONS, router
 # ---------------------------------------------------------------------------
 
 
-def _make_app(user_id: str = "user-1") -> FastAPI:
+def _make_app(user_id: str = "user-1", campaign_creation_enabled: bool = True) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
 
@@ -30,6 +30,9 @@ def _make_app(user_id: str = "user-1") -> FastAPI:
     mock_settings.DATABASE_URL = "postgresql+asyncpg://test"
     mock_settings.TOKEN_ENCRYPTION_KEY = "test-key-32-bytes-padding-here!!"
     mock_settings.LLM_API_KEY = "test-llm-key"
+    # PMax create/eligibility sit behind the greenfield creation kill-switch
+    # (T1.1). Set an explicit bool so the dependency sees a real flag value.
+    mock_settings.CAMPAIGN_CREATION_ENABLED = campaign_creation_enabled
     app.dependency_overrides[get_settings] = lambda: mock_settings
 
     return app
@@ -237,6 +240,33 @@ def test_create_pmax_no_merchant_center():
 
     assert response.status_code == 400
     assert "Merchant Center" in response.json()["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Greenfield creation kill-switch (T1.1)
+# ---------------------------------------------------------------------------
+
+
+def test_create_pmax_404_when_creation_disabled():
+    app = _make_app(campaign_creation_enabled=False)
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post(
+        "/api/user-1/pmax/create",
+        json={
+            "account_id": "acc-uuid-1",
+            "monthly_budget_pln": 1500,
+            "campaign_name": "Test",
+            "final_url": "https://sklep.pl",
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_eligibility_404_when_creation_disabled():
+    app = _make_app(campaign_creation_enabled=False)
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.get("/api/user-1/pmax/eligibility?account_id=acc-uuid-1")
+    assert response.status_code == 404
 
 
 # ---------------------------------------------------------------------------

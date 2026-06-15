@@ -72,6 +72,9 @@ def test_client(tmp_path):
             "LLM_API_KEY": "",
             "TOKEN_ENCRYPTION_KEY": "test-key-32-bytes-long-padding!!",
             "ENV": "test",
+            # This suite drives the greenfield creation flow, which is behind
+            # the kill-switch (T1.1) — enable it so the launch routes mount.
+            "CAMPAIGN_CREATION_ENABLED": "true",
         },
     ):
         from fastapi.testclient import TestClient

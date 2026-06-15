@@ -79,6 +79,9 @@ def client(tmp_path):
             "LLM_API_KEY": "",
             "TOKEN_ENCRYPTION_KEY": "test-key-32-bytes-long-padding!!",
             "ENV": "test",
+            # Drives the launch enable route, behind the creation kill-switch
+            # (T1.1) — enable it so the launch router mounts.
+            "CAMPAIGN_CREATION_ENABLED": "true",
         },
     ):
         from adcopilot.config import get_settings

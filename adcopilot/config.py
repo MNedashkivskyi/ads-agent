@@ -87,12 +87,19 @@ class Settings(BaseSettings):
     # Cache TTL (seconds) for near-identical generation inputs (Phase 7.2).
     GENERATION_CACHE_TTL_SECONDS: int = 60 * 60 * 24 * 7
 
+    # Reversible kill-switch for greenfield (brand-new) campaign creation.
+    # Default OFF: the product has pivoted to optimizing existing campaigns
+    # (optimization pivot, Phase 1). When False, the launch / proposal-editor
+    # routers and the PMax creation routes are not served (they 404); flipping
+    # it True restores them. Physical deletion of the creation code is deferred
+    # to T6.2 after a stabilization window.
+    CAMPAIGN_CREATION_ENABLED: bool = False
+
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_WEBHOOK_SECRET: str | None = None
     STRIPE_STARTER_PRICE_ID: str | None = None
     STRIPE_PRO_PRICE_ID: str | None = None
     STRIPE_BUSINESS_PRICE_ID: str | None = None
-    STRIPE_SETUP_FEE_PRICE_ID: str | None = None  # One-time 399 PLN campaign setup fee
 
     # Sentry observability.  DSN is optional — the app runs fine without
     # Sentry, but when DSN is set all unhandled exceptions in the API,
