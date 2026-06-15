@@ -10,12 +10,9 @@ from datetime import UTC, datetime
 
 import pytest
 
+from adcopilot.application.entitlements import max_accounts as plan_max_accounts
 from adcopilot.domain.entities import GoogleAdsAccount, PlanTier, User, UserId
-from adcopilot.interfaces.api.users import (
-    PLAN_MAX_ACCOUNTS,
-    UserMeResponse,
-    _max_accounts_for_plan,
-)
+from adcopilot.interfaces.api.users import UserMeResponse
 
 _USER_ID = str(uuid.uuid4())
 _ACCOUNT_ID = str(uuid.uuid4())
@@ -97,21 +94,26 @@ class TestUserMeResponse:
 
 
 class TestPlanMaxAccounts:
+    """New limits sourced from the central entitlements module:
+    Starter 1 / Professional 3 / Business unlimited (None)."""
+
     def test_starter_allows_1(self) -> None:
-        assert PLAN_MAX_ACCOUNTS["starter"] == 1
+        assert plan_max_accounts(PlanTier.STARTER) == 1
 
-    def test_professional_allows_1(self) -> None:
-        assert PLAN_MAX_ACCOUNTS["professional"] == 1
+    def test_professional_allows_3(self) -> None:
+        assert plan_max_accounts(PlanTier.PROFESSIONAL) == 3
 
-    def test_business_allows_3(self) -> None:
-        assert PLAN_MAX_ACCOUNTS["business"] == 3
+    def test_business_is_unlimited(self) -> None:
+        assert plan_max_accounts(PlanTier.BUSINESS) is None
 
-    def test_unknown_plan_defaults_to_1(self) -> None:
-        assert _max_accounts_for_plan("unknown") == 1
+    def test_unknown_plan_defaults_to_starter(self) -> None:
+        # PlanTier.parse collapses unknown values to STARTER (limit 1).
+        assert plan_max_accounts(PlanTier.parse("unknown")) == 1
 
     def test_all_plan_tiers_have_mapping(self) -> None:
         for tier in PlanTier:
-            assert tier.value in PLAN_MAX_ACCOUNTS
+            # None is a valid (unlimited) value, so assert the call succeeds.
+            assert plan_max_accounts(tier) is None or plan_max_accounts(tier) >= 1
 
 
 # ---------------------------------------------------------------------------
@@ -173,31 +175,29 @@ class TestUserEntity:
 
 
 class TestOAuthStartQuota:
-    """Verify /oauth/google/start limit map agrees with users module."""
+    """The OAuth, users, and worker enforcement points now share one source
+    of truth (the entitlements module), so there is no second map to drift."""
 
-    def test_plan_limit_map_matches_users_module(self) -> None:
-        from adcopilot.interfaces.api.oauth import _PLAN_ACCOUNT_LIMITS
+    def test_no_duplicate_limit_map_in_oauth(self) -> None:
+        import adcopilot.interfaces.api.oauth as oauth_mod
 
-        for plan, limit in _PLAN_ACCOUNT_LIMITS.items():
-            assert PLAN_MAX_ACCOUNTS.get(plan) == limit, (
-                f"Mismatch for plan {plan}: oauth={limit}, users={PLAN_MAX_ACCOUNTS.get(plan)}"
-            )
+        assert not hasattr(oauth_mod, "_PLAN_ACCOUNT_LIMITS")
 
-    def test_worker_limit_map_matches_users_module(self) -> None:
-        from adcopilot.interfaces.worker.tasks import (
-            _PLAN_ACCOUNT_LIMITS as _WORKER_LIMITS,
-        )
+    def test_no_duplicate_limit_map_in_worker(self) -> None:
+        import adcopilot.interfaces.worker.tasks as tasks_mod
 
-        for plan, limit in _WORKER_LIMITS.items():
-            assert PLAN_MAX_ACCOUNTS.get(plan) == limit, (
-                f"Mismatch for plan {plan}: worker={limit}, users={PLAN_MAX_ACCOUNTS.get(plan)}"
-            )
+        assert not hasattr(tasks_mod, "_PLAN_ACCOUNT_LIMITS")
+
+    def test_no_duplicate_limit_map_in_users(self) -> None:
+        import adcopilot.interfaces.api.users as users_mod
+
+        assert not hasattr(users_mod, "PLAN_MAX_ACCOUNTS")
 
     def test_limits_match_product_rules(self) -> None:
-        # starter & professional: exactly 1 account; business: up to 3.
-        assert PLAN_MAX_ACCOUNTS["starter"] == 1
-        assert PLAN_MAX_ACCOUNTS["professional"] == 1
-        assert PLAN_MAX_ACCOUNTS["business"] == 3
+        # Starter 1, Professional 3, Business unlimited.
+        assert plan_max_accounts(PlanTier.STARTER) == 1
+        assert plan_max_accounts(PlanTier.PROFESSIONAL) == 3
+        assert plan_max_accounts(PlanTier.BUSINESS) is None
 
 
 # ---------------------------------------------------------------------------

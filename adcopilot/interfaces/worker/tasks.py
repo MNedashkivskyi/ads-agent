@@ -8,12 +8,12 @@ from datetime import UTC, date, datetime
 import structlog
 from redis import Redis
 
+from adcopilot.application.entitlements import max_accounts as plan_max_accounts
 from adcopilot.application.use_cases.snapshot_account import SnapshotResult
 from adcopilot.interfaces.worker.celery_app import celery_app
 
 logger = structlog.get_logger(__name__)
 
-_PLAN_ACCOUNT_LIMITS: dict[str, int] = {"starter": 1, "professional": 1, "business": 3}
 _OAUTH_PENDING_KEY_PREFIX = "oauth_pending:"
 
 _LOCK_TTL_SECONDS = 7200  # 2 hours
@@ -149,14 +149,15 @@ async def _async_link_google_ads_accounts(
                 return {"success": False, "error": "user_not_found"}
 
             existing_accounts = await acc_repo.list_for_user(UserId(user_id))
-            account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
+            # ``None`` means unlimited (Business) — sourced from the central
+            # entitlements module.
+            account_limit = plan_max_accounts(user.plan)
             # Customers this user has already linked.  Re-linking one of these
             # is a *reauth* (the OAuth session expired): it refreshes the stored
             # tokens and clears needs_reauth, and must always be allowed because
             # it does not consume a new quota slot.  Only genuinely new customers
             # count against the plan limit.
             existing_by_customer = {a.customer_id: a for a in existing_accounts}
-            slots_remaining = account_limit - len(existing_accounts)
 
             # --- call Google Ads API (runs in a thread pool inside asyncio.run) ---
             ads_client = GoogleAdsClientAdapter(settings)
@@ -173,7 +174,13 @@ async def _async_link_google_ads_accounts(
                 return {"success": False, "error": str(exc)}
 
             # Reauth of already-linked customers first (never quota-limited),
-            # then new customers up to the remaining slots.
+            # then new customers up to the remaining slots. ``None`` means
+            # unlimited (Business): grant a slot for every customer Google
+            # returns; otherwise cap at the plan's remaining slots.
+            if account_limit is None:
+                slots_remaining = len(customer_ids)
+            else:
+                slots_remaining = account_limit - len(existing_accounts)
             customers_to_link = select_customers_to_link(
                 customer_ids, set(existing_by_customer), slots_remaining
             )

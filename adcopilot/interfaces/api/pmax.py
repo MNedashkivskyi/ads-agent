@@ -8,8 +8,10 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from adcopilot.application.entitlements import Capability
 from adcopilot.config import Settings, get_settings
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
+from adcopilot.interfaces.api.deps import require_capability
 
 logger = structlog.get_logger(__name__)
 
@@ -176,8 +178,13 @@ async def create_pmax_campaign(
     body: CreatePMaxRequest,
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    _cap: Annotated[None, Depends(require_capability(Capability.PMAX_OPTIMIZATION))] = None,
 ) -> CreatePMaxResponse:
-    """Create a PAUSED Performance Max campaign (CCR-4: checks write_enabled + plan tier)."""
+    """Create a PAUSED Performance Max campaign (CCR-4: checks write_enabled).
+
+    Plan-tier gating is enforced centrally by ``require_capability`` against the
+    ``pmax_optimization`` capability (Professional and above).
+    """
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Brak dostępu")
 
@@ -192,20 +199,9 @@ async def create_pmax_campaign(
                 detail="Konto nie ma włączonego trybu zapisu. Skontaktuj się z pomocą techniczną.",
             )
 
-        from adcopilot.domain.entities import PlanTier, UserId
         from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
             SqlPromptVersionRepository,
         )
-        from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
-
-        user_repo = SqlUserRepository(session)
-        user = await user_repo.get(UserId(user_id))
-        if user is None or user.plan == PlanTier.STARTER:
-            raise HTTPException(
-                status_code=403,
-                detail="Kampanie PMax są dostępne od planu Growth. Zaktualizuj swój plan.",
-            )
-
         from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
 
         adapter = GoogleAdsQueriesAdapter(settings)

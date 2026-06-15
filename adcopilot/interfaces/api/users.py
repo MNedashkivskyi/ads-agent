@@ -12,28 +12,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from adcopilot.application.entitlements import max_accounts as plan_max_accounts
 from adcopilot.config import Settings, get_settings
-from adcopilot.domain.entities import AccountId, PlanTier, UserId
+from adcopilot.domain.entities import AccountId, UserId
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
-
-# ---------------------------------------------------------------------------
-# Plan → max-accounts mapping (single source of truth)
-# ---------------------------------------------------------------------------
-
-PLAN_MAX_ACCOUNTS: dict[str, int] = {
-    PlanTier.STARTER.value: 1,
-    PlanTier.PROFESSIONAL.value: 1,
-    PlanTier.BUSINESS.value: 3,
-}
-
-
-def _max_accounts_for_plan(plan: str) -> int:
-    return PLAN_MAX_ACCOUNTS.get(plan, 1)
-
 
 # ---------------------------------------------------------------------------
 # Response models
@@ -95,7 +81,7 @@ class UserMeResponse(BaseModel):
     telegram_chat_id: int | None
     role: str  # "admin" | "client"
     plan: str  # "starter" | "professional" | "business"
-    max_accounts: int
+    max_accounts: int | None  # null means unlimited (Business)
     subscription_status: str  # "trialing" | "active" | "canceled" | ...
     trial_started_at: str | None
 
@@ -161,7 +147,7 @@ async def get_user_me(
                 telegram_chat_id=user.telegram_chat_id,
                 role=role,
                 plan=user.plan.value,
-                max_accounts=_max_accounts_for_plan(user.plan.value),
+                max_accounts=plan_max_accounts(user.plan),
                 subscription_status=user.subscription_status,
                 trial_started_at=user.trial_started_at.isoformat()
                 if user.trial_started_at
