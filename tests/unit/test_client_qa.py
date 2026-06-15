@@ -18,10 +18,46 @@ def _jwt(user_id: str = "user-123") -> dict:
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client():  # noqa: ANN201
+    """App client with the entitlement gate satisfied (Professional).
+
+    /ask is gated behind ai_insights (T3.2); patching the plan loader keeps the
+    auth/validation tests deterministic. STARTER gating is covered separately.
+    """
+    from unittest.mock import AsyncMock, patch
+
+    from adcopilot.domain.entities import PlanTier
     from adcopilot.main import create_app
 
-    return TestClient(create_app(), raise_server_exceptions=False)
+    with patch(
+        "adcopilot.interfaces.api.deps._load_plan",
+        new=AsyncMock(return_value=PlanTier.PROFESSIONAL),
+    ):
+        yield TestClient(create_app(), raise_server_exceptions=False)
+
+
+def test_ask_blocked_for_starter() -> None:
+    """/ask is gated behind ai_insights; STARTER gets 403 (T3.2)."""
+    from unittest.mock import AsyncMock, patch
+
+    from jose import jwt
+
+    from adcopilot.config import get_settings
+    from adcopilot.domain.entities import PlanTier
+    from adcopilot.main import create_app
+
+    token = jwt.encode({"sub": "user-123"}, get_settings().SECRET_KEY, algorithm="HS256")
+    with patch(
+        "adcopilot.interfaces.api.deps._load_plan",
+        new=AsyncMock(return_value=PlanTier.STARTER),
+    ):
+        c = TestClient(create_app(), raise_server_exceptions=False)
+        resp = c.post(
+            "/api/user-123/ask",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"question": "Jaki jest mój CPA?"},
+        )
+    assert resp.status_code == 403
 
 
 # --- Use case tests ---

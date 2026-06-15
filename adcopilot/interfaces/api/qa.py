@@ -8,8 +8,10 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
+from adcopilot.application.entitlements import Capability
 from adcopilot.config import Settings, get_settings
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
+from adcopilot.interfaces.api.deps import require_capability
 from adcopilot.rate_limit import limiter
 
 logger = structlog.get_logger(__name__)
@@ -52,8 +54,13 @@ async def ask(
     body: AskRequest,
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    _cap: Annotated[None, Depends(require_capability(Capability.AI_INSIGHTS))] = None,
 ) -> AskResponse:
-    """Answer a natural-language question about the user's Google Ads account."""
+    """Answer a natural-language question about the user's Google Ads account.
+
+    Gated behind ai_insights (Professional and above) — T3.2 — and rate-limited
+    per user.
+    """
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 

@@ -3,17 +3,29 @@
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from adcopilot.application.entitlements import Capability
+from adcopilot.config import Settings, get_settings
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
+from adcopilot.interfaces.api.deps import require_capability
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api", tags=["reports"])
+
+
+class CrossAccountReportRequest(BaseModel):
+    account_ids: list[str] = Field(..., min_length=2)
+    period_start: str  # YYYY-MM-DD
+    period_end: str
+    company_name: str = ""
+    logo_url: str = ""
 
 
 class GenerateReportRequest(BaseModel):
@@ -287,3 +299,88 @@ async def download_report(
             "Content-Disposition": f'attachment; filename="report_{report_id}.pdf"',
         },
     )
+
+
+@router.post("/{user_id}/reports/cross-account")
+async def generate_cross_account_report(
+    user_id: str,
+    body: CrossAccountReportRequest,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+    _cap: Annotated[None, Depends(require_capability(Capability.CROSS_ACCOUNT_REPORTS))] = None,
+) -> dict[str, object]:
+    """Aggregate a single branded report across 2+ accounts owned by the user.
+
+    Gated behind cross_account_reports (Business). Verifies ownership of every
+    account, generates each per-account report, and returns the portfolio
+    aggregate plus branding. STARTER/Professional receive a 403.
+    """
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    from datetime import date
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.aggregate_cross_account_report import (
+        ReportBranding,
+        build_cross_account_report,
+    )
+    from adcopilot.application.use_cases.generate_performance_report import (
+        generate_performance_report,
+    )
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
+        SqlPromptVersionRepository,
+    )
+    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient as AnthropicLLMClient
+
+    try:
+        period_start = date.fromisoformat(body.period_start)
+        period_end = date.fromisoformat(body.period_end)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid date format: {exc}") from exc
+
+    llm = AnthropicLLMClient(api_key=settings.LLM_API_KEY or "")
+    engine = create_async_engine(settings.DATABASE_URL)
+    per_account: list[dict[str, object]] = []
+    try:
+        async with AsyncSession(engine) as session:
+            account_repo = SqlGoogleAdsAccountRepository(session)
+            for account_id in body.account_ids:
+                account = await account_repo.get(AccountId(account_id))
+                if account is None or str(account.user_id) != user_id:
+                    raise HTTPException(
+                        status_code=404, detail=f"Account {account_id} not found"
+                    )
+            prompt_repo = SqlPromptVersionRepository(session)
+            for account_id in body.account_ids:
+                report_data = await generate_performance_report(
+                    user_id=user_id,
+                    account_id=account_id,
+                    period_start=period_start,
+                    period_end=period_end,
+                    session=session,
+                    llm=llm,
+                    prompt_repo=prompt_repo,
+                )
+                per_account.append(report_data)
+    finally:
+        await engine.dispose()
+
+    branding = ReportBranding(company_name=body.company_name, logo_url=body.logo_url)
+    report = build_cross_account_report(
+        per_account,
+        branding,
+        period_start=body.period_start,
+        period_end=body.period_end,
+    )
+    logger.info(
+        "cross_account_report.generated",
+        user_id=user_id,
+        accounts=len(body.account_ids),
+    )
+    return report

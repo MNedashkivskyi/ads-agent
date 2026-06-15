@@ -1396,6 +1396,103 @@ class SpendSafetyConfigModel(Base):
     )
 
 
+class AutoApplySettingsModel(Base):
+    """Per-account auto-apply opt-in (Phase 3 / T3.1).
+
+    Default OFF. When enabled, low-risk recommendations (see
+    ``adcopilot.domain.auto_apply``) are auto-approved and executed after
+    detection, capped at ``max_changes_per_day`` and bounded by ``max_risk``,
+    with SpendGuard still enforced at execution time.
+    """
+
+    __tablename__ = "auto_apply_settings"
+
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa.false(), default=False
+    )
+    max_risk: Mapped[str] = mapped_column(String(16), nullable=False, server_default="LOW")
+    max_changes_per_day: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="5"
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
+class OrganizationModel(Base):
+    """Organization — owns a set of users (team seats, Phase 3 / T3.4)."""
+
+    __tablename__ = "organizations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    owner_user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    is_personal: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa.true(), default=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class MembershipModel(Base):
+    """A user's membership in an organization (Phase 3 / T3.4)."""
+
+    __tablename__ = "memberships"
+    __table_args__ = (
+        sa.UniqueConstraint("organization_id", "user_id", name="uq_memberships_org_user"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, server_default="MEMBER")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class OrganizationInvitationModel(Base):
+    """A pending invitation to join an organization (Phase 3 / T3.4)."""
+
+    __tablename__ = "organization_invitations"
+    __table_args__ = (
+        sa.UniqueConstraint("organization_id", "email", name="uq_org_invites_org_email"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False, server_default="MEMBER")
+    token: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class ApiKeyModel(Base):
+    """Customer API keys (Phase 3 / T3.5). Stores only the SHA-256 hash."""
+
+    __tablename__ = "api_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    display_prefix: Mapped[str] = mapped_column(String(24), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class AssetGroupSnapshotModel(Base):
     __tablename__ = "asset_group_snapshots"
     __table_args__ = (
