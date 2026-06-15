@@ -531,6 +531,7 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
     from adcopilot.infrastructure.db.repositories.snapshot_repository import SqlSnapshotRepository
 
     assert isinstance(settings, Settings)
+    auto_applied_ids: list[str] = []
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with AsyncSession(engine) as session, session.begin():
@@ -582,10 +583,92 @@ async def _run_detection(settings: object, account_id: object, snap_date: date) 
             await _generate_explanations(session, settings, AccountId(str(account_id)))
             await _update_experiment_metrics(session, settings, AccountId(str(account_id)))
             await _notify_pmax_alerts(session, settings, AccountId(str(account_id)), snap_date)
+            # Auto-apply (T3.1): for opted-in, entitled, active accounts, approve
+            # eligible low-risk recs here so they commit with this transaction.
+            auto_applied_ids = await _maybe_auto_apply(
+                session, settings, AccountId(str(account_id))
+            )
     except Exception:
         logger.exception("detection failed (non-fatal)", account_id=str(account_id))
     finally:
         await engine.dispose()
+
+    # Enqueue auto-applied executions only after the APPROVED status is committed
+    # above. SpendGuard's preventive check still runs inside the execute task.
+    for rec_id in auto_applied_ids:
+        try:
+            execute_recommendation_task.delay(rec_id, {"actor": "auto"})
+        except Exception:
+            logger.exception("auto_apply.enqueue_failed", account_id=str(account_id), rec_id=rec_id)
+
+
+def _subscription_active(user: object) -> bool:
+    """True when the user's subscription permits automated execution.
+
+    Mirrors ``_assert_active_subscription``: inactive statuses and expired trials
+    are blocked.
+    """
+    status = getattr(user, "subscription_status", None)
+    if status in ("past_due", "canceled", "unpaid"):
+        return False
+    if status == "trialing":
+        ends = getattr(user, "trial_ends_at", None)
+        if ends is not None and ends < datetime.now(UTC):
+            return False
+    return True
+
+
+async def _maybe_auto_apply(session: object, settings: object, account_id: object) -> list[str]:
+    """Select + approve eligible low-risk recs for an opted-in account (T3.1).
+
+    Returns the approved recommendation ids (empty unless the platform kill-switch
+    is on, the account opted in, the owner is entitled to auto_apply, and the
+    subscription is active).
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from adcopilot.application.entitlements import Capability, has_capability
+    from adcopilot.application.use_cases.auto_apply import AutoApplyUseCase
+    from adcopilot.config import Settings
+    from adcopilot.domain.entities import AccountId, UserId
+    from adcopilot.infrastructure.db.repositories.audit_log_repository import (
+        SqlAuditLogRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.auto_apply_settings_repository import (
+        SqlAutoApplySettingsRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.recommendation_repository import (
+        SqlRecommendationRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
+
+    assert isinstance(settings, Settings)
+    assert isinstance(session, AsyncSession)
+
+    if not settings.AUTO_APPLY_GLOBALLY_ENABLED:
+        return []
+
+    account = await SqlGoogleAdsAccountRepository(session).get(AccountId(str(account_id)))
+    if account is None:
+        return []
+    user = await SqlUserRepository(session).get_by_id(UserId(str(account.user_id)))
+    if user is None:
+        return []
+    if not has_capability(user.plan, Capability.AUTO_APPLY):
+        return []
+    if not _subscription_active(user):
+        return []
+
+    use_case = AutoApplyUseCase(
+        SqlRecommendationRepository(session),
+        SqlAutoApplySettingsRepository(session),
+        SqlAuditLogRepository(session),
+    )
+    approved = await use_case.select_and_approve(AccountId(str(account_id)))
+    return [str(rec_id) for rec_id in approved]
 
 
 async def _generate_explanations(

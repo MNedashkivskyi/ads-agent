@@ -95,6 +95,12 @@ class Settings(BaseSettings):
     # to T6.2 after a stabilization window.
     CAMPAIGN_CREATION_ENABLED: bool = False
 
+    # Global kill-switch for auto-apply (Phase 3 / T3.1). Default OFF: even
+    # accounts that have opted into auto-apply will not have anything executed
+    # automatically until this platform-level flag is turned on. This is the
+    # R4 mitigation — a single switch to halt all automated execution.
+    AUTO_APPLY_GLOBALLY_ENABLED: bool = False
+
     STRIPE_SECRET_KEY: str | None = None
     STRIPE_WEBHOOK_SECRET: str | None = None
     STRIPE_STARTER_PRICE_ID: str | None = None

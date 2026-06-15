@@ -113,3 +113,17 @@ def max_accounts(plan: PlanTier) -> int | None:
     Returns ``None`` for unlimited (Business).
     """
     return _entitlement(plan).max_accounts
+
+
+# Team seats per plan (Phase 3 / T3.4). Only Business is multi-seat; the
+# others are single-seat (the owner only). The count includes the owner.
+_MAX_SEATS: dict[PlanTier, int] = {
+    PlanTier.STARTER: 1,
+    PlanTier.PROFESSIONAL: 1,
+    PlanTier.BUSINESS: 5,
+}
+
+
+def max_seats(plan: PlanTier) -> int:
+    """Maximum number of org members (including the owner) allowed by ``plan``."""
+    return _MAX_SEATS.get(plan, 1)

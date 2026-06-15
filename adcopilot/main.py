@@ -36,7 +36,9 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.account_structure import router as account_structure_router
     from adcopilot.interfaces.api.ad_proposals import router as ad_proposals_router
     from adcopilot.interfaces.api.admin import router as admin_router
+    from adcopilot.interfaces.api.api_keys import router as api_keys_router
     from adcopilot.interfaces.api.audiences import router as audiences_router
+    from adcopilot.interfaces.api.automation import router as automation_router
     from adcopilot.interfaces.api.billing import router as billing_router
     from adcopilot.interfaces.api.conversion_tracking import router as conversion_tracking_router
     from adcopilot.interfaces.api.conversion_tracking_guide import (
@@ -60,6 +62,7 @@ def create_app() -> FastAPI:
     )
     from adcopilot.interfaces.api.notifications import router as notifications_router
     from adcopilot.interfaces.api.oauth import router as oauth_router
+    from adcopilot.interfaces.api.organizations import router as organizations_router
     from adcopilot.interfaces.api.pmax import router as pmax_router
     from adcopilot.interfaces.api.measurement import router as measurement_router
     from adcopilot.interfaces.api.proposal_editor import router as proposal_editor_router
@@ -152,6 +155,9 @@ def create_app() -> FastAPI:
     application.include_router(qs_improvement_router)
     application.include_router(measurement_router)
     application.include_router(audiences_router)
+    application.include_router(automation_router)
+    application.include_router(api_keys_router)
+    application.include_router(organizations_router)
     application.include_router(reports_router)
     application.include_router(account_structure_router)
     application.include_router(seasonality_router)
