@@ -137,6 +137,38 @@ async def test_execute_returns_three_proposals() -> None:
 
 
 @pytest.mark.asyncio
+async def test_execute_for_ad_generates_variants_on_demand() -> None:
+    """On-demand entry point (T2.2): generate variants from explicit ad context,
+    with no recommendation required."""
+    llm = AsyncMock()
+    llm.complete.return_value = _SAMPLE_JSON
+
+    prompt_repo = AsyncMock()
+    pv = MagicMock()
+    pv.content = (
+        "Kampania: {campaign_name}, Branża: {vertical}, "
+        "Słowa: {keyword_themes}, Nagłówki: {existing_headlines}, Opisy: {existing_descriptions}"
+    )
+    prompt_repo.get_latest.return_value = pv
+
+    use_case = AdCopyRefreshUseCase(llm=llm, prompt_repo=prompt_repo)
+    proposals = await use_case.execute_for_ad(
+        campaign_name="Sklep Sportowy",
+        vertical="sport",
+        keyword_themes="buty biegowe",
+        headlines=["Biegnij Szybciej"],
+        descriptions=["Najlepsze buty na rynku."],
+        final_url="https://sklep.pl",
+    )
+    assert len(proposals) == 3
+    assert proposals[0].final_url == "https://sklep.pl"
+    # Prompt was rendered with the supplied context (Polish prompt).
+    user_msg = llm.complete.call_args.kwargs["user"]
+    assert "Sklep Sportowy" in user_msg
+    assert "Biegnij Szybciej" in user_msg
+
+
+@pytest.mark.asyncio
 async def test_execute_wraps_missing_prompt_evidence_gracefully() -> None:
     llm = AsyncMock()
     llm.complete.return_value = _SAMPLE_JSON

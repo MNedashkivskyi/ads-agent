@@ -4,9 +4,10 @@ Owns session lifecycle and Celery dispatch for the generate → validate → sta
 comparison flow. The API depends on this behind a swappable dependency so tests
 can substitute an in-memory implementation.
 
-Resolves the campaign's vertical/language/service/problems from the launch brief
-(``campaign_id`` == brief id) when present, so the keyword engine is wired
-directly into the existing campaign-creation flow; request-body fields override.
+Resolves the campaign's vertical/language/service from the account it belongs to
+(the launch-brief fallback was removed in the optimization pivot, T2.1); the
+keyword engine runs against an existing campaign and request-body fields
+override the resolved defaults.
 """
 
 from __future__ import annotations

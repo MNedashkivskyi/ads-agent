@@ -17,6 +17,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from adcopilot.application.entitlements import Capability
 from adcopilot.config import get_settings
 from adcopilot.domain.campaign_intelligence.keywords.keyword_comparison import KeywordComparison
 from adcopilot.infrastructure.cie.keyword_flow import (
@@ -25,6 +26,7 @@ from adcopilot.infrastructure.cie.keyword_flow import (
     DbKeywordFlowService,
 )
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
+from adcopilot.interfaces.api.deps import require_capability
 
 logger = structlog.get_logger(__name__)
 
@@ -160,6 +162,7 @@ async def generate_keywords(
     body: GenerateKeywordsRequest,
     user_id: CurrentUser,
     flow: FlowDep,
+    _cap: Annotated[None, Depends(require_capability(Capability.ADVANCED_OPTIMIZATION))] = None,
 ) -> RunResponse:
     try:
         run_id = await flow.generate(
@@ -186,10 +189,11 @@ async def analyze_keywords(
     body: GenerateKeywordsRequest,
     user_id: CurrentUser,
     flow: FlowDep,
+    _cap: Annotated[None, Depends(require_capability(Capability.ADVANCED_OPTIMIZATION))] = None,
 ) -> ComparisonResponse:
     """Synchronous: generate → validate → rank, returning the brand-vs-intent
-    comparison in one call (used as a launch-wizard step — no polling, can't
-    hang silently)."""
+    comparison in one call. AI-generation-heavy, so gated behind
+    advanced_optimization (Professional and above)."""
     from adcopilot.domain.exceptions import AdCopilotError
 
     try:
@@ -222,6 +226,7 @@ async def validate_keywords(
     campaign_id: str,
     user_id: CurrentUser,
     flow: FlowDep,
+    _cap: Annotated[None, Depends(require_capability(Capability.ADVANCED_OPTIMIZATION))] = None,
 ) -> RunResponse:
     try:
         run_id = await flow.validate(campaign_id=campaign_id, user_id=user_id)

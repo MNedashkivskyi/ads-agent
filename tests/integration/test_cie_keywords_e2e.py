@@ -113,8 +113,11 @@ class InMemoryKeywordFlow:
 
 @pytest.fixture
 def client():  # noqa: ANN201
+    from unittest.mock import AsyncMock, patch
+
     from fastapi.testclient import TestClient
 
+    from adcopilot.domain.entities import PlanTier
     from adcopilot.interfaces.api.auth_middleware import get_current_user
     from adcopilot.interfaces.api.cie_keywords import get_keyword_flow
     from adcopilot.main import create_app
@@ -123,8 +126,14 @@ def client():  # noqa: ANN201
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: _USER
     app.dependency_overrides[get_keyword_flow] = lambda: flow
-    with TestClient(app, raise_server_exceptions=False) as c:
-        yield c, flow
+    # CIE keyword generation is gated behind advanced_optimization (T2.3);
+    # treat the test user as Professional so the gate passes.
+    with patch(
+        "adcopilot.interfaces.api.deps._load_plan",
+        new=AsyncMock(return_value=PlanTier.PROFESSIONAL),
+    ):
+        with TestClient(app, raise_server_exceptions=False) as c:
+            yield c, flow
     app.dependency_overrides.clear()
 
 
@@ -183,3 +192,37 @@ def test_analyze_returns_comparison_synchronously(client) -> None:  # noqa: ANN0
     assert body["intent_total_volume"] > body["brand_total_volume"]
     assert {g["intent"] for g in body["groups"]} == {"BRAND", "INTENT", "PROBLEM"}
     assert flow.df.requested == ["icoone warszawa"]  # bucketed → DataForSEO fallback fired
+
+
+def test_cie_generation_blocked_for_starter() -> None:
+    """CIE keyword generation is gated behind advanced_optimization (T2.3):
+    a STARTER user is rejected with 403 before any flow work runs."""
+    from unittest.mock import AsyncMock, patch
+
+    from fastapi.testclient import TestClient
+
+    from adcopilot.domain.entities import PlanTier
+    from adcopilot.interfaces.api.auth_middleware import get_current_user
+    from adcopilot.interfaces.api.cie_keywords import get_keyword_flow
+    from adcopilot.main import create_app
+
+    app = create_app()
+    app.dependency_overrides[get_current_user] = lambda: _USER
+    app.dependency_overrides[get_keyword_flow] = lambda: InMemoryKeywordFlow()
+    cid = "55555555-5555-5555-5555-555555555555"
+    with patch(
+        "adcopilot.interfaces.api.deps._load_plan",
+        new=AsyncMock(return_value=PlanTier.STARTER),
+    ):
+        with TestClient(app, raise_server_exceptions=False) as c:
+            for path in (
+                f"/api/campaigns/{cid}/keywords/generate",
+                f"/api/campaigns/{cid}/keywords/analyze",
+                f"/api/campaigns/{cid}/keywords/validate",
+            ):
+                resp = c.post(
+                    path,
+                    json={"account_id": "acct-1", "vertical": "salon", "service": "icoone"},
+                )
+                assert resp.status_code == 403, f"{path}: {resp.status_code} {resp.text}"
+    app.dependency_overrides.clear()
