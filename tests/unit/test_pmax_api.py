@@ -153,8 +153,15 @@ def test_eligibility_forbidden():
 def test_create_pmax_forbidden_write_disabled():
     app = _make_app()
 
+    import adcopilot.infrastructure.db.repositories.user_repository as user_mod
+
+    # Entitled plan so the capability gate passes and execution reaches the
+    # write-enabled check.
+    mock_user_repo = AsyncMock()
+    mock_user_repo.get_by_id = AsyncMock(return_value=_mock_user(plan="professional"))
+
     p1, p2, p3, p4 = _infra_patches(account=_mock_account(write_enabled=False))
-    with p1, p2, p3, p4:
+    with p1, p2, p3, p4, patch.object(user_mod, "SqlUserRepository", return_value=mock_user_repo):
         client = TestClient(app, raise_server_exceptions=False)
         response = client.post(
             "/api/user-1/pmax/create",
@@ -176,7 +183,7 @@ def test_create_pmax_forbidden_starter_plan():
     import adcopilot.infrastructure.db.repositories.user_repository as user_mod
 
     mock_user_repo = AsyncMock()
-    mock_user_repo.get = AsyncMock(return_value=_mock_user(plan="starter"))
+    mock_user_repo.get_by_id = AsyncMock(return_value=_mock_user(plan="starter"))
 
     p1, p2, p3, p4 = _infra_patches()
     with p1, p2, p3, p4, patch.object(user_mod, "SqlUserRepository", return_value=mock_user_repo):
@@ -191,8 +198,10 @@ def test_create_pmax_forbidden_starter_plan():
             },
         )
 
+    # Plan-tier gating is now enforced centrally by require_capability against
+    # the pmax_optimization capability, returning the Polish upgrade message.
     assert response.status_code == 403
-    assert "Growth" in response.json()["detail"]
+    assert "Professional" in response.json()["detail"]
 
 
 def test_create_pmax_no_merchant_center():
@@ -202,7 +211,7 @@ def test_create_pmax_no_merchant_center():
     import adcopilot.infrastructure.google_ads.queries_adapter as qa_mod
 
     mock_user_repo = AsyncMock()
-    mock_user_repo.get = AsyncMock(return_value=_mock_user(plan="professional"))
+    mock_user_repo.get_by_id = AsyncMock(return_value=_mock_user(plan="professional"))
     mock_adapter = AsyncMock()
     mock_adapter.get_merchant_center_link = AsyncMock(return_value=None)
 

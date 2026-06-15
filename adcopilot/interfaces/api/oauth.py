@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from adcopilot.application.entitlements import max_accounts as plan_max_accounts
 from adcopilot.config import Settings, get_settings
 from adcopilot.domain.entities import UserId
 from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
@@ -64,9 +65,6 @@ async def _get_db_session(
     await engine.dispose()
 
 
-_PLAN_ACCOUNT_LIMITS: dict[str, int] = {"starter": 1, "professional": 1, "business": 3}
-
-
 @router.get("/google/start")
 async def oauth_google_start(
     user_id: str,
@@ -99,9 +97,10 @@ async def oauth_google_start(
 
     acc_repo = SqlGoogleAdsAccountRepository(session)
     existing_accounts = await acc_repo.list_for_user(UserId(user_id))
-    account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
+    # ``None`` means unlimited (Business) — sourced from the central entitlements module.
+    account_limit = plan_max_accounts(user.plan)
 
-    if not reauth and len(existing_accounts) >= account_limit:
+    if not reauth and account_limit is not None and len(existing_accounts) >= account_limit:
         logger.warning(
             "oauth.start.quota_exceeded",
             user_id=user_id,
@@ -222,9 +221,10 @@ async def oauth_google_callback(
     # the existing customer and only consumes a slot for genuinely new ones.
     acc_repo = SqlGoogleAdsAccountRepository(session)
     existing_accounts = await acc_repo.list_for_user(UserId(user_id))
-    account_limit = _PLAN_ACCOUNT_LIMITS.get(user.plan.value, 1)
+    # ``None`` means unlimited (Business) — sourced from the central entitlements module.
+    account_limit = plan_max_accounts(user.plan)
     is_reauth = any(a.needs_reauth for a in existing_accounts)
-    if not is_reauth and len(existing_accounts) >= account_limit:
+    if not is_reauth and account_limit is not None and len(existing_accounts) >= account_limit:
         raise HTTPException(
             status_code=402,
             detail=f"Account limit reached for {user.plan.value} plan ({account_limit} max). Upgrade to add more accounts.",
