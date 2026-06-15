@@ -1023,6 +1023,13 @@ class PromptVersionModel(Base):
     prompt_key: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    # Deprecated prompts are retained for version history (the prompt-versioning
+    # rule forbids deleting rows) but are no longer used by live code. Set for the
+    # retired launch_structure / launch_ad_copy creation prompts in migration
+    # 0075 (T2.4).
+    deprecated: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa.false(), default=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

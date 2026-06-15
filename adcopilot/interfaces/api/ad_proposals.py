@@ -8,8 +8,10 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from adcopilot.application.entitlements import Capability
 from adcopilot.config import Settings, get_settings
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
+from adcopilot.interfaces.api.deps import require_capability
 
 logger = structlog.get_logger(__name__)
 
@@ -20,6 +22,17 @@ class AdProposalResponse(BaseModel):
     headlines: list[str]
     descriptions: list[str]
     final_url: str
+
+
+class OnDemandVariantsRequest(BaseModel):
+    """Context for generating RSA variants for an existing ad on demand (T2.2)."""
+
+    campaign_name: str = ""
+    vertical: str = "ogólna"
+    keyword_themes: str = ""
+    headlines: list[str] = []
+    descriptions: list[str] = []
+    final_url: str = ""
 
 
 class ApproveProposalResponse(BaseModel):
@@ -37,8 +50,12 @@ async def get_ad_proposals(
     rec_id: str,
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    _cap: Annotated[None, Depends(require_capability(Capability.ADVANCED_OPTIMIZATION))] = None,
 ) -> list[AdProposalResponse]:
-    """Generate 3 RSA copy variants for an AD_FATIGUE or WEAK_RSA_STRENGTH recommendation."""
+    """Generate 3 RSA copy variants for an AD_FATIGUE or WEAK_RSA_STRENGTH recommendation.
+
+    Gated behind advanced_optimization (Professional and above) — T2.2.
+    """
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -105,11 +122,13 @@ async def approve_ad_proposal(
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
     body: ApproveProposalRequest = ApproveProposalRequest(),  # noqa: B008
+    _cap: Annotated[None, Depends(require_capability(Capability.ADVANCED_OPTIMIZATION))] = None,
 ) -> ApproveProposalResponse:
     """Approve an ad copy proposal.
 
     Default behaviour: run as A/B experiment (keeps control ad, adds variant).
     Pass force_replace=true to immediately replace the control ad (e.g., disapproved ad).
+    Gated behind advanced_optimization (Professional and above) — T2.2.
     """
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
@@ -170,3 +189,61 @@ async def approve_ad_proposal(
         status="APPROVED",
         message=f"Rekomendacja zatwierdzona. Zostanie uruchomiony {mode}.",
     )
+
+
+@router.post(
+    "/{user_id}/ad-copy/variants",
+    response_model=list[AdProposalResponse],
+)
+async def generate_ad_copy_variants(
+    user_id: str,
+    body: OnDemandVariantsRequest,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+    _cap: Annotated[None, Depends(require_capability(Capability.ADVANCED_OPTIMIZATION))] = None,
+) -> list[AdProposalResponse]:
+    """On-demand RSA variant generation for any existing ad (T2.2).
+
+    Unlike the recommendation-driven path, this does not require an AD_FATIGUE
+    recommendation to have fired: the caller (the ads / recommendations view)
+    passes the ad's current copy and context, and the versioned
+    ``ad_copy_refresh_v1`` prompt returns Polish variants. To run a chosen
+    variant as an A/B test, approve it through the experiments flow.
+
+    Gated behind advanced_optimization (Professional and above); STARTER → 403.
+    """
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from adcopilot.application.use_cases.refresh_ad_copy import AdCopyRefreshUseCase
+    from adcopilot.infrastructure.db.repositories.prompt_version_repository import (
+        SqlPromptVersionRepository,
+    )
+    from adcopilot.infrastructure.llm.anthropic_client import AnthropicClient
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            llm = AnthropicClient(api_key=settings.LLM_API_KEY)
+            prompt_repo = SqlPromptVersionRepository(session)
+            use_case = AdCopyRefreshUseCase(llm=llm, prompt_repo=prompt_repo)
+            proposals = await use_case.execute_for_ad(
+                campaign_name=body.campaign_name,
+                vertical=body.vertical,
+                keyword_themes=body.keyword_themes,
+                headlines=body.headlines,
+                descriptions=body.descriptions,
+                final_url=body.final_url,
+            )
+    finally:
+        await engine.dispose()
+
+    return [
+        AdProposalResponse(
+            headlines=p.headlines,
+            descriptions=p.descriptions,
+            final_url=p.final_url,
+        )
+        for p in proposals
+    ]

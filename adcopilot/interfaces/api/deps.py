@@ -117,21 +117,21 @@ def require_capability(
 ) -> Callable[..., Coroutine[Any, Any, None]]:
     """Build a FastAPI dependency that gates a route by ``capability``.
 
-    The dependency resolves ``user_id`` from the route path, loads the user's
-    plan, and raises HTTP 403 with a Polish upgrade message if the plan is not
-    entitled. On success it returns ``None``.
+    The dependency loads the plan of the *authenticated* user (the JWT subject),
+    so it works on any route regardless of whether a ``user_id`` path parameter
+    is present. It raises HTTP 403 with a Polish upgrade message if the plan is
+    not entitled; on success it returns ``None``.
     """
 
     async def _dependency(
-        user_id: str,
         current_user: CurrentUser,
         settings: Annotated[Settings, Depends(get_settings)],
     ) -> None:
-        plan = await _load_plan(user_id, settings)
+        plan = await _load_plan(current_user, settings)
         if not has_capability(plan, capability):
             logger.info(
                 "entitlements.capability_denied",
-                user_id=user_id,
+                user_id=current_user,
                 plan=plan.value,
                 capability=capability.value,
             )

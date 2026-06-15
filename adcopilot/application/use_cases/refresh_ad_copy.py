@@ -53,26 +53,14 @@ class AdCopyRefreshUseCase:
     async def execute(self, recommendation: Recommendation) -> list[AdCopyProposal]:
         """Generate 3 RSA variants for a AD_FATIGUE or WEAK_RSA_STRENGTH recommendation."""
         ev = recommendation.evidence
-        campaign_name = ev.get("campaign_name", "")
-        vertical = ev.get("vertical", "ogólna")
-        keyword_themes = ev.get("keyword_themes", "")
-        existing_headlines = ", ".join(ev.get("headlines", []))
-        existing_descriptions = ", ".join(ev.get("descriptions", []))
-        final_url = ev.get("final_url", "")
-
-        prompt_template = await get_latest_prompt(self._prompt_repo, _PROMPT_KEY)
-        user_msg = prompt_template.format(
-            campaign_name=campaign_name,
-            vertical=vertical,
-            keyword_themes=keyword_themes,
-            existing_headlines=existing_headlines or "(brak)",
-            existing_descriptions=existing_descriptions or "(brak)",
+        proposals = await self.execute_for_ad(
+            campaign_name=ev.get("campaign_name", ""),
+            vertical=ev.get("vertical", "ogólna"),
+            keyword_themes=ev.get("keyword_themes", ""),
+            headlines=ev.get("headlines", []),
+            descriptions=ev.get("descriptions", []),
+            final_url=ev.get("final_url", ""),
         )
-
-        raw = await self._llm.complete(
-            system=_SYSTEM, user=user_msg, max_tokens=1200, temperature=0.7
-        )
-        proposals = _parse_proposals(raw, final_url)
 
         if len(proposals) < _NUM_VARIANTS:
             logger.warning(
@@ -89,3 +77,38 @@ class AdCopyRefreshUseCase:
             variants=len(proposals),
         )
         return proposals
+
+    async def execute_for_ad(
+        self,
+        *,
+        campaign_name: str,
+        vertical: str = "ogólna",
+        keyword_themes: str = "",
+        headlines: list[str] | None = None,
+        descriptions: list[str] | None = None,
+        final_url: str = "",
+    ) -> list[AdCopyProposal]:
+        """Generate Polish RSA variants for an existing ad on demand.
+
+        This is the recommendation-independent entry point used by the on-demand
+        optimization endpoint (T2.2): the caller passes the ad's current copy and
+        context directly, so variant generation is no longer tied to an
+        AD_FATIGUE recommendation firing. Uses the versioned ``ad_copy_refresh_v1``
+        prompt and returns Polish output.
+        """
+        existing_headlines = ", ".join(headlines or [])
+        existing_descriptions = ", ".join(descriptions or [])
+
+        prompt_template = await get_latest_prompt(self._prompt_repo, _PROMPT_KEY)
+        user_msg = prompt_template.format(
+            campaign_name=campaign_name,
+            vertical=vertical,
+            keyword_themes=keyword_themes,
+            existing_headlines=existing_headlines or "(brak)",
+            existing_descriptions=existing_descriptions or "(brak)",
+        )
+
+        raw = await self._llm.complete(
+            system=_SYSTEM, user=user_msg, max_tokens=1200, temperature=0.7
+        )
+        return _parse_proposals(raw, final_url)

@@ -1,13 +1,17 @@
 """Resolve a campaign's CIE context (account, vertical, language, service).
 
-Pulls defaults from the launch brief when ``campaign_id`` is a brief id, falling
-back to request overrides and the account's classified vertical. Verifies the
-account belongs to the requesting user. Shared by the keyword and creative flows.
+Resolves context for an *existing* campaign from the account it belongs to,
+with optional request-body overrides. Verifies the account belongs to the
+requesting user. Shared by the keyword and creative flows.
+
+Greenfield campaign creation was retired in the optimization pivot (Phase 1),
+so this resolver no longer reads a launch brief (T2.1). ``account_id`` is now
+required, the vertical comes from the account's classified vertical (or an
+override), and the service/language come from request overrides (or defaults).
 """
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -36,22 +40,6 @@ class CampaignContext:
     service: str
 
 
-async def _try_get_brief(session: AsyncSession, campaign_id: str, user_id: str):  # noqa: ANN202
-    try:
-        uuid.UUID(campaign_id)
-    except ValueError:
-        return None
-    from adcopilot.domain.launch.entities import CampaignBriefId
-    from adcopilot.infrastructure.db.repositories.launch_brief_repository import (
-        SqlCampaignBriefRepository,
-    )
-
-    brief = await SqlCampaignBriefRepository(session).get(CampaignBriefId(campaign_id))
-    if brief is not None and str(brief.user_id) == user_id:
-        return brief
-    return None
-
-
 async def resolve_campaign_context(
     session: AsyncSession,
     *,
@@ -62,22 +50,28 @@ async def resolve_campaign_context(
     language: str | None = None,
     service: str | None = None,
 ) -> CampaignContext:
-    brief = await _try_get_brief(session, campaign_id, user_id)
-    resolved_account = account_id or (str(brief.account_id) if brief else None)
-    if resolved_account is None:
-        raise CampaignNotFound("account_id is required when the campaign has no launch brief")
+    """Resolve CIE context for an existing campaign from its account.
 
-    account = await SqlGoogleAdsAccountRepository(session).get(AccountId(resolved_account))
+    ``account_id`` is required (the launch-brief fallback was removed in the
+    optimization pivot). ``vertical`` defaults to the account's classified
+    vertical, ``language`` to Polish, and ``service`` to the supplied override
+    (empty when none) — callers can pass a richer description derived from
+    website intelligence when available.
+    """
+    if account_id is None:
+        raise CampaignNotFound("account_id is required")
+
+    account = await SqlGoogleAdsAccountRepository(session).get(AccountId(account_id))
     if account is None:
         raise CampaignNotFound("Account not found")
     if str(account.user_id) != user_id:
         raise CampaignForbidden("Account does not belong to user")
 
-    raw_vertical = vertical or (brief.vertical if brief else None) or account.vertical
+    raw_vertical = vertical or account.vertical
     return CampaignContext(
-        account_id=resolved_account,
+        account_id=account_id,
         customer_id=account.customer_id,
         vertical=Vertical.from_raw(raw_vertical).value.value,
-        language=language or (brief.language if brief else None) or "pl",
-        service=service or (brief.business_description if brief else "") or "",
+        language=language or "pl",
+        service=service or "",
     )
