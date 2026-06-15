@@ -143,6 +143,20 @@ def require_capability(
     return _dependency
 
 
+async def require_campaign_creation_enabled(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> None:
+    """Gate a route behind the greenfield campaign-creation kill-switch.
+
+    When ``CAMPAIGN_CREATION_ENABLED`` is False (the default after the
+    optimization pivot), the route responds 404 — as if it does not exist —
+    so brand-new campaign creation is fully off the API surface. Flipping the
+    flag True restores the route. See Phase 1 / T1.1.
+    """
+    if not settings.CAMPAIGN_CREATION_ENABLED:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
 def assert_within_account_limit(plan: PlanTier, current_count: int) -> None:
     """Guard the OAuth account-link flow against the plan's account limit.
 

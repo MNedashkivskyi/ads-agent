@@ -122,15 +122,21 @@ def create_app() -> FastAPI:
     # (it has no auth and is only for local plumbing checks). See LAUNCH-001.
     if not settings.is_production:
         application.include_router(debug_router)
-    application.include_router(launch_router)
-    application.include_router(launch_api_router)
+    # Greenfield campaign-creation kill-switch (Phase 1 / T1.1). When creation
+    # is disabled (the default after the optimization pivot), the launch,
+    # proposal-editor and launch-error-recovery routers are not mounted, so
+    # every brand-new-campaign endpoint 404s. Flipping CAMPAIGN_CREATION_ENABLED
+    # True restores them. All optimization routers stay mounted regardless.
+    if settings.CAMPAIGN_CREATION_ENABLED:
+        application.include_router(launch_router)
+        application.include_router(launch_api_router)
+        application.include_router(launch_error_recovery_router)
+        application.include_router(proposal_editor_router)
     application.include_router(website_router)
     application.include_router(dashboard_router)
     application.include_router(notifications_router)
     application.include_router(conversion_tracking_router)
     application.include_router(conversion_tracking_guide_router)
-    application.include_router(launch_error_recovery_router)
-    application.include_router(proposal_editor_router)
     application.include_router(experiments_router)
     application.include_router(causal_experiments_router)
     application.include_router(spend_safety_router)

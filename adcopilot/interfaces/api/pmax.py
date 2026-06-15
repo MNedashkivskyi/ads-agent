@@ -11,7 +11,10 @@ from pydantic import BaseModel, Field
 from adcopilot.application.entitlements import Capability
 from adcopilot.config import Settings, get_settings
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
-from adcopilot.interfaces.api.deps import require_capability
+from adcopilot.interfaces.api.deps import (
+    require_campaign_creation_enabled,
+    require_capability,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -136,8 +139,13 @@ async def get_pmax_eligibility(
     account_id: str,
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    _creation: Annotated[None, Depends(require_campaign_creation_enabled)] = None,
 ) -> PMaxEligibilityResponse:
-    """Check if the account has a Merchant Center link and is eligible for PMax."""
+    """Check if the account has a Merchant Center link and is eligible for PMax.
+
+    Part of greenfield creation — 404s while the creation kill-switch is off
+    (Phase 1 / T1.1).
+    """
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Brak dostępu")
 
@@ -178,12 +186,16 @@ async def create_pmax_campaign(
     body: CreatePMaxRequest,
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    # Kill-switch first so it short-circuits (404) before the capability check
+    # touches the database.
+    _creation: Annotated[None, Depends(require_campaign_creation_enabled)] = None,
     _cap: Annotated[None, Depends(require_capability(Capability.PMAX_OPTIMIZATION))] = None,
 ) -> CreatePMaxResponse:
     """Create a PAUSED Performance Max campaign (CCR-4: checks write_enabled).
 
-    Plan-tier gating is enforced centrally by ``require_capability`` against the
-    ``pmax_optimization`` capability (Professional and above).
+    Greenfield creation — 404s while the creation kill-switch is off (Phase 1 /
+    T1.1). Plan-tier gating is enforced centrally by ``require_capability``
+    against the ``pmax_optimization`` capability (Professional and above).
     """
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Brak dostępu")

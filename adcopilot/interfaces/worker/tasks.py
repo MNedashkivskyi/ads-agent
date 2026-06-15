@@ -16,6 +16,20 @@ logger = structlog.get_logger(__name__)
 
 _OAUTH_PENDING_KEY_PREFIX = "oauth_pending:"
 
+
+def _campaign_creation_disabled() -> bool:
+    """True when the greenfield creation kill-switch is OFF (Phase 1 / T1.2).
+
+    The creation Celery tasks below build brand-new campaigns. They are only
+    ever enqueued by the (now-gated) creation routes, but we guard them here too
+    so a stray enqueue or a still-scheduled beat entry becomes an inert no-op
+    while creation is disabled. The task code is retained for reversibility and
+    is physically removed in T6.2.
+    """
+    from adcopilot.config import get_settings
+
+    return not get_settings().CAMPAIGN_CREATION_ENABLED
+
 _LOCK_TTL_SECONDS = 7200  # 2 hours
 _MONITORING_INTERVAL_SECONDS = 3600  # 1 hour
 _MONITORING_WINDOW_HOURS = 48
@@ -1605,6 +1619,9 @@ def generate_campaign_task(
     Dispatched when the user submits a campaign brief or revision.
     template_id: when set, uses hybrid path (template structure + LLM copy).
     """
+    if _campaign_creation_disabled():
+        logger.info("creation task skipped — campaign creation disabled", task="generate_campaign")
+        return {"success": False, "skipped": "campaign_creation_disabled"}
     import asyncio
 
     return asyncio.run(_run_generate_campaign(brief_id, revision_text, template_id))
@@ -1833,6 +1850,9 @@ def regenerate_ad_copy_task(
     ad_group_index: int = 0,
 ) -> dict[str, object]:
     """Re-generate ad copy for one ad group of an existing proposal using the LLM."""
+    if _campaign_creation_disabled():
+        logger.info("creation task skipped — campaign creation disabled", task="regenerate_ad_copy")
+        return {"success": False, "skipped": "campaign_creation_disabled"}
     import asyncio
 
     return asyncio.run(_run_regenerate_ad_copy(brief_id, proposal_id, ad_group_index))
@@ -1956,6 +1976,9 @@ def create_campaign_task(brief_id: str) -> dict[str, object]:
 
     Dispatched when the user confirms campaign creation.
     """
+    if _campaign_creation_disabled():
+        logger.info("creation task skipped — campaign creation disabled", task="create_campaign")
+        return {"success": False, "skipped": "campaign_creation_disabled"}
     import asyncio
 
     return asyncio.run(_run_create_campaign(brief_id))
@@ -2240,6 +2263,9 @@ def enable_campaign_task(
     Dispatched when the user confirms enabling. ``skip_conversion_check`` is the
     explicit user override that bypasses the conversion-tracking gate.
     """
+    if _campaign_creation_disabled():
+        logger.info("creation task skipped — campaign creation disabled", task="enable_campaign")
+        return {"success": False, "skipped": "campaign_creation_disabled"}
     import asyncio
 
     return asyncio.run(_run_enable_campaign(brief_id, skip_conversion_check))
@@ -2401,6 +2427,11 @@ def monitor_new_campaign_task(
 
     After 48 hours the monitoring window closes and nightly digests take over.
     """
+    if _campaign_creation_disabled():
+        logger.info(
+            "creation task skipped — campaign creation disabled", task="monitor_new_campaign"
+        )
+        return {"success": False, "skipped": "campaign_creation_disabled"}
     import asyncio
 
     return asyncio.run(_run_monitor_new_campaign(brief_id, account_id, hours_elapsed))
@@ -2973,6 +3004,12 @@ def check_rlsa_eligibility_task() -> dict[str, object]:
 )  # type: ignore[untyped-decorator]
 def check_remarketing_campaign_eligibility_task() -> dict[str, object]:
     """Monthly task: propose Display Remarketing campaigns for eligible GROWTH accounts."""
+    if _campaign_creation_disabled():
+        logger.info(
+            "creation task skipped — campaign creation disabled",
+            task="check_remarketing_campaign_eligibility",
+        )
+        return {"success": False, "skipped": "campaign_creation_disabled"}
     import asyncio
 
     from adcopilot.config import get_settings
