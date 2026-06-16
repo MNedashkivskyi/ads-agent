@@ -76,3 +76,62 @@ def test_business_is_unlimited() -> None:
 
 def test_business_superset_of_professional() -> None:
     assert capabilities(PlanTier.PROFESSIONAL) <= capabilities(PlanTier.BUSINESS)
+
+
+# ---------------------------------------------------------------------------
+# T6.3 — lock the model so it cannot drift silently.
+# ---------------------------------------------------------------------------
+
+# The complete set of gated capabilities (Appendix A). If a capability is added
+# or removed, this test must be updated deliberately — that is the gate.
+_APPENDIX_A_CAPABILITIES: set[str] = {
+    "measurement_loop",
+    "audiences",
+    "structure_seasonality",
+    "ai_insights",
+    "ab_experiments",
+    "advanced_optimization",
+    "auto_apply",
+    "pmax_optimization",
+    "causal_experiments",
+    "cross_account_reports",
+    "team_seats",
+    "api_access",
+}
+
+# Core features stay ungated on every tier — they must never become capabilities.
+_CORE_FEATURES_NEVER_GATED: set[str] = {
+    "recommendations",
+    "conversion_tracking",
+    "quality_score",
+    "search_term_waste",
+    "spend_safety",
+    "dashboard",
+    "approve",
+    "undo",
+}
+
+
+def test_capability_enum_is_exactly_appendix_a() -> None:
+    """The Capability enum must equal Appendix A exactly — no extra, none missing."""
+    assert {c.value for c in Capability} == _APPENDIX_A_CAPABILITIES
+
+
+def test_core_features_are_not_capabilities() -> None:
+    """Core features must never leak into the gated capability set (T6.3)."""
+    gated = {c.value for c in Capability}
+    assert gated.isdisjoint(_CORE_FEATURES_NEVER_GATED)
+
+
+def test_starter_has_no_capabilities() -> None:
+    """Starter is Core-only: detection + recommendations stay ungated for it."""
+    assert capabilities(PlanTier.STARTER) == frozenset()
+
+
+def test_professional_has_exactly_eight_capabilities() -> None:
+    assert len(capabilities(PlanTier.PROFESSIONAL)) == 8
+
+
+def test_business_has_all_twelve_capabilities() -> None:
+    assert len(capabilities(PlanTier.BUSINESS)) == 12
+    assert {c.value for c in capabilities(PlanTier.BUSINESS)} == _APPENDIX_A_CAPABILITIES

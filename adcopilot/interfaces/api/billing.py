@@ -285,6 +285,17 @@ async def _handle_subscription_event(
             updated = dataclasses.replace(user, **changes)
             await repo.save(updated)
             await session.commit()
+
+            # T6.4 — funnel event: plan transition (paid conversion / churn).
+            if new_plan is not None and new_plan != user.plan:
+                from adcopilot.observability import analytics
+
+                analytics.subscription_changed(
+                    str(user.id),
+                    old_plan=user.plan.value,
+                    new_plan=new_plan.value,
+                    status=new_status,
+                )
     finally:
         await engine.dispose()
 

@@ -136,6 +136,10 @@ async def get_user_me(
             if user.subscription_status == "trialing" and user.trial_started_at is None:
                 user = dataclasses.replace(user, trial_started_at=datetime.now(UTC))
                 await repo.save(user)
+                # T6.4 — funnel event: trial begins.
+                from adcopilot.observability import analytics
+
+                analytics.trial_started(str(user.id))
 
             await session.commit()
 
