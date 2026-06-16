@@ -91,10 +91,24 @@ ENTITLEMENTS: dict[PlanTier, Entitlement] = {
 }
 
 
-def _entitlement(plan: PlanTier) -> Entitlement:
-    # PlanTier.parse already collapses unknown values to STARTER, but guard the
-    # lookup so a future tier without an entry degrades safely to most-restrictive.
-    return ENTITLEMENTS.get(plan, ENTITLEMENTS[PlanTier.STARTER])
+def _coerce_plan(plan: object) -> PlanTier:
+    """Coerce any plan-ish value to a PlanTier.
+
+    Callers normally pass a ``PlanTier``, but be tolerant of a plain string or
+    any object exposing a ``.value`` (e.g. a lightweight stand-in). Unknown or
+    unhashable inputs degrade to the most-restrictive tier rather than raising.
+    """
+    if isinstance(plan, PlanTier):
+        return plan
+    raw = getattr(plan, "value", plan)
+    return PlanTier.parse(raw if isinstance(raw, str) else None)
+
+
+def _entitlement(plan: object) -> Entitlement:
+    # PlanTier.parse already collapses unknown values to STARTER, but coerce
+    # first so a non-PlanTier (or unhashable) input degrades safely instead of
+    # blowing up the dict lookup.
+    return ENTITLEMENTS.get(_coerce_plan(plan), ENTITLEMENTS[PlanTier.STARTER])
 
 
 def has_capability(plan: PlanTier, capability: Capability) -> bool:
@@ -126,4 +140,4 @@ _MAX_SEATS: dict[PlanTier, int] = {
 
 def max_seats(plan: PlanTier) -> int:
     """Maximum number of org members (including the owner) allowed by ``plan``."""
-    return _MAX_SEATS.get(plan, 1)
+    return _MAX_SEATS.get(_coerce_plan(plan), 1)
