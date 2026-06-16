@@ -2,12 +2,14 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from adcopilot.application.entitlements import Capability
 from adcopilot.config import get_settings
+from adcopilot.interfaces.api.deps import require_capability
 from adcopilot.logging_config import configure_logging
 from adcopilot.middleware import RequestIdMiddleware
 from adcopilot.observability import init_sentry
@@ -140,27 +142,59 @@ def create_app() -> FastAPI:
     application.include_router(notifications_router)
     application.include_router(conversion_tracking_router)
     application.include_router(conversion_tracking_guide_router)
-    application.include_router(experiments_router)
-    application.include_router(causal_experiments_router)
+    # --- Tier gating (Phase 4 / T4.1, T4.2) -------------------------------
+    # Capability gates are applied at router registration so every route in a
+    # gated router requires the right plan. Core routers (recommendations,
+    # conversion-tracking, quality-score, spend-safety, dashboard, search-term
+    # waste, ad-proposals approve loop) stay ungated for every tier.
+    application.include_router(
+        experiments_router,
+        dependencies=[Depends(require_capability(Capability.AB_EXPERIMENTS))],
+    )
+    application.include_router(
+        causal_experiments_router,
+        dependencies=[Depends(require_capability(Capability.CAUSAL_EXPERIMENTS))],
+    )
     application.include_router(spend_safety_router)
-    application.include_router(shopping_router)
+    application.include_router(
+        shopping_router,
+        dependencies=[Depends(require_capability(Capability.PMAX_OPTIMIZATION))],
+    )
     application.include_router(search_terms_router)
     application.include_router(ad_proposals_router)
     application.include_router(landing_page_router)
     application.include_router(qa_router)
-    application.include_router(insights_router)
+    application.include_router(
+        insights_router,
+        dependencies=[Depends(require_capability(Capability.AI_INSIGHTS))],
+    )
     application.include_router(admin_router)
-    application.include_router(pmax_router)
+    application.include_router(
+        pmax_router,
+        dependencies=[Depends(require_capability(Capability.PMAX_OPTIMIZATION))],
+    )
     application.include_router(quality_score_router)
     application.include_router(qs_improvement_router)
-    application.include_router(measurement_router)
-    application.include_router(audiences_router)
+    application.include_router(
+        measurement_router,
+        dependencies=[Depends(require_capability(Capability.MEASUREMENT_LOOP))],
+    )
+    application.include_router(
+        audiences_router,
+        dependencies=[Depends(require_capability(Capability.AUDIENCES))],
+    )
     application.include_router(automation_router)
     application.include_router(api_keys_router)
     application.include_router(organizations_router)
     application.include_router(reports_router)
-    application.include_router(account_structure_router)
-    application.include_router(seasonality_router)
+    application.include_router(
+        account_structure_router,
+        dependencies=[Depends(require_capability(Capability.STRUCTURE_SEASONALITY))],
+    )
+    application.include_router(
+        seasonality_router,
+        dependencies=[Depends(require_capability(Capability.STRUCTURE_SEASONALITY))],
+    )
     application.include_router(cie_keywords_router)
     application.include_router(cie_creatives_router)
 
