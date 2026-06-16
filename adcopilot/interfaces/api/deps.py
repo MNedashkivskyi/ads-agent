@@ -129,12 +129,16 @@ def require_capability(
     ) -> None:
         plan = await _load_plan(current_user, settings)
         if not has_capability(plan, capability):
+            from adcopilot.observability import analytics
+
             logger.info(
                 "entitlements.capability_denied",
                 user_id=current_user,
                 plan=plan.value,
                 capability=capability.value,
             )
+            # T6.4 — the upsell surface: a gated capability returned 403.
+            analytics.upgrade_prompted(current_user, plan.value, capability.value)
             raise HTTPException(
                 status_code=403,
                 detail=_upgrade_message(capability),
