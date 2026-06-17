@@ -162,6 +162,13 @@ class SqlAuditSessionRepository:
         )
         return result.rowcount > 0
 
+    async def delete(self, session_id: str) -> bool:
+        """GDPR erasure on request: delete one session + its cascaded reports/findings."""
+        result = await self._session.execute(
+            delete(AuditSessionModel).where(AuditSessionModel.id == uuid.UUID(session_id))
+        )
+        return result.rowcount > 0
+
     async def delete_stale(self, *, before: datetime) -> int:
         """GDPR: delete anonymous (un-promoted) sessions created before ``before``.
 

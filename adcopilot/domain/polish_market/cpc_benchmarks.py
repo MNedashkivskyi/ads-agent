@@ -60,3 +60,13 @@ def get_benchmark(vertical: str, city: str) -> VerticalBenchmark | None:
     """Return benchmark for a vertical + city. Returns None if vertical unknown."""
     tier = classify_city(city)
     return BENCHMARKS.get((vertical.lower(), tier))
+
+
+def get_benchmark_by_tier(vertical: str, tier: int = 2) -> VerticalBenchmark | None:
+    """Return benchmark for a vertical at a known city tier (default tier 2 = regional).
+
+    Used when the vertical is known but the city is not (e.g. the free audit infers
+    the vertical from account text but has no geo) — tier 2 is the conservative
+    national-average choice.
+    """
+    return BENCHMARKS.get((vertical.lower(), tier))

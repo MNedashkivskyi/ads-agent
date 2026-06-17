@@ -126,3 +126,14 @@ def test_builder_gap_when_conversion_action_disabled() -> None:
     )
     ds = build_audit_dataset(raw, window_start=date(2026, 5, 1), window_end=_D, days=30)
     assert ds.measurement_gap_pct == 1.0
+
+
+def test_builder_infers_vertical_from_text() -> None:
+    raw = AuditRawData(
+        campaigns=[_campaign(100 * _M)],
+        search_terms=[],
+        keywords=[_keyword("fryzjer damski", criterion_id=1)],
+        conversion_actions=[],
+    )
+    ds = build_audit_dataset(raw, window_start=date(2026, 5, 1), window_end=_D, days=30)
+    assert ds.vertical == "salon"

@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 import httpx
 import redis as redis_sync
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
@@ -19,6 +19,7 @@ from adcopilot.infrastructure.db.repositories.google_ads_account_repository impo
     SqlGoogleAdsAccountRepository,
 )
 from adcopilot.infrastructure.db.repositories.user_repository import SqlUserRepository
+from adcopilot.rate_limit import limiter
 from adcopilot.security import (
     StateAlreadyUsedError,
     StateTokenInvalidError,
@@ -430,7 +431,9 @@ def audit_session_id_from_subject(subject: str) -> str | None:
 
 
 @router.get("/audit/start")
+@limiter.limit("5/minute")
 async def oauth_audit_start(
+    request: Request,
     settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[AsyncSession, Depends(_get_db_session)],
     source: str = "landing",
