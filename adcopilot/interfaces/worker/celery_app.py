@@ -179,6 +179,13 @@ def create_celery_app() -> Celery:
                     "schedule": crontab(hour=6, minute=30),
                 },
             },
+            # The Railway worker consumes `-Q default`. Without this, only
+            # `tasks.*` (explicitly routed below) reached it — tasks in OTHER
+            # modules (audit_tasks, cie_tasks) fell back to Celery's implicit
+            # "celery" queue, which no worker consumes, so they hung forever
+            # (e.g. the free-audit scan stuck at SCANNING). Default everything to
+            # the queue the worker actually drains.
+            "task_default_queue": "default",
             "task_routes": {
                 "adcopilot.interfaces.worker.tasks.*": {"queue": "default"},
             },
