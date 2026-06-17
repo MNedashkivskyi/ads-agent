@@ -23,7 +23,9 @@ def upgrade() -> None:
     op.create_table(
         "audit_sessions",
         sa.Column("id", UUID(as_uuid=True), **_UUID_PK),
-        sa.Column("google_customer_id", sa.String(length=50), nullable=False),
+        # Nullable: the Google customer id is resolved by a Google Ads API call
+        # in the scan worker (Phase 2), not at connect time.
+        sa.Column("google_customer_id", sa.String(length=50), nullable=True),
         sa.Column("status", sa.String(length=20), nullable=False, server_default="pending"),
         sa.Column(
             "oauth_scope", sa.String(length=40), nullable=False, server_default="adwords-readonly"

@@ -103,7 +103,7 @@ class SqlAuditSessionRepository:
     async def create(
         self,
         *,
-        google_customer_id: str,
+        google_customer_id: str | None = None,
         source: AuditSource = AuditSource.LANDING,
         consent_at: datetime | None = None,
         expires_at: datetime | None = None,
@@ -136,6 +136,14 @@ class SqlAuditSessionRepository:
             update(AuditSessionModel)
             .where(AuditSessionModel.id == uuid.UUID(session_id))
             .values(email=email)
+        )
+
+    async def set_customer_id(self, session_id: str, google_customer_id: str) -> None:
+        """Set the resolved Google customer id (called by the scan worker, Phase 2)."""
+        await self._session.execute(
+            update(AuditSessionModel)
+            .where(AuditSessionModel.id == uuid.UUID(session_id))
+            .values(google_customer_id=google_customer_id)
         )
 
     async def promote(self, session_id: str, *, user_id: str, account_id: str) -> bool:

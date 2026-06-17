@@ -1874,7 +1874,7 @@ class AuditSessionModel(Base):
     __tablename__ = "audit_sessions"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    google_customer_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    google_customer_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
     oauth_scope: Mapped[str] = mapped_column(String(40), nullable=False, default="adwords-readonly")
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="landing")

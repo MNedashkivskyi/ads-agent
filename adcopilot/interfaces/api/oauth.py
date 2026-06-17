@@ -404,3 +404,162 @@ async def oauth_ga4_callback(
             url=f"{settings.APP_URL.rstrip('/')}/app/ga4-connect?ga4=connected", status_code=302
         )
     return {"status": "ok", "account_id": account_id}
+
+
+# ---------------------------------------------------------------------------
+# Free-audit funnel — read-only Google Ads connect (Audit Funnel Phase 0 / T0.2)
+# ---------------------------------------------------------------------------
+#
+# Google Ads exposes a SINGLE OAuth scope (``GOOGLE_ADS_SCOPE``) — there is no
+# narrower "read-only" scope. "Read-only" is therefore a *policy*: audit sessions
+# are never used to dispatch mutations, only read (search) calls during the scan.
+# The landing page surfaces that promise to the user before they connect.
+
+_AUDIT_STATE_PREFIX = "audit:"
+
+
+def _audit_subject(session_id: str) -> str:
+    return f"{_AUDIT_STATE_PREFIX}{session_id}"
+
+
+def audit_session_id_from_subject(subject: str) -> str | None:
+    """Return the audit session id encoded in a state subject, or None."""
+    if not subject.startswith(_AUDIT_STATE_PREFIX):
+        return None
+    return subject[len(_AUDIT_STATE_PREFIX) :]
+
+
+@router.get("/audit/start")
+async def oauth_audit_start(
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(_get_db_session)],
+    source: str = "landing",
+) -> RedirectResponse:
+    """Begin a free, read-only audit: create an anonymous session and redirect to
+    Google consent. No login and no account slot are required. The Google
+    customer id is resolved later by the scan worker (Phase 2), so the session
+    starts ``pending`` with a null customer id.
+    """
+    if not settings.GOOGLE_ADS_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
+    from adcopilot.domain.audit import AuditSource
+    from adcopilot.infrastructure.db.repositories.audit_repository import SqlAuditSessionRepository
+
+    try:
+        src = AuditSource(source)
+    except ValueError:
+        src = AuditSource.LANDING
+
+    audit_session = await SqlAuditSessionRepository(session).create(
+        source=src, consent_at=datetime.now(UTC)
+    )
+    await session.commit()
+
+    state = issue_state_jwt(_audit_subject(audit_session.id), settings.SECRET_KEY)
+    params = {
+        "client_id": settings.GOOGLE_ADS_CLIENT_ID,
+        "redirect_uri": settings.AUDIT_OAUTH_REDIRECT_URI,
+        "response_type": "code",
+        "scope": GOOGLE_ADS_SCOPE,
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
+    }
+    return RedirectResponse(url=f"{GOOGLE_AUTH_URL}?{urlencode(params)}", status_code=302)
+
+
+@router.get("/audit/callback", response_model=None)
+async def oauth_audit_callback(
+    code: Annotated[str, Query()],
+    state: Annotated[str, Query()],
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[AsyncSession, Depends(_get_db_session)],
+    redis_client: Annotated[redis_sync.Redis, Depends(_get_redis_client)],
+) -> RedirectResponse | dict[str, object]:
+    """Finish the read-only connect: validate state, exchange the code, and store
+    the refresh token (encrypted, short Redis TTL) for the scan worker. No
+    account is created here — that only happens if the visitor signs up (T0.3).
+    """
+    import asyncio
+    import base64
+    import hashlib
+    import json
+
+    from cryptography.fernet import Fernet
+
+    from adcopilot.infrastructure.db.repositories.audit_repository import SqlAuditSessionRepository
+
+    if not settings.GOOGLE_ADS_CLIENT_ID or not settings.GOOGLE_ADS_CLIENT_SECRET:
+        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
+    try:
+        subject = await asyncio.wait_for(
+            asyncio.to_thread(
+                consume_state_jwt, state, settings.SECRET_KEY, redis_client=redis_client
+            ),
+            timeout=10,
+        )
+    except StateAlreadyUsedError as exc:
+        raise HTTPException(status_code=400, detail="OAuth state already used") from exc
+    except StateTokenInvalidError as exc:
+        raise HTTPException(status_code=400, detail="Invalid or expired OAuth state") from exc
+    except (redis_sync.ConnectionError, redis_sync.TimeoutError, TimeoutError, OSError) as exc:
+        logger.error("redis unavailable during audit oauth state validation", error=str(exc))
+        raise HTTPException(
+            status_code=503, detail="Service temporarily unavailable — please try again"
+        ) from exc
+
+    audit_session_id = audit_session_id_from_subject(subject)
+    if not audit_session_id:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+
+    repo = SqlAuditSessionRepository(session)
+    if await repo.get(audit_session_id) is None:
+        raise HTTPException(status_code=400, detail="Unknown audit session")
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        token_resp = await client.post(
+            GOOGLE_TOKEN_URL,
+            data={
+                "code": code,
+                "client_id": settings.GOOGLE_ADS_CLIENT_ID,
+                "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
+                "redirect_uri": settings.AUDIT_OAUTH_REDIRECT_URI,
+                "grant_type": "authorization_code",
+            },
+        )
+    if token_resp.status_code != 200:
+        logger.error("audit google token exchange failed", status=token_resp.status_code)
+        raise HTTPException(status_code=400, detail="Failed to exchange OAuth code")
+
+    refresh_token = token_resp.json().get("refresh_token", "")
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail="No refresh_token in Google response")
+
+    # Encrypt the read-only refresh token and stash it in Redis keyed by session,
+    # with a short TTL (small GDPR footprint). The scan worker reads it (Phase 2).
+    fernet_key = base64.urlsafe_b64encode(
+        hashlib.sha256(settings.TOKEN_ENCRYPTION_KEY.encode()).digest()
+    )
+    enc = Fernet(fernet_key).encrypt(
+        json.dumps({"refresh_token": refresh_token, "scope": "adwords-readonly"}).encode()
+    )
+    try:
+        await asyncio.wait_for(
+            asyncio.to_thread(redis_client.set, f"audit_token:{audit_session_id}", enc, ex=3600),
+            timeout=10,
+        )
+    except (redis_sync.ConnectionError, redis_sync.TimeoutError, TimeoutError, OSError) as exc:
+        logger.error("redis unavailable — cannot store audit token", error=str(exc))
+        raise HTTPException(
+            status_code=503, detail="Service temporarily unavailable — please try again"
+        ) from exc
+
+    logger.info("audit oauth connected — scan pending", audit_session_id=audit_session_id)
+    if settings.APP_URL:
+        base = settings.APP_URL.rstrip("/")
+        return RedirectResponse(
+            url=f"{base}/audit/scanning?session={audit_session_id}", status_code=302
+        )
+    return {"audit_session_id": audit_session_id, "status": "scanning"}

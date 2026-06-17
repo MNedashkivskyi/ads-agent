@@ -77,7 +77,7 @@ class AuditSession:
     """A (possibly anonymous) free-audit session keyed to a Google customer id."""
 
     id: str
-    google_customer_id: str
+    google_customer_id: str | None = None  # resolved during the scan (Phase 2)
     status: AuditStatus = AuditStatus.PENDING
     oauth_scope: str = "adwords-readonly"
     source: AuditSource = AuditSource.LANDING

@@ -68,6 +68,11 @@ class Settings(BaseSettings):
     # Uses the same OAuth client as Google Ads.
     GA4_OAUTH_REDIRECT_URI: str = "http://localhost:8000/oauth/ga4/callback"
 
+    # Free-audit funnel — read-only Google Ads connect (Audit Funnel Phase 0).
+    # Separate registered redirect URI for the anonymous audit OAuth callback;
+    # must be added in Google Cloud Console alongside OAUTH_REDIRECT_URI.
+    AUDIT_OAUTH_REDIRECT_URI: str = "http://localhost:8000/oauth/audit/callback"
+
     # --- Campaign Intelligence Engine ---------------------------------------
     # DataForSEO — exact search-volume fallback + keyword expansion. Optional;
     # when unset the CIE degrades to Keyword Planner only (no exact fallback,
