@@ -16,6 +16,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 
+from adcopilot.application.audit.finding_actions import fix_action_for
 from adcopilot.application.use_cases.promote_audit_session import PromoteAuditSessionUseCase
 from adcopilot.config import Settings, get_settings
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
@@ -49,6 +50,7 @@ def _report_summary(report: object) -> dict[str, object]:
 
 
 def _finding_dict(f: object) -> dict[str, object]:
+    fix = fix_action_for(f.category)  # type: ignore[attr-defined]
     return {
         "category": f.category.value,  # type: ignore[attr-defined]
         "tier": f.tier.value,  # type: ignore[attr-defined]
@@ -56,6 +58,11 @@ def _finding_dict(f: object) -> dict[str, object]:
         "severity": f.severity,  # type: ignore[attr-defined]
         "amount_micros": f.amount_micros,  # type: ignore[attr-defined]
         "evidence": f.evidence,  # type: ignore[attr-defined]
+        # How we fix this finding (T2.5): the recommendation kind to apply, a
+        # Polish label, and whether it's one-click (vs. advisory).
+        "fix_kind": fix.kind.value if fix else None,
+        "fix_label": fix.label_pl if fix else None,
+        "fix_actionable": fix.actionable if fix else False,
     }
 
 
@@ -293,6 +300,48 @@ async def get_account_recovery(
         "applied_count": len(entries),
         "identified_annual_waste_micros": report.annual_waste_micros if report else 0,
         "currency": report.currency if report else "PLN",
+    }
+
+
+@router.get("/accounts/{account_id}/findings")
+async def get_account_audit_findings(
+    account_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """The audit's findings for a linked account, each annotated with the fix we
+    apply — powers the in-app "fix what your audit found" list (T2.5).
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.infrastructure.db.repositories.audit_repository import (
+        SqlWasteFindingRepository,
+        SqlWasteReportRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            account = await SqlGoogleAdsAccountRepository(session).get(AccountId(account_id))
+            if account is None or str(account.user_id) != current_user:
+                raise HTTPException(status_code=404, detail="Konto nie zostało znalezione")
+            report = await SqlWasteReportRepository(session).get_for_account(account_id)
+            findings = (
+                await SqlWasteFindingRepository(session).list_for_report(report.id)
+                if report
+                else []
+            )
+    finally:
+        await engine.dispose()
+
+    return {
+        "account_id": account_id,
+        "report_id": report.id if report else None,
+        "findings": [_finding_dict(f) for f in findings],
     }
 
 
