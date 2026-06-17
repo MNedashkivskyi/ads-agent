@@ -556,7 +556,13 @@ async def oauth_audit_callback(
             status_code=503, detail="Service temporarily unavailable — please try again"
         ) from exc
 
-    logger.info("audit oauth connected — scan pending", audit_session_id=audit_session_id)
+    from adcopilot.domain.audit import AuditStatus
+    from adcopilot.interfaces.worker.audit_tasks import run_audit_scan_task
+
+    await repo.set_status(audit_session_id, AuditStatus.SCANNING)
+    await session.commit()
+    run_audit_scan_task.delay(audit_session_id)
+    logger.info("audit oauth connected — scan enqueued", audit_session_id=audit_session_id)
     if settings.APP_URL:
         base = settings.APP_URL.rstrip("/")
         return RedirectResponse(
