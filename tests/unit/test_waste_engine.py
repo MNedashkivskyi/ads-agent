@@ -192,3 +192,20 @@ def test_high_confidence_requires_enough_terms() -> None:
     ]
     comp = compute_waste(_ds(search_terms=terms), config=WasteConfig())
     assert comp.confidence is ReportConfidence.HIGH
+
+
+def test_vertical_only_uses_default_tier_benchmark() -> None:
+    # Inferred vertical but no city → benchmark resolves via the default tier (2),
+    # which unlocks the egregious zero-conversion tier. (_ds defaults vertical=e-commerce.)
+    comp = compute_waste(
+        _ds(
+            city=None,
+            search_terms=[
+                SearchTermRow(
+                    "dostawa ekspresowa premium", clicks=30, conversions=0, cost_micros=300 * _M
+                ),
+            ],
+        )
+    )
+    # Without the tier fallback this would be 0 (no benchmark → egregious=∞).
+    assert _amount(comp, WasteCategory.SEARCHTERM_WASTE) == 300 * _M

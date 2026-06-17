@@ -160,6 +160,30 @@ async def get_audit_session_status(
     return {"session_id": session_id, "status": audit.status.value, "report_id": report_id}
 
 
+@router.delete("/sessions/{session_id}")
+async def delete_audit_session(
+    session_id: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """GDPR erasure on request — purge a session and its report/findings.
+
+    Public: the session id is the visitor's own capability (from the scan URL).
+    The read-only token already auto-expires (Redis TTL).
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.infrastructure.db.repositories.audit_repository import SqlAuditSessionRepository
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            deleted = await SqlAuditSessionRepository(session).delete(session_id)
+    finally:
+        await engine.dispose()
+    logger.info("audit.session.erased", session_id=session_id, deleted=deleted)
+    return {"session_id": session_id, "deleted": deleted}
+
+
 @router.get("/methodology")
 async def audit_methodology() -> dict[str, object]:
     """Public "how we calculate this" content (T1.8)."""

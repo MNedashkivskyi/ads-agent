@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import date
 
 from adcopilot.application.audit.scan_reader import AuditRawData
+from adcopilot.application.audit.vertical_inference import infer_vertical
 from adcopilot.application.audit.waste_engine import AuditDataset, KeywordRow, SearchTermRow
 
 # A campaign losing more than this share of impressions to budget is a flagged
@@ -77,7 +78,8 @@ def build_audit_dataset(
         total_spend_micros=total_spend_micros,
         search_terms=search_terms,
         keywords=keywords,
-        vertical=vertical,
+        vertical=vertical
+        or infer_vertical([c.name for c in raw.campaigns] + [k.text for k in raw.keywords]),
         city=city,
         measurement_gap_pct=measurement_gap_pct,
         issues_count=issues_count,

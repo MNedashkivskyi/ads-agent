@@ -34,7 +34,7 @@ from adcopilot.application.detection.search_term_waste import (
     is_wasteful_term,
 )
 from adcopilot.domain.audit import FindingTier, ReportConfidence, WasteCategory
-from adcopilot.domain.polish_market.cpc_benchmarks import get_benchmark
+from adcopilot.domain.polish_market.cpc_benchmarks import get_benchmark, get_benchmark_by_tier
 
 _MICROS = 1_000_000
 _FLOOR_UNIT_MICROS = 10 * _MICROS  # round the headline DOWN to the nearest 10 PLN
@@ -87,6 +87,7 @@ class WasteConfig:
     )  # below ~50 PLN/window we can't stand behind a number
     keyword_min_clicks: int = 8
     min_terms_for_high_confidence: int = 20
+    default_city_tier: int = 2  # benchmark tier when the city is unknown (vertical inferred only)
 
 
 DEFAULT_CONFIG = WasteConfig()
@@ -151,9 +152,14 @@ def _keyword_examples(rows: list[KeywordRow], limit: int = 5) -> list[dict[str, 
 
 def compute_waste(dataset: AuditDataset, config: WasteConfig = DEFAULT_CONFIG) -> WasteComputation:
     """Compute the waste report + findings for a dataset (pure, no I/O)."""
-    benchmark = (
-        get_benchmark(dataset.vertical, dataset.city) if dataset.vertical and dataset.city else None
-    )
+    # Resolve the benchmark: city + vertical when both known; vertical-only falls
+    # back to a default city tier (the audit infers a vertical but has no geo).
+    if dataset.vertical and dataset.city:
+        benchmark = get_benchmark(dataset.vertical, dataset.city)
+    elif dataset.vertical:
+        benchmark = get_benchmark_by_tier(dataset.vertical, config.default_city_tier)
+    else:
+        benchmark = None
     # "Acceptable CPA" anchor. With a benchmark we can also flag egregious
     # zero-conversion spend; without one we stay conservative and count only
     # junk-intent terms (egregious threshold = infinity).
