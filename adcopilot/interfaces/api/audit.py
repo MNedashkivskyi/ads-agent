@@ -254,6 +254,48 @@ async def get_account_audit_report(
     return {"account_id": account_id, "report": _report_summary(report) if report else None}
 
 
+@router.get("/accounts/{account_id}/recovery")
+async def get_account_recovery(
+    account_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """The recovery meter for a linked account: how much of the audit-identified
+    waste has been recovered so far (Audit Funnel Phase 4 — retention loop).
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.infrastructure.db.repositories.audit_repository import (
+        SqlRecoveryLedgerRepository,
+        SqlWasteReportRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            account = await SqlGoogleAdsAccountRepository(session).get(AccountId(account_id))
+            if account is None or str(account.user_id) != current_user:
+                raise HTTPException(status_code=404, detail="Konto nie zostało znalezione")
+            ledger = SqlRecoveryLedgerRepository(session)
+            recovered = await ledger.recovered_total_micros(account_id)
+            entries = await ledger.list_for_account(account_id)
+            report = await SqlWasteReportRepository(session).get_for_account(account_id)
+    finally:
+        await engine.dispose()
+
+    return {
+        "account_id": account_id,
+        "recovered_micros": recovered,
+        "applied_count": len(entries),
+        "identified_annual_waste_micros": report.annual_waste_micros if report else 0,
+        "currency": report.currency if report else "PLN",
+    }
+
+
 @router.get("/methodology")
 async def audit_methodology() -> dict[str, object]:
     """Public "how we calculate this" content (T1.8)."""

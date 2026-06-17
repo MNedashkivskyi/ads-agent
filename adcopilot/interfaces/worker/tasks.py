@@ -30,6 +30,7 @@ def _campaign_creation_disabled() -> bool:
 
     return not get_settings().CAMPAIGN_CREATION_ENABLED
 
+
 _LOCK_TTL_SECONDS = 7200  # 2 hours
 _MONITORING_INTERVAL_SECONDS = 3600  # 1 hour
 _MONITORING_WINDOW_HOURS = 48
@@ -287,9 +288,7 @@ async def _async_link_google_ads_accounts(
             # Record transfers that actually happened (their previous owners are
             # notified after the commit succeeds).
             transferred_prev_owners = {
-                cid: transfer_prev_owner[cid]
-                for cid in linked_ids
-                if cid in transfer_prev_owner
+                cid: transfer_prev_owner[cid] for cid in linked_ids if cid in transfer_prev_owner
             }
 
             try:
@@ -1181,9 +1180,7 @@ def execute_recommendation_task(
         # mark it (and any siblings targeting the same removed campaign) EXPIRED
         # and finish the task cleanly. Re-raising would log a misleading "task
         # raised unexpected" traceback and trip the task_failure → Sentry path.
-        logger.warning(
-            "recommendation expired — campaign removed", rec_id=rec_id, error=str(exc)
-        )
+        logger.warning("recommendation expired — campaign removed", rec_id=rec_id, error=str(exc))
         expired = 0
         try:
             expired = asyncio.run(_expire_recs_for_removed_campaign(rec_id))
@@ -1219,6 +1216,9 @@ async def _run_execute_recommendation(rec_id: str) -> dict[str, object]:
     from adcopilot.config import get_settings
     from adcopilot.domain.recommendation import RecommendationId
     from adcopilot.infrastructure.db.repositories.audit_log_repository import SqlAuditLogRepository
+    from adcopilot.infrastructure.db.repositories.audit_repository import (
+        SqlRecoveryLedgerRepository,
+    )
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
@@ -1251,6 +1251,7 @@ async def _run_execute_recommendation(rec_id: str) -> dict[str, object]:
                 mutations=GoogleAdsMutationsAdapter(settings),
                 spend_safety_repo=SpendSafetyConfigRepository(session),
                 account_spend_provider=_spend_provider,
+                recovery_repo=SqlRecoveryLedgerRepository(session),
             )
             result = await use_case.execute(RecommendationId(rec_id))
     finally:
@@ -1669,9 +1670,7 @@ async def _expire_recs_for_removed_campaign(rec_id: str) -> int:
             campaign_id = rec.target.get("campaign_id")
             if campaign_id is None:
                 # No campaign target — just expire this one rec.
-                await rec_repo.update_status(
-                    RecommendationId(rec_id), RecommendationStatus.EXPIRED
-                )
+                await rec_repo.update_status(RecommendationId(rec_id), RecommendationStatus.EXPIRED)
                 return 1
 
             expired = await rec_repo.expire_open_for_campaign(rec.account_id, int(campaign_id))
@@ -1782,7 +1781,9 @@ async def _run_generate_campaign(
                         kw_refresh_token = _creds.refresh_token
                         kw_customer_id = _account.customer_id
             except Exception:
-                logger.warning("generate_campaign_task: planner creds unavailable", brief_id=brief_id)
+                logger.warning(
+                    "generate_campaign_task: planner creds unavailable", brief_id=brief_id
+                )
             # Best-effort competitor scan from collected auction insights (14d).
             try:
                 from datetime import UTC, datetime, timedelta
@@ -1804,7 +1805,9 @@ async def _run_generate_campaign(
                         competitors=len(competitors),
                     )
             except Exception:
-                logger.warning("generate_campaign_task: competitor scan unavailable", brief_id=brief_id)
+                logger.warning(
+                    "generate_campaign_task: competitor scan unavailable", brief_id=brief_id
+                )
         # session and DB connection are fully released here;
         # nothing is held open during the LLM calls below.
 
@@ -1848,7 +1851,7 @@ async def _run_generate_campaign(
 
                     keyword_planner = GoogleKeywordPlannerAdapter(settings)
                 use_case = GenerateCampaignProposalUseCase(
-                    brief_repo=None,     # not needed for content-only generation
+                    brief_repo=None,  # not needed for content-only generation
                     proposal_repo=None,  # not needed for content-only generation
                     generator=generator,
                     template_repo=YamlVerticalTemplateAdapter(),
@@ -1887,9 +1890,7 @@ async def _run_generate_campaign(
                     customer_id=kw_customer_id,
                 )
             except Exception:
-                logger.warning(
-                    "generate_campaign_task: CIE enhancement skipped", brief_id=brief_id
-                )
+                logger.warning("generate_campaign_task: CIE enhancement skipped", brief_id=brief_id)
 
         # \u2500\u2500 Step 3: persist proposal + mark brief PROPOSED (short write-tx) \u2500\u2500
         async with AsyncSession(engine) as session, session.begin():
@@ -1906,9 +1907,7 @@ async def _run_generate_campaign(
         try:
             async with AsyncSession(engine) as session, session.begin():
                 brief_repo_f = SqlCampaignBriefRepository(session)
-                await brief_repo_f.update_status(
-                    CampaignBriefId(brief_id), LaunchStatus.FAILED
-                )
+                await brief_repo_f.update_status(CampaignBriefId(brief_id), LaunchStatus.FAILED)
         except Exception:
             logger.exception(
                 "generate_campaign_task: failed to mark brief as FAILED",
@@ -2338,9 +2337,7 @@ async def _run_create_campaign(brief_id: str) -> dict[str, object]:
     retry_backoff=True,
     name="adcopilot.interfaces.worker.tasks.enable_campaign_task",
 )
-def enable_campaign_task(
-    brief_id: str, skip_conversion_check: bool = False
-) -> dict[str, object]:
+def enable_campaign_task(brief_id: str, skip_conversion_check: bool = False) -> dict[str, object]:
     """Enable the paused campaign and start monitoring.
 
     Dispatched when the user confirms enabling. ``skip_conversion_check`` is the
@@ -2429,9 +2426,7 @@ async def _run_enable_campaign(
                         settings
                     ).list_conversion_actions(credentials.refresh_token, account.customer_id)
                 except Exception:
-                    logger.warning(
-                        "enable_campaign_tracking_check_failed", brief_id=brief_id
-                    )
+                    logger.warning("enable_campaign_tracking_check_failed", brief_id=brief_id)
                     return {
                         "enabled": False,
                         "error": "tracking_check_failed",
@@ -4296,7 +4291,6 @@ def upload_offline_conversions_task() -> dict[str, object]:
     settings = get_settings()
 
     async def _run() -> dict[str, object]:
-        import uuid
 
         from sqlalchemy import and_, or_, select
         from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -4650,7 +4644,9 @@ def detect_spend_cap_breaches_task() -> dict[str, object]:
                             break
                 except Exception as exc:  # noqa: BLE001 — isolate per-account failures
                     logger.warning(
-                        "spend_cap_breach_account_failed", account_id=str(account.id), error=str(exc)
+                        "spend_cap_breach_account_failed",
+                        account_id=str(account.id),
+                        error=str(exc),
                     )
         finally:
             await engine.dispose()
@@ -4699,9 +4695,7 @@ async def _campaign_today_spend(session, account_id: str):
 
     rows = (
         await session.execute(
-            select(
-                CampaignSnapshotModel.campaign_id, CampaignSnapshotModel.cost_micros
-            ).where(
+            select(CampaignSnapshotModel.campaign_id, CampaignSnapshotModel.cost_micros).where(
                 CampaignSnapshotModel.account_id == uuid.UUID(account_id),
                 CampaignSnapshotModel.snapshot_date == date.today(),
             )

@@ -147,3 +147,70 @@ async def _purge_stale_audit_sessions() -> dict[str, object]:
         await engine.dispose()
     logger.info("audit_retention.purged", count=purged)
     return {"purged": purged}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.audit_tasks.settle_recovery_ledger_task"
+)
+def settle_recovery_ledger_task() -> dict[str, object]:
+    """Reconcile projected savings to measured ones once the settle window passes
+    (Audit Funnel Phase 4 — recovery meter). The reconciliation arithmetic is pure
+    and unit-tested; the live per-campaign spend read is verified in staging.
+    """
+    return asyncio.run(_settle_recovery_ledger())
+
+
+async def _settle_recovery_ledger() -> dict[str, object]:
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.audit.recovery import reconcile_realized_saving
+    from adcopilot.config import get_settings
+    from adcopilot.infrastructure.db.repositories.audit_repository import (
+        SqlRecoveryLedgerRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.snapshot_repository import SqlSnapshotRepository
+
+    settle_days = 28
+    settings = get_settings()
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(days=settle_days)
+    engine = create_async_engine(settings.DATABASE_URL)
+    settled = 0
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            ledger = SqlRecoveryLedgerRepository(session)
+            snaps = SqlSnapshotRepository(session)
+            due = await ledger.list_due_for_settlement(before=cutoff)
+            for entry in due:
+                bm = entry.baseline_metric or {}
+                projected = int(bm.get("projected_micros") or entry.realized_saving_micros or 0)
+                campaign_id = bm.get("campaign_id")
+                realized = projected
+                if campaign_id:
+                    applied = entry.applied_at.date()
+                    cid = int(campaign_id)
+                    pre = await snaps.get_campaigns_date_range(
+                        entry.account_id,
+                        applied - timedelta(days=settle_days),
+                        applied - timedelta(days=1),
+                    )
+                    post = await snaps.get_campaigns_date_range(
+                        entry.account_id,
+                        applied + timedelta(days=1),
+                        applied + timedelta(days=settle_days),
+                    )
+                    base_cost = sum(s.cost_micros for s in pre if s.campaign_id == cid)
+                    post_cost = sum(s.cost_micros for s in post if s.campaign_id == cid)
+                    realized = reconcile_realized_saving(
+                        projected_micros=projected,
+                        baseline_cost_micros=base_cost,
+                        post_cost_micros=post_cost,
+                    )
+                await ledger.settle(entry.id, realized_saving_micros=realized, measured_at=now)
+                settled += 1
+    finally:
+        await engine.dispose()
+    logger.info("recovery_ledger.settled", count=settled)
+    return {"settled": settled}

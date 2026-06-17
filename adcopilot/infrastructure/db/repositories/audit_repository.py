@@ -345,3 +345,39 @@ class SqlRecoveryLedgerRepository:
             )
         ).scalar_one()
         return int(total or 0)
+
+    async def get(self, entry_id: str) -> RecoveryLedgerEntry | None:
+        m = await self._session.get(RecoveryLedgerModel, uuid.UUID(entry_id))
+        return recovery_to_domain(m) if m else None
+
+    async def list_due_for_settlement(
+        self, *, before: datetime, limit: int = 200
+    ) -> list[RecoveryLedgerEntry]:
+        """Projected entries applied before ``before`` and not yet measured (settle task)."""
+        rows = (
+            await self._session.execute(
+                select(RecoveryLedgerModel)
+                .where(
+                    RecoveryLedgerModel.method == "projected",
+                    RecoveryLedgerModel.measured_at.is_(None),
+                    RecoveryLedgerModel.applied_at < before,
+                )
+                .order_by(RecoveryLedgerModel.applied_at)
+                .limit(limit)
+            )
+        ).scalars()
+        return [recovery_to_domain(m) for m in rows]
+
+    async def settle(
+        self, entry_id: str, *, realized_saving_micros: int, measured_at: datetime
+    ) -> None:
+        """Reconcile a projected entry to its measured saving."""
+        await self._session.execute(
+            update(RecoveryLedgerModel)
+            .where(RecoveryLedgerModel.id == uuid.UUID(entry_id))
+            .values(
+                method="measured",
+                realized_saving_micros=realized_saving_micros,
+                measured_at=measured_at,
+            )
+        )
