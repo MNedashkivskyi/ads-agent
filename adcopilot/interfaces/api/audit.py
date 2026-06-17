@@ -59,3 +59,78 @@ async def promote_audit_session(
         "audit.session.promote", session_id=session_id, user_id=body.user_id, promoted=promoted
     )
     return {"session_id": session_id, "promoted": promoted}
+
+
+@router.get("/methodology")
+async def audit_methodology() -> dict[str, object]:
+    """Public "how we calculate this" content (T1.8)."""
+    from adcopilot.application.audit.methodology import METHODOLOGY
+
+    return METHODOLOGY
+
+
+@router.get("/reports/{report_id}")
+async def get_waste_report(
+    report_id: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """Public read of a waste-report summary — the audit reveal (T1.6)."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.infrastructure.db.repositories.audit_repository import SqlWasteReportRepository
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            report = await SqlWasteReportRepository(session).get(report_id)
+    finally:
+        await engine.dispose()
+
+    if report is None:
+        raise HTTPException(status_code=404, detail="Raport nie został znaleziony")
+    return {
+        "id": report.id,
+        "currency": report.currency,
+        "window_start": report.window_start.isoformat(),
+        "window_end": report.window_end.isoformat(),
+        "total_spend_micros": report.total_spend_micros,
+        "headline_waste_micros": report.headline_waste_micros,
+        "annual_waste_micros": report.annual_waste_micros,
+        "waste_pct": round(report.waste_pct, 4),
+        "measurement_gap_pct": report.measurement_gap_pct,
+        "confidence": report.confidence.value,
+        "methodology_version": report.methodology_version,
+    }
+
+
+@router.get("/reports/{report_id}/findings")
+async def get_waste_report_findings(
+    report_id: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """Public evidence drill-down: the findings behind a report (T1.6)."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.infrastructure.db.repositories.audit_repository import SqlWasteFindingRepository
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            findings = await SqlWasteFindingRepository(session).list_for_report(report_id)
+    finally:
+        await engine.dispose()
+
+    return {
+        "report_id": report_id,
+        "findings": [
+            {
+                "category": f.category.value,
+                "tier": f.tier.value,
+                "title": f.title,
+                "severity": f.severity,
+                "amount_micros": f.amount_micros,
+                "evidence": f.evidence,
+            }
+            for f in findings
+        ],
+    }
