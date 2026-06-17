@@ -127,6 +127,35 @@ async def promote_audit_session(
     return {"session_id": session_id, "promoted": promoted}
 
 
+@router.get("/sessions/{session_id}")
+async def get_audit_session_status(
+    session_id: str,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """Poll a (possibly anonymous) audit session's status + report id (T2.1).
+
+    The scan-ritual page polls this until status is READY (then loads the report)
+    or FAILED.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.infrastructure.db.repositories.audit_repository import (
+        SqlAuditSessionRepository,
+        SqlWasteReportRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            audit = await SqlAuditSessionRepository(session).get(session_id)
+            if audit is None:
+                raise HTTPException(status_code=404, detail="Sesja audytu nie istnieje")
+            report_id = await SqlWasteReportRepository(session).get_id_for_session(session_id)
+    finally:
+        await engine.dispose()
+    return {"session_id": session_id, "status": audit.status.value, "report_id": report_id}
+
+
 @router.get("/methodology")
 async def audit_methodology() -> dict[str, object]:
     """Public "how we calculate this" content (T1.8)."""
