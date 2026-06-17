@@ -45,6 +45,12 @@ def create_celery_app() -> Celery:
                     "task": "adcopilot.interfaces.worker.audit_tasks.purge_stale_audit_sessions_task",
                     "schedule": crontab(hour=1, minute=30),
                 },
+                "recovery-ledger-settle": {
+                    # 6:30 AM UTC daily — reconcile projected savings older than the
+                    # settle window to measured ones (Audit Funnel retention loop).
+                    "task": "adcopilot.interfaces.worker.audit_tasks.settle_recovery_ledger_task",
+                    "schedule": crontab(hour=6, minute=30),
+                },
                 "nightly-db-backup": {
                     # 2:00 AM UTC — runs before snapshot ingestion so the
                     # backup always captures the previous day's committed data.

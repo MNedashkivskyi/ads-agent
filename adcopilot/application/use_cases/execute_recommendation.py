@@ -118,6 +118,7 @@ class ExecuteRecommendationUseCase:
         baseline_repo: Any | None = None,
         spend_safety_repo: Any | None = None,
         account_spend_provider: Any | None = None,
+        recovery_repo: Any | None = None,
     ) -> None:
         self._rec_repo = rec_repo
         self._audit_log_repo = audit_log_repo
@@ -131,6 +132,10 @@ class ExecuteRecommendationUseCase:
         # account_spend_provider(account_id) -> AccountSpendContext (awaitable).
         self._spend_safety_repo = spend_safety_repo
         self._account_spend_provider = account_spend_provider
+        # Optional recovery-ledger repo: book the projected saving on successful
+        # execution so the recovery meter moves (Audit Funnel Phase 4). Inert if
+        # absent (e.g. unit tests that don't exercise the ledger).
+        self._recovery_repo = recovery_repo
 
     async def execute(self, rec_id: RecommendationId) -> dict[str, Any]:
         with sentry_sdk.start_transaction(
@@ -209,6 +214,29 @@ class ExecuteRecommendationUseCase:
                 await self._capture_baseline(rec, result)
             except Exception:
                 logger.warning("baseline capture failed (best-effort)", rec_id=rec_id)
+
+        # Book the projected saving to the recovery ledger now (the meter moves on
+        # apply); a settle task reconciles it to a measured saving once the window
+        # passes (Audit Funnel Phase 4). Best-effort — a ledger failure must never
+        # fail the execution that already succeeded against Google Ads.
+        if self._recovery_repo is not None:
+            try:
+                projected = int(getattr(rec, "estimated_monthly_savings_micros", 0) or 0)
+                target = rec.target if isinstance(rec.target, dict) else {}
+                campaign_id = target.get("campaign_id")
+                await self._recovery_repo.create(
+                    account_id=str(rec.account_id),
+                    recommendation_id=str(rec.id),
+                    method="projected",
+                    realized_saving_micros=projected,
+                    baseline_metric={
+                        "kind": rec.kind.value,
+                        "projected_micros": projected,
+                        "campaign_id": int(campaign_id) if campaign_id else None,
+                    },
+                )
+            except Exception:
+                logger.warning("recovery ledger booking failed (best-effort)", rec_id=rec_id)
 
         log = AuditLog.create_execute(
             recommendation_id=rec_id,

@@ -55,6 +55,7 @@ def _rec(
 def _make_use_case(
     rec: Recommendation,
     mutations: FakeGoogleAdsMutations | None = None,
+    recovery_repo: object | None = None,
 ) -> tuple[ExecuteRecommendationUseCase, FakeGoogleAdsMutations]:
     mutations = mutations or FakeGoogleAdsMutations()
     rec_repo = MagicMock()
@@ -97,6 +98,7 @@ def _make_use_case(
         account_repo=account_repo,
         credentials_repo=creds_repo,
         mutations=mutations,
+        recovery_repo=recovery_repo,
     )
     return uc, mutations
 
@@ -197,6 +199,43 @@ async def test_execute_use_case_updates_status_to_executed() -> None:
     uc, _ = _make_use_case(rec)
     await uc.execute(rec.id)
     uc._rec_repo.update_status.assert_awaited_once_with(rec.id, RecommendationStatus.EXECUTED)
+
+
+@pytest.mark.asyncio
+async def test_execute_books_projected_recovery_on_success() -> None:
+    rec = _rec(
+        RecommendationKind.PAUSE_KEYWORD,
+        target={"campaign_id": 500, "ad_group_id": 10, "criterion_id": 99},
+    )
+    recovery_repo = MagicMock()
+    recovery_repo.create = AsyncMock()
+    uc, _ = _make_use_case(rec, recovery_repo=recovery_repo)
+    await uc.execute(rec.id)
+    recovery_repo.create.assert_awaited_once()
+    kwargs = recovery_repo.create.call_args.kwargs
+    assert kwargs["account_id"] == str(_ACCOUNT_ID)
+    assert kwargs["recommendation_id"] == str(rec.id)
+    assert kwargs["method"] == "projected"
+    assert kwargs["realized_saving_micros"] == 5_000_000
+    assert kwargs["baseline_metric"]["campaign_id"] == 500
+
+
+@pytest.mark.asyncio
+async def test_execute_does_not_book_recovery_when_executor_fails() -> None:
+    # A removed campaign fails terminally before EXECUTED — nothing is booked.
+    from adcopilot.domain.exceptions import CampaignNotFoundError
+
+    rec = _rec(
+        RecommendationKind.PAUSE_KEYWORD,
+        target={"campaign_id": 500, "ad_group_id": 10, "criterion_id": 99},
+    )
+    mutations = FakeGoogleAdsMutations(missing_campaign_ids={500})
+    recovery_repo = MagicMock()
+    recovery_repo.create = AsyncMock()
+    uc, _ = _make_use_case(rec, mutations=mutations, recovery_repo=recovery_repo)
+    with pytest.raises(CampaignNotFoundError):
+        await uc.execute(rec.id)
+    recovery_repo.create.assert_not_awaited()
 
 
 @pytest.mark.asyncio
