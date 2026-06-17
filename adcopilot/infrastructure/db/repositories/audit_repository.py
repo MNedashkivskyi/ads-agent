@@ -200,6 +200,18 @@ class SqlWasteReportRepository:
         m = await self._session.get(WasteReportModel, uuid.UUID(report_id))
         return report_to_domain(m) if m else None
 
+    async def get_id_for_session(self, audit_session_id: str) -> str | None:
+        """The latest report id for an audit session (for scan-status polling)."""
+        row = (
+            await self._session.execute(
+                select(WasteReportModel.id)
+                .where(WasteReportModel.audit_session_id == uuid.UUID(audit_session_id))
+                .order_by(WasteReportModel.computed_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        return str(row) if row else None
+
 
 class SqlWasteFindingRepository:
     def __init__(self, session: AsyncSession) -> None:
