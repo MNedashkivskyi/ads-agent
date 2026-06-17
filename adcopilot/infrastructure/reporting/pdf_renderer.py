@@ -227,3 +227,78 @@ def render_performance_report_pdf(report_data: dict) -> bytes:
 
     c.save()
     return buf.getvalue()
+
+
+def _pln(value: float) -> str:
+    """Polish-style thousands grouping with a space separator (e.g. 40 800)."""
+    return f"{value:,.0f}".replace(",", " ")
+
+
+def render_waste_audit_pdf(report_data: dict) -> bytes:
+    """Render the free waste-audit report as PDF bytes (Audit Funnel T2.3).
+
+    Expects PLN amounts (not micros): ``headline_waste_pln``, ``annual_waste_pln``,
+    ``waste_pct`` (0..1), ``measurement_gap_pct`` (0..1), ``confidence``, and a
+    ``findings`` list of ``{title, amount_pln, tier}``.
+    """
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+
+    headline = report_data.get("headline_waste_pln", 0) or 0
+    annual = report_data.get("annual_waste_pln", 0) or 0
+    waste_pct = report_data.get("waste_pct", 0) or 0
+    gap_pct = report_data.get("measurement_gap_pct", 0) or 0
+    confidence = report_data.get("confidence", "")
+    findings = report_data.get("findings", [])
+    customer = report_data.get("customer_id", "")
+    period = report_data.get("period", "")
+
+    y = PAGE_H - MARGIN
+    c.setFont(FONT_BOLD, 22)
+    c.drawString(MARGIN, y, "Audyt Google Ads — ile marnujesz")
+    y -= 34
+    c.setFont(FONT_REGULAR, 11)
+    if customer:
+        c.drawString(MARGIN, y, f"Konto: {customer}")
+        y -= 16
+    if period:
+        c.drawString(MARGIN, y, f"Okres: {period}")
+        y -= 16
+    y -= 12
+
+    c.setFont(FONT_BOLD, 18)
+    c.drawString(MARGIN, y, f"Marnujesz ok. {_pln(headline)} zł / mies.")
+    y -= 24
+    c.setFont(FONT_REGULAR, 11)
+    c.drawString(MARGIN, y, f"≈ {_pln(annual)} zł rocznie   ·   {waste_pct:.0%} budżetu")
+    y -= 16
+    c.drawString(MARGIN, y, f"Pewność oszacowania: {confidence}")
+    y -= 26
+
+    if gap_pct > 0:
+        c.setFont(FONT_BOLD, 11)
+        c.drawString(MARGIN, y, f"Nie mierzysz ok. {gap_pct:.0%} konwersji — działasz po omacku.")
+        y -= 26
+
+    c.setFont(FONT_BOLD, 13)
+    c.drawString(MARGIN, y, "Na co idą zmarnowane pieniądze")
+    y -= 20
+    c.setFont(FONT_REGULAR, 10)
+    if not findings:
+        c.drawString(MARGIN, y, "Nie znaleziono istotnego marnowania w tym okresie.")
+        y -= 16
+    for f in findings:
+        title = f.get("title", "")
+        amount = f.get("amount_pln")
+        suffix = f": {_pln(amount)} zł" if amount is not None else ""
+        if f.get("tier") == "estimated":
+            suffix += " (szacunkowo)"
+        c.drawString(MARGIN, y, f"• {title}{suffix}")
+        y -= 16
+        if y < 80:
+            break
+
+    _draw_footer(c, 1)
+    c.showPage()
+    c.save()
+    return buf.getvalue()
