@@ -40,8 +40,12 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.admin import router as admin_router
     from adcopilot.interfaces.api.api_keys import router as api_keys_router
     from adcopilot.interfaces.api.audiences import router as audiences_router
+    from adcopilot.interfaces.api.audit import router as audit_router
     from adcopilot.interfaces.api.automation import router as automation_router
     from adcopilot.interfaces.api.billing import router as billing_router
+    from adcopilot.interfaces.api.causal_experiments import router as causal_experiments_router
+    from adcopilot.interfaces.api.cie_creatives import router as cie_creatives_router
+    from adcopilot.interfaces.api.cie_keywords import router as cie_keywords_router
     from adcopilot.interfaces.api.conversion_tracking import router as conversion_tracking_router
     from adcopilot.interfaces.api.conversion_tracking_guide import (
         router as conversion_tracking_guide_router,
@@ -49,12 +53,7 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.dashboard import router as dashboard_router
     from adcopilot.interfaces.api.debug import router as debug_router
     from adcopilot.interfaces.api.digest import router as digest_router
-    from adcopilot.interfaces.api.causal_experiments import router as causal_experiments_router
-    from adcopilot.interfaces.api.cie_creatives import router as cie_creatives_router
-    from adcopilot.interfaces.api.cie_keywords import router as cie_keywords_router
     from adcopilot.interfaces.api.experiments import router as experiments_router
-    from adcopilot.interfaces.api.shopping import router as shopping_router
-    from adcopilot.interfaces.api.spend_safety import router as spend_safety_router
     from adcopilot.interfaces.api.insights import router as insights_router
     from adcopilot.interfaces.api.landing_page import router as landing_page_router
     from adcopilot.interfaces.api.launch import api_router as launch_api_router
@@ -62,11 +61,11 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.launch_error_recovery import (
         router as launch_error_recovery_router,
     )
+    from adcopilot.interfaces.api.measurement import router as measurement_router
     from adcopilot.interfaces.api.notifications import router as notifications_router
     from adcopilot.interfaces.api.oauth import router as oauth_router
     from adcopilot.interfaces.api.organizations import router as organizations_router
     from adcopilot.interfaces.api.pmax import router as pmax_router
-    from adcopilot.interfaces.api.measurement import router as measurement_router
     from adcopilot.interfaces.api.proposal_editor import router as proposal_editor_router
     from adcopilot.interfaces.api.qa import router as qa_router
     from adcopilot.interfaces.api.qs_improvement import router as qs_improvement_router
@@ -74,7 +73,9 @@ def create_app() -> FastAPI:
     from adcopilot.interfaces.api.reports import router as reports_router
     from adcopilot.interfaces.api.search_terms import router as search_terms_router
     from adcopilot.interfaces.api.seasonality import router as seasonality_router
+    from adcopilot.interfaces.api.shopping import router as shopping_router
     from adcopilot.interfaces.api.snapshots import router as snapshots_router
+    from adcopilot.interfaces.api.spend_safety import router as spend_safety_router
     from adcopilot.interfaces.api.users import router as users_router
     from adcopilot.interfaces.api.website import router as website_router
     from adcopilot.rate_limit import limiter
@@ -119,6 +120,9 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
     )
     application.include_router(oauth_router)
+    # Free-audit funnel (Audit Funnel Phase 0) — public OAuth connect lives in the
+    # oauth router; this router exposes session promotion (T0.3). Ungated.
+    application.include_router(audit_router)
     application.include_router(snapshots_router)
     application.include_router(digest_router)
     application.include_router(users_router)

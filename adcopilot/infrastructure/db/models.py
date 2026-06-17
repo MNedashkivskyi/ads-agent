@@ -78,6 +78,11 @@ __all__ = [
     "CieShippedAssetModel",
     "CieAdsPerformanceFactModel",
     "CieSearchTermProposalModel",
+    # Audit funnel (Phase 0)
+    "AuditSessionModel",
+    "WasteReportModel",
+    "WasteFindingModel",
+    "RecoveryLedgerModel",
 ]
 
 
@@ -1303,9 +1308,7 @@ class BusinessEconomicsModel(Base):
 
     __tablename__ = "business_economics"
 
-    account_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True
-    )
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     avg_order_value: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     profit_margin_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), nullable=True)
     customer_ltv: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
@@ -1412,9 +1415,7 @@ class AutoApplySettingsModel(Base):
         Boolean, nullable=False, server_default=sa.false(), default=False
     )
     max_risk: Mapped[str] = mapped_column(String(16), nullable=False, server_default="LOW")
-    max_changes_per_day: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="5"
-    )
+    max_changes_per_day: Mapped[int] = mapped_column(Integer, nullable=False, server_default="5")
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -1686,9 +1687,7 @@ class CieHookCandidateModel(Base):
     """A generated hook, tagged by angle (the dimension) + surface."""
 
     __tablename__ = "cie_hook_candidates"
-    __table_args__ = (
-        Index("ix_cie_hook_candidate_set_status", "set_id", "status"),
-    )
+    __table_args__ = (Index("ix_cie_hook_candidate_set_status", "set_id", "status"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     set_id: Mapped[uuid.UUID] = mapped_column(
@@ -1725,7 +1724,10 @@ class CieShippedKeywordModel(Base):
     __tablename__ = "cie_shipped_keywords"
     __table_args__ = (
         sa.UniqueConstraint(
-            "account_id", "customer_id", "keyword_text", "ad_group_id",
+            "account_id",
+            "customer_id",
+            "keyword_text",
+            "ad_group_id",
             name="uq_cie_shipped_keyword",
         ),
         Index("ix_cie_shipped_keyword_text", "keyword_text"),
@@ -1756,7 +1758,10 @@ class CieShippedAssetModel(Base):
     __tablename__ = "cie_shipped_assets"
     __table_args__ = (
         sa.UniqueConstraint(
-            "account_id", "customer_id", "asset_text", "surface",
+            "account_id",
+            "customer_id",
+            "asset_text",
+            "surface",
             name="uq_cie_shipped_asset",
         ),
         Index("ix_cie_shipped_asset_text", "asset_text"),
@@ -1789,7 +1794,10 @@ class CieAdsPerformanceFactModel(Base):
     __tablename__ = "cie_ads_performance_facts"
     __table_args__ = (
         sa.UniqueConstraint(
-            "account_id", "entity_type", "entity_id", "day",
+            "account_id",
+            "entity_type",
+            "entity_id",
+            "day",
             name="uq_cie_perf_fact",
         ),
         Index("ix_cie_perf_fact_dim", "vertical", "dimension", "value"),
@@ -1853,3 +1861,98 @@ class CieSearchTermProposalModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+
+# ---------------------------------------------------------------------------
+# Audit-funnel models (Audit Funnel Phase 0 / Task 0.1)
+# ---------------------------------------------------------------------------
+
+
+class AuditSessionModel(Base):
+    """A (possibly anonymous) free-audit session keyed to a Google customer id."""
+
+    __tablename__ = "audit_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    google_customer_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    oauth_scope: Mapped[str] = mapped_column(String(40), nullable=False, default="adwords-readonly")
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="landing")
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    consent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class WasteReportModel(Base):
+    """The computed audit result — headline waste plus measurement gap."""
+
+    __tablename__ = "waste_reports"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    audit_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("audit_sessions.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
+    window_start: Mapped[date] = mapped_column(Date, nullable=False)
+    window_end: Mapped[date] = mapped_column(Date, nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False, default="PLN")
+    total_spend_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    headline_waste_micros: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    measurement_gap_pct: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    confidence: Mapped[str] = mapped_column(String(10), nullable=False, default="medium")
+    methodology_version: Mapped[str] = mapped_column(String(20), nullable=False, default="1")
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class WasteFindingModel(Base):
+    """One categorised finding within a report; ``evidence`` carries the proof."""
+
+    __tablename__ = "waste_findings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    report_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("waste_reports.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    category: Mapped[str] = mapped_column(String(40), nullable=False)
+    tier: Mapped[str] = mapped_column(String(20), nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="MEDIUM")
+    amount_micros: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    evidence: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
+    recommendation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+
+class RecoveryLedgerModel(Base):
+    """A realised (or projected) saving from applying a fix — powers the meter."""
+
+    __tablename__ = "recovery_ledger"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    finding_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    recommendation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    applied_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    method: Mapped[str] = mapped_column(String(20), nullable=False, default="projected")
+    baseline_metric: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default=dict)
+    realized_saving_micros: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    measured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
