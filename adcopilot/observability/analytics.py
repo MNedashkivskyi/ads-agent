@@ -47,7 +47,9 @@ def subscription_changed(user_id: str, old_plan: str | None, new_plan: str, stat
         old_plan=old_plan,
         new_plan=new_plan,
         status=status,
-        paid_conversion=(old_plan in (None, "starter") and new_plan in ("professional", "business")),
+        paid_conversion=(
+            old_plan in (None, "starter") and new_plan in ("professional", "business")
+        ),
     )
 
 
@@ -57,3 +59,28 @@ def upgrade_prompted(user_id: str, plan: str, capability: str) -> None:
 
 def feature_used(user_id: str, plan: str, capability: str) -> None:
     emit("feature_used", user_id=user_id, plan=plan, capability=capability)
+
+
+# --- Free-audit funnel (Audit Funnel) -------------------------------------
+# The acquisition funnel before the pivot funnel above: connect -> scan ->
+# reveal -> signup. Only ids are emitted (no PII).
+
+
+def audit_started(audit_session_id: str, source: str) -> None:
+    emit("audit_started", audit_session_id=audit_session_id, source=source)
+
+
+def audit_scan_completed(audit_session_id: str, report_id: str | None) -> None:
+    emit("audit_scan_completed", audit_session_id=audit_session_id, report_id=report_id)
+
+
+def audit_scan_failed(audit_session_id: str, reason: str) -> None:
+    emit("audit_scan_failed", audit_session_id=audit_session_id, reason=reason)
+
+
+def audit_report_viewed(report_id: str) -> None:
+    emit("audit_report_viewed", report_id=report_id)
+
+
+def audit_session_promoted(audit_session_id: str, user_id: str) -> None:
+    emit("audit_session_promoted", audit_session_id=audit_session_id, user_id=user_id)

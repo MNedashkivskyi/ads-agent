@@ -39,6 +39,12 @@ def create_celery_app() -> Celery:
             "timezone": "UTC",
             "enable_utc": True,
             "beat_schedule": {
+                "audit-retention-purge": {
+                    # 1:30 AM UTC daily — GDPR purge of anonymous (un-promoted)
+                    # free-audit data past AUDIT_RETENTION_DAYS.
+                    "task": "adcopilot.interfaces.worker.audit_tasks.purge_stale_audit_sessions_task",
+                    "schedule": crontab(hour=1, minute=30),
+                },
                 "nightly-db-backup": {
                     # 2:00 AM UTC — runs before snapshot ingestion so the
                     # backup always captures the previous day's committed data.

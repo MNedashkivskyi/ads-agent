@@ -121,6 +121,10 @@ async def promote_audit_session(
     finally:
         await engine.dispose()
 
+    if promoted:
+        from adcopilot.observability import analytics
+
+        analytics.audit_session_promoted(session_id, body.user_id)
     logger.info(
         "audit.session.promote", session_id=session_id, user_id=body.user_id, promoted=promoted
     )
@@ -173,6 +177,9 @@ async def get_waste_report(
     report = await _load_report(settings, report_id)
     if report is None:
         raise HTTPException(status_code=404, detail="Raport nie został znaleziony")
+    from adcopilot.observability import analytics
+
+    analytics.audit_report_viewed(report_id)
     return _report_summary(report)
 
 
