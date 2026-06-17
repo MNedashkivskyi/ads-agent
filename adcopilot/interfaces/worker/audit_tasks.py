@@ -13,6 +13,7 @@ import asyncio
 import structlog
 
 from adcopilot.interfaces.worker.celery_app import celery_app
+from adcopilot.observability import analytics
 
 logger = structlog.get_logger(__name__)
 
@@ -83,6 +84,7 @@ async def _run_audit_scan(audit_session_id: str) -> dict[str, object]:
     if not enc:
         logger.warning("audit_scan.token_missing", audit_session_id=audit_session_id)
         await _mark_failed(settings, audit_session_id)
+        analytics.audit_scan_failed(audit_session_id, "token_missing")
         return {"status": "failed", "reason": "token_missing"}
 
     refresh_token = _decrypt_token(enc, settings.TOKEN_ENCRYPTION_KEY)
@@ -103,6 +105,7 @@ async def _run_audit_scan(audit_session_id: str) -> dict[str, object]:
             )
     except Exception:
         await _mark_failed(settings, audit_session_id)
+        analytics.audit_scan_failed(audit_session_id, "scan_error")
         raise
     finally:
         await engine.dispose()
@@ -113,5 +116,34 @@ async def _run_audit_scan(audit_session_id: str) -> dict[str, object]:
     except Exception:  # noqa: BLE001 — best-effort cleanup
         logger.warning("audit_scan.token_cleanup_failed", audit_session_id=audit_session_id)
 
+    analytics.audit_scan_completed(audit_session_id, report_id)
     logger.info("audit_scan.complete", audit_session_id=audit_session_id, report_id=report_id)
     return {"status": "ok", "report_id": report_id}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="adcopilot.interfaces.worker.audit_tasks.purge_stale_audit_sessions_task"
+)
+def purge_stale_audit_sessions_task() -> dict[str, object]:
+    """GDPR retention: delete anonymous audit data older than AUDIT_RETENTION_DAYS."""
+    return asyncio.run(_purge_stale_audit_sessions())
+
+
+async def _purge_stale_audit_sessions() -> dict[str, object]:
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.config import get_settings
+    from adcopilot.infrastructure.db.repositories.audit_repository import SqlAuditSessionRepository
+
+    settings = get_settings()
+    cutoff = datetime.now(UTC) - timedelta(days=settings.AUDIT_RETENTION_DAYS)
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            purged = await SqlAuditSessionRepository(session).delete_stale(before=cutoff)
+    finally:
+        await engine.dispose()
+    logger.info("audit_retention.purged", count=purged)
+    return {"purged": purged}

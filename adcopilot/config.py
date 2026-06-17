@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     # Separate registered redirect URI for the anonymous audit OAuth callback;
     # must be added in Google Cloud Console alongside OAUTH_REDIRECT_URI.
     AUDIT_OAUTH_REDIRECT_URI: str = "http://localhost:8000/oauth/audit/callback"
+    # GDPR: purge anonymous (un-promoted) audit sessions + their reports/findings
+    # this many days after creation. Promoted sessions (claimed at signup) are kept.
+    AUDIT_RETENTION_DAYS: int = 30
 
     # --- Campaign Intelligence Engine ---------------------------------------
     # DataForSEO — exact search-volume fallback + keyword expansion. Optional;

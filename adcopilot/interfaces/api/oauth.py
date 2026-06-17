@@ -456,6 +456,10 @@ async def oauth_audit_start(
     )
     await session.commit()
 
+    from adcopilot.observability import analytics
+
+    analytics.audit_started(audit_session.id, src.value)
+
     state = issue_state_jwt(_audit_subject(audit_session.id), settings.SECRET_KEY)
     params = {
         "client_id": settings.GOOGLE_ADS_CLIENT_ID,

@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adcopilot.domain.audit import (
@@ -161,6 +161,20 @@ class SqlAuditSessionRepository:
             )
         )
         return result.rowcount > 0
+
+    async def delete_stale(self, *, before: datetime) -> int:
+        """GDPR: delete anonymous (un-promoted) sessions created before ``before``.
+
+        Their waste reports and findings cascade via FK. Returns the number of
+        sessions deleted.
+        """
+        result = await self._session.execute(
+            delete(AuditSessionModel).where(
+                AuditSessionModel.user_id.is_(None),
+                AuditSessionModel.created_at < before,
+            )
+        )
+        return result.rowcount
 
 
 class SqlWasteReportRepository:
