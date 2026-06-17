@@ -29,6 +29,7 @@ def create_celery_app() -> Celery:
             "include": [
                 "adcopilot.interfaces.worker.tasks",
                 "adcopilot.interfaces.worker.cie_tasks",
+                "adcopilot.interfaces.worker.audit_tasks",
             ],
             "broker_url": settings.REDIS_URL,
             "result_backend": settings.REDIS_URL,

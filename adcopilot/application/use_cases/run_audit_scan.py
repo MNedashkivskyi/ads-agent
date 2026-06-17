@@ -55,28 +55,28 @@ class RunAuditScanUseCase:
         today: date,
         days: int = 30,
     ) -> str | None:
-        """Run the scan. Returns the report id, or None when there is nothing to scan."""
-        try:
-            customers = await self._reader.accessible_customers(refresh_token)
-            if not customers:
-                await self._sessions.set_status(audit_session_id, AuditStatus.FAILED)
-                return None
+        """Run the scan. Returns the report id, or None when there is nothing to scan.
 
-            customer_id = _customer_id_from_resource(customers[0])
-            await self._sessions.set_customer_id(audit_session_id, customer_id)
-            await self._sessions.set_status(audit_session_id, AuditStatus.SCANNING)
-
-            raw = await self._reader.pull(refresh_token, customer_id, days)
-            dataset = build_audit_dataset(
-                raw,
-                window_start=today - timedelta(days=days),
-                window_end=today,
-                days=days,
-            )
-            report = await self._compute.execute(dataset, audit_session_id=audit_session_id)
-
-            await self._sessions.set_status(audit_session_id, AuditStatus.READY)
-            return report.id
-        except Exception:
+        Exceptions propagate: the Celery task marks the session FAILED in its own
+        transaction, because a rolled-back transaction here could not persist it.
+        """
+        customers = await self._reader.accessible_customers(refresh_token)
+        if not customers:
             await self._sessions.set_status(audit_session_id, AuditStatus.FAILED)
-            raise
+            return None
+
+        customer_id = _customer_id_from_resource(customers[0])
+        await self._sessions.set_customer_id(audit_session_id, customer_id)
+        await self._sessions.set_status(audit_session_id, AuditStatus.SCANNING)
+
+        raw = await self._reader.pull(refresh_token, customer_id, days)
+        dataset = build_audit_dataset(
+            raw,
+            window_start=today - timedelta(days=days),
+            window_end=today,
+            days=days,
+        )
+        report = await self._compute.execute(dataset, audit_session_id=audit_session_id)
+
+        await self._sessions.set_status(audit_session_id, AuditStatus.READY)
+        return report.id
