@@ -233,6 +233,26 @@ class SqlWasteReportRepository:
         ).scalar_one_or_none()
         return str(row) if row else None
 
+    async def get_for_account(self, account_id: str) -> WasteReport | None:
+        """The latest waste report tied to a linked account (the onboarding bridge)."""
+        m = (
+            await self._session.execute(
+                select(WasteReportModel)
+                .where(WasteReportModel.account_id == uuid.UUID(account_id))
+                .order_by(WasteReportModel.computed_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        return report_to_domain(m) if m else None
+
+    async def set_account_for_session(self, audit_session_id: str, account_id: str) -> None:
+        """Tie an audit's report(s) to a linked account (after the session is promoted)."""
+        await self._session.execute(
+            update(WasteReportModel)
+            .where(WasteReportModel.audit_session_id == uuid.UUID(audit_session_id))
+            .values(account_id=uuid.UUID(account_id))
+        )
+
 
 class SqlWasteFindingRepository:
     def __init__(self, session: AsyncSession) -> None:

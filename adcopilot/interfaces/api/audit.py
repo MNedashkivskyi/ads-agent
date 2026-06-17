@@ -184,6 +184,76 @@ async def delete_audit_session(
     return {"session_id": session_id, "deleted": deleted}
 
 
+@router.post("/sessions/{session_id}/bridge")
+async def bridge_audit_session(
+    session_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """Claim the audit for the signed-up user's matching linked account, then kick off
+    the first snapshot so real recommendations appear (onboarding bridge).
+    """
+    from datetime import UTC, datetime
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.bridge_audit_session import BridgeAuditSessionUseCase
+    from adcopilot.infrastructure.db.repositories.audit_repository import (
+        SqlAuditSessionRepository,
+        SqlWasteReportRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            use_case = BridgeAuditSessionUseCase(
+                SqlAuditSessionRepository(session),
+                SqlGoogleAdsAccountRepository(session),
+                SqlWasteReportRepository(session),
+            )
+            account_id = await use_case.execute(session_id=session_id, user_id=current_user)
+    finally:
+        await engine.dispose()
+
+    if account_id:
+        from adcopilot.interfaces.worker.tasks import snapshot_account_task
+
+        snapshot_account_task.delay(account_id, datetime.now(UTC).date().isoformat())
+    logger.info("audit.session.bridge", session_id=session_id, account_id=account_id)
+    return {"session_id": session_id, "bridged": account_id is not None, "account_id": account_id}
+
+
+@router.get("/accounts/{account_id}/report")
+async def get_account_audit_report(
+    account_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """The audit report tied to a linked account — for the one-time dashboard banner."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.domain.entities import AccountId
+    from adcopilot.infrastructure.db.repositories.audit_repository import SqlWasteReportRepository
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            account = await SqlGoogleAdsAccountRepository(session).get(AccountId(account_id))
+            if account is None or str(account.user_id) != current_user:
+                raise HTTPException(status_code=404, detail="Konto nie zostało znalezione")
+            report = await SqlWasteReportRepository(session).get_for_account(account_id)
+    finally:
+        await engine.dispose()
+
+    return {"account_id": account_id, "report": _report_summary(report) if report else None}
+
+
 @router.get("/methodology")
 async def audit_methodology() -> dict[str, object]:
     """Public "how we calculate this" content (T1.8)."""
