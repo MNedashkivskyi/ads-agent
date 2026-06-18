@@ -303,6 +303,39 @@ async def get_account_recovery(
     }
 
 
+@router.get("/portfolio")
+async def get_recovery_portfolio(
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """Recovery rolled up across all the signed-in user's accounts (Phase 5 — agency
+    portfolio): totals plus a per-account breakdown for the portfolio dashboard.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.recovery_portfolio import RecoveryPortfolioUseCase
+    from adcopilot.domain.entities import UserId
+    from adcopilot.infrastructure.db.repositories.audit_repository import (
+        SqlRecoveryLedgerRepository,
+        SqlWasteReportRepository,
+    )
+    from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
+        SqlGoogleAdsAccountRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            use_case = RecoveryPortfolioUseCase(
+                SqlGoogleAdsAccountRepository(session),
+                SqlRecoveryLedgerRepository(session),
+                SqlWasteReportRepository(session),
+            )
+            return await use_case.execute(user_id=UserId(current_user))
+    finally:
+        await engine.dispose()
+
+
 @router.get("/accounts/{account_id}/findings")
 async def get_account_audit_findings(
     account_id: str,
