@@ -23,6 +23,7 @@ def _model_to_domain(model: GoogleAdsAccountModel) -> GoogleAdsAccount:
         if model.connected_at.tzinfo is None
         else model.connected_at,
         vertical=model.vertical,
+        organization_id=str(model.organization_id) if model.organization_id else None,
     )
 
 
@@ -40,6 +41,8 @@ def _domain_to_model(
     model.write_enabled = account.write_enabled
     model.needs_reauth = account.needs_reauth
     model.connected_at = account.connected_at
+    if account.organization_id is not None:
+        model.organization_id = uuid.UUID(account.organization_id)
     return model
 
 
@@ -78,9 +81,7 @@ class SqlGoogleAdsAccountRepository:
         existing row id so the move doesn't violate the unique customer_id index).
         """
         result = await self._session.execute(
-            select(GoogleAdsAccountModel).where(
-                GoogleAdsAccountModel.customer_id == customer_id
-            )
+            select(GoogleAdsAccountModel).where(GoogleAdsAccountModel.customer_id == customer_id)
         )
         model = result.scalar_one_or_none()
         return _model_to_domain(model) if model else None
