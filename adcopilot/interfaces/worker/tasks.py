@@ -262,9 +262,17 @@ async def _async_link_google_ads_accounts(
                         error=str(exc),
                     )
 
+                from adcopilot.infrastructure.db.repositories.organization_repository import (
+                    SqlOrganizationRepository,
+                )
+
+                # Account belongs to the owner's organization (Phase 5B): its
+                # members share access. ensure_personal_org is idempotent.
+                org = await SqlOrganizationRepository(session).ensure_personal_org(user_id)
                 account = GoogleAdsAccount(
                     id=account_id,
                     user_id=UserId(user_id),
+                    organization_id=str(org.id),
                     customer_id=customer_id,
                     descriptive_name=descriptive_name,
                     currency=currency,

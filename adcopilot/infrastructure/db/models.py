@@ -130,6 +130,12 @@ class GoogleAdsAccountModel(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    # Owning organization (Phase 5B). Nullable during the additive rollout: new
+    # accounts set it to the owner's personal org and existing rows are backfilled
+    # (migration 0080). Access is granted to members of this org.
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
     customer_id: Mapped[str] = mapped_column(String(50), nullable=False)
     descriptive_name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
     currency: Mapped[str] = mapped_column(String(10), nullable=False, default="")

@@ -71,6 +71,8 @@ class GoogleAdsAccount:
     # classifier after the first snapshot. Drives the conversion-attribution
     # window used by lag-sensitive detection rules. None until classified.
     vertical: str | None = None
+    # Owning organization (Phase 5B); access is granted to its members.
+    organization_id: str | None = None
 
 
 @dataclass(frozen=True)
