@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from adcopilot.application.entitlements import Capability
 from adcopilot.config import Settings, get_settings
+from adcopilot.interfaces.api.account_access import can_access_account
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 from adcopilot.interfaces.api.deps import require_capability
 
@@ -352,10 +353,8 @@ async def generate_cross_account_report(
             account_repo = SqlGoogleAdsAccountRepository(session)
             for account_id in body.account_ids:
                 account = await account_repo.get(AccountId(account_id))
-                if account is None or str(account.user_id) != user_id:
-                    raise HTTPException(
-                        status_code=404, detail=f"Account {account_id} not found"
-                    )
+                if account is None or not await can_access_account(session, account, user_id):
+                    raise HTTPException(status_code=404, detail=f"Account {account_id} not found")
             prompt_repo = SqlPromptVersionRepository(session)
             for account_id in body.account_ids:
                 report_data = await generate_performance_report(

@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from adcopilot.application.audit.finding_actions import fix_action_for
 from adcopilot.application.use_cases.promote_audit_session import PromoteAuditSessionUseCase
 from adcopilot.config import Settings, get_settings
+from adcopilot.interfaces.api.account_access import can_access_account
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
@@ -252,7 +253,7 @@ async def get_account_audit_report(
     try:
         async with AsyncSession(engine) as session, session.begin():
             account = await SqlGoogleAdsAccountRepository(session).get(AccountId(account_id))
-            if account is None or str(account.user_id) != current_user:
+            if account is None or not await can_access_account(session, account, current_user):
                 raise HTTPException(status_code=404, detail="Konto nie zostało znalezione")
             report = await SqlWasteReportRepository(session).get_for_account(account_id)
     finally:
@@ -285,7 +286,7 @@ async def get_account_recovery(
     try:
         async with AsyncSession(engine) as session, session.begin():
             account = await SqlGoogleAdsAccountRepository(session).get(AccountId(account_id))
-            if account is None or str(account.user_id) != current_user:
+            if account is None or not await can_access_account(session, account, current_user):
                 raise HTTPException(status_code=404, detail="Konto nie zostało znalezione")
             ledger = SqlRecoveryLedgerRepository(session)
             recovered = await ledger.recovered_total_micros(account_id)
@@ -360,7 +361,7 @@ async def get_account_audit_findings(
     try:
         async with AsyncSession(engine) as session, session.begin():
             account = await SqlGoogleAdsAccountRepository(session).get(AccountId(account_id))
-            if account is None or str(account.user_id) != current_user:
+            if account is None or not await can_access_account(session, account, current_user):
                 raise HTTPException(status_code=404, detail="Konto nie zostało znalezione")
             report = await SqlWasteReportRepository(session).get_for_account(account_id)
             findings = (
