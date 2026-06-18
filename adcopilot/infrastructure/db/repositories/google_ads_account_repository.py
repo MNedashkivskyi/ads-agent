@@ -1,11 +1,11 @@
 import uuid
 from datetime import UTC
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adcopilot.domain.entities import AccountId, GoogleAdsAccount, UserId
-from adcopilot.infrastructure.db.models import GoogleAdsAccountModel
+from adcopilot.infrastructure.db.models import GoogleAdsAccountModel, MembershipModel
 
 
 def _model_to_domain(model: GoogleAdsAccountModel) -> GoogleAdsAccount:
@@ -58,14 +58,21 @@ class SqlGoogleAdsAccountRepository:
         return _model_to_domain(model) if model else None
 
     async def list_for_user(self, user_id: UserId) -> list[GoogleAdsAccount]:
-        # Deterministic ordering (oldest connection first, id as tiebreak) so
-        # callers that use accounts[0] as the "primary" account always resolve
-        # to the same account across requests. Without an explicit ORDER BY,
-        # Postgres row order is arbitrary, which made the displayed account and
-        # the account targeted by mutations diverge for multi-account users.
+        # Accounts the user can access (Phase 5B): ones they own, plus any owned by
+        # an organization they're a member of. Deterministic ordering (oldest
+        # connection first, id as tiebreak) so callers that use accounts[0] as the
+        # "primary" account always resolve to the same account across requests.
+        member_org_ids = select(MembershipModel.organization_id).where(
+            MembershipModel.user_id == str(user_id)
+        )
         result = await self._session.execute(
             select(GoogleAdsAccountModel)
-            .where(GoogleAdsAccountModel.user_id == uuid.UUID(user_id))
+            .where(
+                or_(
+                    GoogleAdsAccountModel.user_id == uuid.UUID(user_id),
+                    GoogleAdsAccountModel.organization_id.in_(member_org_ids),
+                )
+            )
             .order_by(
                 GoogleAdsAccountModel.connected_at.asc(),
                 GoogleAdsAccountModel.id.asc(),
