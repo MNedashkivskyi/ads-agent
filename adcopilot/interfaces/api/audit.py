@@ -379,6 +379,86 @@ async def get_account_audit_findings(
     }
 
 
+class ProspectStatusUpdate(BaseModel):
+    status: str
+
+
+@router.get("/agency/prospects")
+async def list_agency_prospects(
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """The agency's prospects (client accounts under its MCC) with audit waste +
+    status, for the prospects dashboard (Phase 5C). Scoped to the user's orgs.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.application.use_cases.agency_prospects import build_prospects_view
+    from adcopilot.infrastructure.db.repositories.agency_repository import SqlProspectRepository
+    from adcopilot.infrastructure.db.repositories.audit_repository import SqlWasteReportRepository
+    from adcopilot.infrastructure.db.repositories.organization_repository import (
+        SqlOrganizationRepository,
+    )
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            org_ids = await SqlOrganizationRepository(session).list_org_ids_for_member(current_user)
+            prospects = await SqlProspectRepository(session).list_for_orgs(org_ids)
+            reports = SqlWasteReportRepository(session)
+            report_by_id: dict[str, object] = {}
+            for p in prospects:
+                if p.report_id and p.report_id not in report_by_id:
+                    r = await reports.get(p.report_id)
+                    if r is not None:
+                        report_by_id[p.report_id] = r
+            view = build_prospects_view(prospects, report_by_id)
+    finally:
+        await engine.dispose()
+    return {"prospects": view}
+
+
+@router.post("/agency/prospects/{prospect_id}/status")
+async def set_agency_prospect_status(
+    prospect_id: str,
+    body: ProspectStatusUpdate,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> dict[str, object]:
+    """Update a prospect's lifecycle status (member of the prospect's org only)."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from adcopilot.domain.agency import ProspectStatus
+    from adcopilot.infrastructure.db.repositories.agency_repository import SqlProspectRepository
+    from adcopilot.infrastructure.db.repositories.organization_repository import (
+        SqlOrganizationRepository,
+    )
+
+    try:
+        status = ProspectStatus(body.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Nieprawidłowy status") from exc
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    try:
+        async with AsyncSession(engine) as session, session.begin():
+            repo = SqlProspectRepository(session)
+            prospect = await repo.get(prospect_id)
+            membership = (
+                await SqlOrganizationRepository(session).get_membership(
+                    prospect.organization_id, current_user
+                )
+                if prospect is not None
+                else None
+            )
+            if prospect is None or membership is None:
+                raise HTTPException(status_code=404, detail="Prospekt nie został znaleziony")
+            await repo.set_status(prospect_id, status)
+    finally:
+        await engine.dispose()
+    return {"id": prospect_id, "status": status.value}
+
+
 @router.get("/methodology")
 async def audit_methodology() -> dict[str, object]:
     """Public "how we calculate this" content (T1.8)."""

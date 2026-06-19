@@ -45,6 +45,7 @@ def session_to_domain(m: AuditSessionModel) -> AuditSession:
         email=m.email,
         user_id=_opt_str(m.user_id),
         account_id=_opt_str(m.account_id),
+        agency_org_id=_opt_str(m.agency_org_id),
         consent_at=m.consent_at,
         created_at=m.created_at,
         expires_at=m.expires_at,
@@ -107,6 +108,7 @@ class SqlAuditSessionRepository:
         source: AuditSource = AuditSource.LANDING,
         consent_at: datetime | None = None,
         expires_at: datetime | None = None,
+        agency_org_id: str | None = None,
     ) -> AuditSession:
         m = AuditSessionModel(
             id=uuid.uuid4(),
@@ -115,6 +117,7 @@ class SqlAuditSessionRepository:
             source=source.value,
             consent_at=consent_at,
             expires_at=expires_at,
+            agency_org_id=_opt_uuid(agency_org_id),
         )
         self._session.add(m)
         await self._session.flush()
