@@ -14,7 +14,7 @@ from adcopilot.application.entitlements import Capability
 from adcopilot.config import Settings, get_settings
 from adcopilot.interfaces.api.account_access import can_access_account
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
-from adcopilot.interfaces.api.deps import require_capability
+from adcopilot.interfaces.api.deps import require_capability, require_phase5_enabled
 
 logger = structlog.get_logger(__name__)
 
@@ -309,6 +309,7 @@ async def generate_cross_account_report(
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
     _cap: Annotated[None, Depends(require_capability(Capability.CROSS_ACCOUNT_REPORTS))] = None,
+    _p5: Annotated[None, Depends(require_phase5_enabled)] = None,
 ) -> dict[str, object]:
     """Aggregate a single branded report across 2+ accounts owned by the user.
 

@@ -21,6 +21,7 @@ from adcopilot.application.use_cases.promote_audit_session import PromoteAuditSe
 from adcopilot.config import Settings, get_settings
 from adcopilot.interfaces.api.account_access import can_access_account
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
+from adcopilot.interfaces.api.deps import require_phase5_enabled
 
 logger = structlog.get_logger(__name__)
 
@@ -308,6 +309,7 @@ async def get_account_recovery(
 async def get_recovery_portfolio(
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    _p5: Annotated[None, Depends(require_phase5_enabled)] = None,
 ) -> dict[str, object]:
     """Recovery rolled up across all the signed-in user's accounts (Phase 5 — agency
     portfolio): totals plus a per-account breakdown for the portfolio dashboard.
@@ -387,6 +389,7 @@ class ProspectStatusUpdate(BaseModel):
 async def list_agency_prospects(
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    _p5: Annotated[None, Depends(require_phase5_enabled)] = None,
 ) -> dict[str, object]:
     """The agency's prospects (client accounts under its MCC) with audit waste +
     status, for the prospects dashboard (Phase 5C). Scoped to the user's orgs.
@@ -424,6 +427,7 @@ async def set_agency_prospect_status(
     body: ProspectStatusUpdate,
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    _p5: Annotated[None, Depends(require_phase5_enabled)] = None,
 ) -> dict[str, object]:
     """Update a prospect's lifecycle status (member of the prospect's org only)."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine

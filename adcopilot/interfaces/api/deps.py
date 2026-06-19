@@ -46,8 +46,7 @@ _UPGRADE_MESSAGE: dict[Capability, str] = {
         "Zaktualizuj swój plan, aby ich używać."
     ),
     Capability.STRUCTURE_SEASONALITY: (
-        "Struktura konta i sezonowość są dostępne od planu Professional. "
-        "Zaktualizuj swój plan."
+        "Struktura konta i sezonowość są dostępne od planu Professional. Zaktualizuj swój plan."
     ),
     Capability.AI_INSIGHTS: (
         "Analizy AI są dostępne od planu Professional. Zaktualizuj swój plan."
@@ -60,20 +59,16 @@ _UPGRADE_MESSAGE: dict[Capability, str] = {
         "dostępna od planu Professional. Zaktualizuj swój plan."
     ),
     Capability.AUTO_APPLY: (
-        "Tryb automatycznego wdrażania jest dostępny od planu Professional. "
-        "Zaktualizuj swój plan."
+        "Tryb automatycznego wdrażania jest dostępny od planu Professional. Zaktualizuj swój plan."
     ),
     Capability.PMAX_OPTIMIZATION: (
-        "Optymalizacja kampanii PMax jest dostępna od planu Professional. "
-        "Zaktualizuj swój plan."
+        "Optymalizacja kampanii PMax jest dostępna od planu Professional. Zaktualizuj swój plan."
     ),
     Capability.CAUSAL_EXPERIMENTS: (
-        "Eksperymenty przyczynowe są dostępne w planie Business. "
-        "Zaktualizuj swój plan."
+        "Eksperymenty przyczynowe są dostępne w planie Business. Zaktualizuj swój plan."
     ),
     Capability.CROSS_ACCOUNT_REPORTS: (
-        "Raporty wielokontowe i brandowane są dostępne w planie Business. "
-        "Zaktualizuj swój plan."
+        "Raporty wielokontowe i brandowane są dostępne w planie Business. Zaktualizuj swój plan."
     ),
     Capability.TEAM_SEATS: (
         "Miejsca dla zespołu są dostępne w planie Business. Zaktualizuj swój plan."
@@ -158,6 +153,19 @@ async def require_campaign_creation_enabled(
     flag True restores the route. See Phase 1 / T1.1.
     """
     if not settings.CAMPAIGN_CREATION_ENABLED:
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
+async def require_phase5_enabled(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> None:
+    """Gate a route behind the Phase 5 (agency go-to-market) kill-switch.
+
+    When ``PHASE_5_ENABLED`` is False (the default — Phase 5 is frozen), the route
+    responds 404, taking the portfolio / team / cross-account / agency-prospects
+    surfaces off the API. Flip the flag True to unlock. See docs/phase_5_frozen.md.
+    """
+    if not settings.PHASE_5_ENABLED:
         raise HTTPException(status_code=404, detail="Not Found")
 
 
