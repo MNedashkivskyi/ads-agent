@@ -84,6 +84,7 @@ class AuditSession:
     email: str | None = None
     user_id: str | None = None
     account_id: str | None = None
+    agency_org_id: str | None = None  # set when an agency initiated this audit (Phase 5C)
     consent_at: datetime | None = None
     created_at: datetime | None = None
     expires_at: datetime | None = None

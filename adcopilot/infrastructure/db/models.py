@@ -1892,6 +1892,39 @@ class AuditSessionModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Agency that initiated this audit on a prospect's account (Phase 5C); null for
+    # self-serve audits.
+    agency_org_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
+
+
+class ProspectModel(Base):
+    """An agency's prospect: a client account under its MCC it audits (Phase 5C)."""
+
+    __tablename__ = "agency_prospects"
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "organization_id", "customer_id", name="uq_agency_prospects_org_customer"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    customer_id: Mapped[str] = mapped_column(String(50), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="new", index=True)
+    mcc_customer_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    audit_session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    report_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class WasteReportModel(Base):
