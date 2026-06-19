@@ -35,8 +35,17 @@ class InMemoryCreativeFlow:
         self.generator = FakeHookGenerator()
         self.judge = FakeHookJudge(winner_angle="PAIN")
 
-    async def generate(self, *, campaign_id, user_id, account_id=None, vertical=None,
-                       language=None, service=None, problems=None):  # noqa: ANN001
+    async def generate(
+        self,
+        *,
+        campaign_id,
+        user_id,
+        account_id=None,
+        vertical=None,
+        language=None,
+        service=None,
+        problems=None,
+    ):  # noqa: ANN001
         run = HookRun(
             campaign_id=campaign_id,
             account_id=account_id or "acct-1",
@@ -69,6 +78,8 @@ class InMemoryCreativeFlow:
 
 @pytest.fixture
 def client():  # noqa: ANN201
+    from unittest.mock import AsyncMock, patch
+
     from fastapi.testclient import TestClient
 
     from adcopilot.interfaces.api.auth_middleware import get_current_user
@@ -79,7 +90,12 @@ def client():  # noqa: ANN201
     app = create_app()
     app.dependency_overrides[get_current_user] = lambda: _USER
     app.dependency_overrides[get_creative_flow] = lambda: flow
-    with TestClient(app, raise_server_exceptions=False) as c:
+    # The campaign-access gate hits a real DB (separately covered by
+    # test_campaign_access.py); these in-memory flow tests neutralize it.
+    with patch(
+        "adcopilot.interfaces.api.cie_creatives.assert_campaign_access",
+        new=AsyncMock(return_value=None),
+    ), TestClient(app, raise_server_exceptions=False) as c:
         yield c, flow
     app.dependency_overrides.clear()
 
@@ -123,8 +139,6 @@ def test_select_marks_candidates_and_keeps_angle_diversity(client) -> None:  # n
     )
     c.post(f"/api/campaigns/{cid}/creatives/select")
     run = list(flow.repo.runs.values())[-1]
-    selected = [
-        x for x in flow.repo.candidates[run.id] if x.status is HookStatus.SELECTED
-    ]
+    selected = [x for x in flow.repo.candidates[run.id] if x.status is HookStatus.SELECTED]
     angles = {x.angle for x in selected}
     assert len(angles) > 1  # diversity preserved across angles

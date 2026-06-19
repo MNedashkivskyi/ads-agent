@@ -21,6 +21,7 @@ from adcopilot.application.use_cases.campaign_intelligence.keywords.validate_key
 )
 from adcopilot.domain.campaign_intelligence.keywords.keyword_comparison import KeywordComparison
 from adcopilot.domain.campaign_intelligence.keywords.keyword_run import KeywordRun
+from adcopilot.infrastructure.cache.keyword_volume_cache import KeywordVolumeCache
 from tests.unit.application.campaign_intelligence._fakes import (
     FakeKeywordGenerator,
     FakeKeywordRepository,
@@ -28,7 +29,6 @@ from tests.unit.application.campaign_intelligence._fakes import (
     FakeVolumePort,
     make_volume,
 )
-from adcopilot.infrastructure.cache.keyword_volume_cache import KeywordVolumeCache
 
 _USER = "user-123"
 
@@ -58,8 +58,18 @@ class InMemoryKeywordFlow:
         self.kp = FakeVolumePort(_KP_VOLUMES, name="kp")
         self.df = FakeVolumePort(_DATAFORSEO_VOLUMES, name="dataforseo")
 
-    async def generate(self, *, campaign_id, user_id, account_id=None, vertical=None,
-                       language=None, service=None, problems=None, seeds=None) -> str:  # noqa: ANN001
+    async def generate(
+        self,
+        *,
+        campaign_id,
+        user_id,
+        account_id=None,
+        vertical=None,
+        language=None,
+        service=None,
+        problems=None,
+        seeds=None,
+    ) -> str:  # noqa: ANN001
         run = KeywordRun(
             campaign_id=campaign_id,
             account_id=account_id or "acct-1",
@@ -98,12 +108,26 @@ class InMemoryKeywordFlow:
             return None
         return await RankKeywordsUseCase(self.repo).run(run.id)
 
-    async def analyze(self, *, campaign_id, user_id, account_id=None, vertical=None,
-                      language=None, service=None, problems=None) -> KeywordComparison:  # noqa: ANN001
+    async def analyze(
+        self,
+        *,
+        campaign_id,
+        user_id,
+        account_id=None,
+        vertical=None,
+        language=None,
+        service=None,
+        problems=None,
+    ) -> KeywordComparison:  # noqa: ANN001
         # Synchronous: generate → validate → rank in one call.
         await self.generate(
-            campaign_id=campaign_id, user_id=user_id, account_id=account_id,
-            vertical=vertical, language=language, service=service, problems=problems,
+            campaign_id=campaign_id,
+            user_id=user_id,
+            account_id=account_id,
+            vertical=vertical,
+            language=language,
+            service=service,
+            problems=problems,
         )
         await self.validate(campaign_id=campaign_id, user_id=user_id)
         result = await self.comparison(campaign_id=campaign_id, user_id=user_id)
@@ -128,12 +152,19 @@ def client():  # noqa: ANN201
     app.dependency_overrides[get_keyword_flow] = lambda: flow
     # CIE keyword generation is gated behind advanced_optimization (T2.3);
     # treat the test user as Professional so the gate passes.
-    with patch(
-        "adcopilot.interfaces.api.deps._load_plan",
-        new=AsyncMock(return_value=PlanTier.PROFESSIONAL),
+    # The campaign-access gate hits a real DB (separately covered by
+    # test_campaign_access.py); these in-memory flow tests neutralize it.
+    with (
+        patch(
+            "adcopilot.interfaces.api.deps._load_plan",
+            new=AsyncMock(return_value=PlanTier.PROFESSIONAL),
+        ),
+        patch(
+            "adcopilot.interfaces.api.cie_keywords.assert_campaign_access",
+            new=AsyncMock(return_value=None),
+        ),TestClient(app, raise_server_exceptions=False) as c
     ):
-        with TestClient(app, raise_server_exceptions=False) as c:
-            yield c, flow
+        yield c, flow
     app.dependency_overrides.clear()
 
 
@@ -213,16 +244,15 @@ def test_cie_generation_blocked_for_starter() -> None:
     with patch(
         "adcopilot.interfaces.api.deps._load_plan",
         new=AsyncMock(return_value=PlanTier.STARTER),
-    ):
-        with TestClient(app, raise_server_exceptions=False) as c:
-            for path in (
-                f"/api/campaigns/{cid}/keywords/generate",
-                f"/api/campaigns/{cid}/keywords/analyze",
-                f"/api/campaigns/{cid}/keywords/validate",
-            ):
-                resp = c.post(
-                    path,
-                    json={"account_id": "acct-1", "vertical": "salon", "service": "icoone"},
-                )
-                assert resp.status_code == 403, f"{path}: {resp.status_code} {resp.text}"
+    ), TestClient(app, raise_server_exceptions=False) as c:
+        for path in (
+            f"/api/campaigns/{cid}/keywords/generate",
+            f"/api/campaigns/{cid}/keywords/analyze",
+            f"/api/campaigns/{cid}/keywords/validate",
+        ):
+            resp = c.post(
+                path,
+                json={"account_id": "acct-1", "vertical": "salon", "service": "icoone"},
+            )
+            assert resp.status_code == 403, f"{path}: {resp.status_code} {resp.text}"
     app.dependency_overrides.clear()

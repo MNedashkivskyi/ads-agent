@@ -277,12 +277,14 @@ async def check_conversion_tracking(
         SqlOAuthCredentialsRepository,
     )
     from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+    from adcopilot.interfaces.api.account_access import require_account_access
 
     settings = get_settings()
     engine = create_async_engine(settings.DATABASE_URL)
 
     try:
         async with AsyncSession(engine) as session:
+            await require_account_access(session, account_id, user_id)
             creds_repo = SqlOAuthCredentialsRepository(session, settings.TOKEN_ENCRYPTION_KEY)
             creds = await creds_repo.get(AccountId(account_id))
             if creds is None:
