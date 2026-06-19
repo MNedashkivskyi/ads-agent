@@ -64,3 +64,18 @@ async def test_list_for_user_includes_org_accounts(db_session: AsyncSession) -> 
     assert any(a.id == acc.id for a in member_accounts)
     owner_accounts = await acc_repo.list_for_user(UserId(owner))
     assert any(a.id == acc.id for a in owner_accounts)
+
+
+@pytest.mark.integration
+async def test_list_owned_excludes_org_shared_accounts(db_session: AsyncSession) -> None:
+    # The plan account-quota counts OWNED accounts only: a shared org account a
+    # member can see must not count against the member's limit.
+    org_repo = SqlOrganizationRepository(db_session)
+    acc_repo = SqlGoogleAdsAccountRepository(db_session)
+    owner, member = str(uuid.uuid4()), str(uuid.uuid4())
+    org = await org_repo.ensure_personal_org(owner)
+    await org_repo.add_member(str(org.id), member, MembershipRole.MEMBER)
+    acc = await _make_account(db_session, owner, str(org.id))
+
+    assert any(a.id == acc.id for a in await acc_repo.list_for_user(UserId(member)))
+    assert all(a.id != acc.id for a in await acc_repo.list_owned(UserId(member)))

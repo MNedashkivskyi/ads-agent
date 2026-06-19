@@ -135,6 +135,7 @@ async def test_oauth_callback_enforces_starter_account_limit() -> None:
 
     mock_acc_repo = MagicMock()
     mock_acc_repo.list_for_user = AsyncMock(return_value=[existing_account])
+    mock_acc_repo.list_owned = AsyncMock(return_value=[existing_account])
 
     mock_session = AsyncMock()
     mock_session.commit = AsyncMock()
@@ -199,6 +200,7 @@ async def test_oauth_callback_allows_business_second_account() -> None:
 
     mock_acc_repo = MagicMock()
     mock_acc_repo.list_for_user = AsyncMock(return_value=[existing_account])  # 1 of 3 limit
+    mock_acc_repo.list_owned = AsyncMock(return_value=[existing_account])  # quota counts owned
 
     mock_session = AsyncMock()
     mock_session.commit = AsyncMock()
@@ -299,7 +301,6 @@ async def test_trial_reminders_returns_skipped_count() -> None:
     # ADW-017: the notifier is now wired — eligible users get a reminder.
     assert result["sent"] == 1
     assert result["skipped"] == 0
-
 
 
 def test_plan_for_price_id_maps_prices_to_slugs() -> None:

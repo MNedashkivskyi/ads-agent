@@ -38,8 +38,10 @@ def _settings() -> Settings:
 def _build_client(monkeypatch, *, existing_accounts) -> TestClient:
     """Wire a TestClient whose repositories are stubbed in-memory.
 
-    ``existing_accounts`` is the list ``list_for_user`` returns — each item only
-    needs a ``needs_reauth`` attribute for these tests.
+    ``existing_accounts`` is the list the account repo returns — each item only
+    needs a ``needs_reauth`` attribute for these tests. The plan quota counts owned
+    accounts via ``list_owned`` (Phase 5B); ``list_for_user`` is mocked too for any
+    org-aware listing paths.
     """
     settings = _settings()
 
@@ -50,6 +52,7 @@ def _build_client(monkeypatch, *, existing_accounts) -> TestClient:
     user_repo.ensure_exists = AsyncMock(return_value=fake_user)
     acc_repo = MagicMock()
     acc_repo.list_for_user = AsyncMock(return_value=existing_accounts)
+    acc_repo.list_owned = AsyncMock(return_value=existing_accounts)
 
     monkeypatch.setattr(oauth_module, "SqlUserRepository", lambda _session: user_repo)
     monkeypatch.setattr(oauth_module, "SqlGoogleAdsAccountRepository", lambda _session: acc_repo)
