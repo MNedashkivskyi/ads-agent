@@ -32,3 +32,17 @@ class Prospect:
     report_id: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class AgencyManagerLink:
+    """An agency org's connected Google Ads manager (MCC) account (Phase 5C).
+
+    ``refresh_token`` is the read-only OAuth token for the MCC; it's encrypted at
+    rest by the repository (never stored in plaintext).
+    """
+
+    organization_id: str
+    mcc_customer_id: str
+    refresh_token: str
+    created_at: datetime | None = None

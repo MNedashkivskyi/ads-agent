@@ -7,8 +7,9 @@ import uuid
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from adcopilot.domain.agency import Prospect, ProspectStatus
-from adcopilot.infrastructure.db.models import ProspectModel
+from adcopilot.domain.agency import AgencyManagerLink, Prospect, ProspectStatus
+from adcopilot.infrastructure.db.encryption import decrypt, encrypt
+from adcopilot.infrastructure.db.models import AgencyManagerLinkModel, ProspectModel
 
 
 def prospect_to_domain(m: ProspectModel) -> Prospect:
@@ -101,3 +102,46 @@ class SqlProspectRepository:
                 status=ProspectStatus.AUDITED.value,
             )
         )
+
+
+class SqlAgencyManagerLinkRepository:
+    """Stores an org's MCC link; the refresh token is encrypted at rest."""
+
+    def __init__(self, session: AsyncSession, encryption_key: str) -> None:
+        self._session = session
+        self._key = encryption_key
+
+    async def get(self, organization_id: str) -> AgencyManagerLink | None:
+        m = (
+            await self._session.execute(
+                select(AgencyManagerLinkModel).where(
+                    AgencyManagerLinkModel.organization_id == uuid.UUID(organization_id)
+                )
+            )
+        ).scalar_one_or_none()
+        if m is None:
+            return None
+        return AgencyManagerLink(
+            organization_id=str(m.organization_id),
+            mcc_customer_id=m.mcc_customer_id,
+            refresh_token=decrypt(m.refresh_token_encrypted, self._key),
+            created_at=m.created_at,
+        )
+
+    async def save(self, link: AgencyManagerLink) -> None:
+        """Create or replace the org's MCC link (one MCC per org in v1)."""
+        existing = (
+            await self._session.execute(
+                select(AgencyManagerLinkModel).where(
+                    AgencyManagerLinkModel.organization_id == uuid.UUID(link.organization_id)
+                )
+            )
+        ).scalar_one_or_none()
+        model = existing or AgencyManagerLinkModel(
+            id=uuid.uuid4(), organization_id=uuid.UUID(link.organization_id)
+        )
+        model.mcc_customer_id = link.mcc_customer_id
+        model.refresh_token_encrypted = encrypt(link.refresh_token, self._key)
+        if existing is None:
+            self._session.add(model)
+        await self._session.flush()
