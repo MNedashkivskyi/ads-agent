@@ -25,6 +25,7 @@ from adcopilot.infrastructure.cie.keyword_flow import (
     CampaignNotFound,
     DbKeywordFlowService,
 )
+from adcopilot.interfaces.api.account_access import assert_campaign_access
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 from adcopilot.interfaces.api.deps import require_capability
 
@@ -58,9 +59,7 @@ class KeywordFlowService(Protocol):
         self, *, campaign_id: str, user_id: str
     ) -> tuple[str | None, str | None]: ...
 
-    async def comparison(
-        self, *, campaign_id: str, user_id: str
-    ) -> KeywordComparison | None: ...
+    async def comparison(self, *, campaign_id: str, user_id: str) -> KeywordComparison | None: ...
 
     async def analyze(
         self,
@@ -228,6 +227,7 @@ async def validate_keywords(
     flow: FlowDep,
     _cap: Annotated[None, Depends(require_capability(Capability.ADVANCED_OPTIMIZATION))] = None,
 ) -> RunResponse:
+    await assert_campaign_access(get_settings(), campaign_id, user_id)
     try:
         run_id = await flow.validate(campaign_id=campaign_id, user_id=user_id)
     except (CampaignNotFound, CampaignForbidden, ValueError) as exc:
@@ -241,6 +241,7 @@ async def keyword_status(
     user_id: CurrentUser,
     flow: FlowDep,
 ) -> StatusResponse:
+    await assert_campaign_access(get_settings(), campaign_id, user_id)
     status, run_id = await flow.get_status(campaign_id=campaign_id, user_id=user_id)
     return StatusResponse(status=status or "none", run_id=run_id)
 
@@ -251,6 +252,7 @@ async def keyword_comparison(
     user_id: CurrentUser,
     flow: FlowDep,
 ) -> ComparisonResponse:
+    await assert_campaign_access(get_settings(), campaign_id, user_id)
     comparison = await flow.comparison(campaign_id=campaign_id, user_id=user_id)
     if comparison is None:
         raise HTTPException(status_code=404, detail="No keyword run found")
@@ -280,10 +282,9 @@ class AdoptProposalRequest(BaseModel):
 
 
 @router.get("/campaigns/{campaign_id}/keywords/harvest", response_model=HarvestResponse)
-async def keyword_harvest(
-    campaign_id: str, user_id: CurrentUser, flow: FlowDep
-) -> HarvestResponse:
+async def keyword_harvest(campaign_id: str, user_id: CurrentUser, flow: FlowDep) -> HarvestResponse:
     """Surface harvested promotion + negative proposals for one-click adoption."""
+    await assert_campaign_access(get_settings(), campaign_id, user_id)
     data = await flow.get_harvest(campaign_id=campaign_id, user_id=user_id)
     if data is None:
         return HarvestResponse(promotions=[], negatives=[])
@@ -293,11 +294,12 @@ async def keyword_harvest(
     )
 
 
-@router.post("/campaigns/{campaign_id}/keywords/harvest/run", response_model=RunResponse, status_code=202)
-async def run_harvest(
-    campaign_id: str, user_id: CurrentUser, flow: FlowDep
-) -> RunResponse:
+@router.post(
+    "/campaigns/{campaign_id}/keywords/harvest/run", response_model=RunResponse, status_code=202
+)
+async def run_harvest(campaign_id: str, user_id: CurrentUser, flow: FlowDep) -> RunResponse:
     """Trigger a search-term harvest for the campaign's account on demand."""
+    await assert_campaign_access(get_settings(), campaign_id, user_id)
     try:
         account_id = await flow.trigger_harvest(campaign_id=campaign_id, user_id=user_id)
     except (CampaignNotFound, CampaignForbidden, ValueError) as exc:
@@ -310,6 +312,7 @@ async def adopt_harvest(
     campaign_id: str, body: AdoptProposalRequest, user_id: CurrentUser, flow: FlowDep
 ) -> dict:
     """Adopt or dismiss a harvested proposal."""
+    await assert_campaign_access(get_settings(), campaign_id, user_id)
     try:
         updated = await flow.adopt_proposal(
             campaign_id=campaign_id,

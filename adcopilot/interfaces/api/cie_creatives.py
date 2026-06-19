@@ -20,6 +20,7 @@ from adcopilot.infrastructure.cie.creative_flow import (
     CampaignNotFound,
     DbCreativeFlowService,
 )
+from adcopilot.interfaces.api.account_access import assert_campaign_access
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
@@ -110,9 +111,8 @@ async def generate_creatives(
 @router.post(
     "/campaigns/{campaign_id}/creatives/select", response_model=RunResponse, status_code=202
 )
-async def select_creatives(
-    campaign_id: str, user_id: CurrentUser, flow: FlowDep
-) -> RunResponse:
+async def select_creatives(campaign_id: str, user_id: CurrentUser, flow: FlowDep) -> RunResponse:
+    await assert_campaign_access(get_settings(), campaign_id, user_id)
     try:
         run_id = await flow.select(campaign_id=campaign_id, user_id=user_id)
     except (CampaignNotFound, CampaignForbidden, ValueError) as exc:
@@ -123,9 +123,8 @@ async def select_creatives(
 @router.post(
     "/campaigns/{campaign_id}/creatives/finalize", response_model=RunResponse, status_code=202
 )
-async def finalize_creatives(
-    campaign_id: str, user_id: CurrentUser, flow: FlowDep
-) -> RunResponse:
+async def finalize_creatives(campaign_id: str, user_id: CurrentUser, flow: FlowDep) -> RunResponse:
+    await assert_campaign_access(get_settings(), campaign_id, user_id)
     try:
         run_id = await flow.finalize(campaign_id=campaign_id, user_id=user_id)
     except (CampaignNotFound, CampaignForbidden, ValueError) as exc:
@@ -137,5 +136,6 @@ async def finalize_creatives(
 async def creative_status(
     campaign_id: str, user_id: CurrentUser, flow: FlowDep
 ) -> CreativeStatusResponse:
+    await assert_campaign_access(get_settings(), campaign_id, user_id)
     status, run_id, payload = await flow.get_status(campaign_id=campaign_id, user_id=user_id)
     return CreativeStatusResponse(status=status or "none", run_id=run_id, rsa_payload=payload)
