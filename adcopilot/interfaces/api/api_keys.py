@@ -23,6 +23,7 @@ from adcopilot.application.entitlements import Capability, has_capability
 from adcopilot.config import Settings, get_settings
 from adcopilot.domain.api_key import generate_api_key, hash_key
 from adcopilot.domain.entities import PlanTier
+from adcopilot.interfaces.api.account_access import can_access_account
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 from adcopilot.interfaces.api.deps import require_capability
 from adcopilot.rate_limit import limiter
@@ -210,7 +211,7 @@ async def _verify_account_owner(session, account_id: str, user_id: str) -> str: 
     )
 
     account = await SqlGoogleAdsAccountRepository(session).get(AccountId(account_id))
-    if account is None or str(account.user_id) != user_id:
+    if account is None or not await can_access_account(session, account, user_id):
         raise HTTPException(status_code=404, detail="Account not found")
     return account.customer_id
 

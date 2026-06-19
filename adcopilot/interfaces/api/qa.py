@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from adcopilot.application.entitlements import Capability
 from adcopilot.config import Settings, get_settings
+from adcopilot.interfaces.api.account_access import can_access_account
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 from adcopilot.interfaces.api.deps import require_capability
 from adcopilot.rate_limit import limiter
@@ -96,7 +97,7 @@ async def ask(
 
             if body.account_id:
                 account = await account_repo.get(AccountId(body.account_id))
-                if account is None or str(account.user_id) != user_id:
+                if account is None or not await can_access_account(session, account, user_id):
                     raise HTTPException(status_code=404, detail="Account not found")
                 account_id = account.id
             else:

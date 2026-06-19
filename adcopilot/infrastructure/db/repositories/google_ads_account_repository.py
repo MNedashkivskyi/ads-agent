@@ -80,6 +80,19 @@ class SqlGoogleAdsAccountRepository:
         )
         return [_model_to_domain(m) for m in result.scalars().all()]
 
+    async def list_owned(self, user_id: UserId) -> list[GoogleAdsAccount]:
+        """Accounts the user personally owns — for the plan account quota (NOT the
+        org-shared accounts that list_for_user also returns)."""
+        result = await self._session.execute(
+            select(GoogleAdsAccountModel)
+            .where(GoogleAdsAccountModel.user_id == uuid.UUID(user_id))
+            .order_by(
+                GoogleAdsAccountModel.connected_at.asc(),
+                GoogleAdsAccountModel.id.asc(),
+            )
+        )
+        return [_model_to_domain(m) for m in result.scalars().all()]
+
     async def get_by_customer_id(self, customer_id: str) -> GoogleAdsAccount | None:
         """Return the account row for a Google Ads customer_id, whoever owns it.
 

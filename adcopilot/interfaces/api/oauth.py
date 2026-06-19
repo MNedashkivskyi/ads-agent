@@ -97,7 +97,7 @@ async def oauth_google_start(
     await session.commit()
 
     acc_repo = SqlGoogleAdsAccountRepository(session)
-    existing_accounts = await acc_repo.list_for_user(UserId(user_id))
+    existing_accounts = await acc_repo.list_owned(UserId(user_id))
     # ``None`` means unlimited (Business) — sourced from the central entitlements module.
     account_limit = plan_max_accounts(user.plan)
 
@@ -221,7 +221,7 @@ async def oauth_google_callback(
     # account flagged ``needs_reauth`` and defer to the worker, which upserts
     # the existing customer and only consumes a slot for genuinely new ones.
     acc_repo = SqlGoogleAdsAccountRepository(session)
-    existing_accounts = await acc_repo.list_for_user(UserId(user_id))
+    existing_accounts = await acc_repo.list_owned(UserId(user_id))
     # ``None`` means unlimited (Business) — sourced from the central entitlements module.
     account_limit = plan_max_accounts(user.plan)
     is_reauth = any(a.needs_reauth for a in existing_accounts)

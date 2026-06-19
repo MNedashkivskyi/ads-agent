@@ -19,22 +19,24 @@ router = APIRouter(prefix="/api/accounts", tags=["snapshots"])
 
 
 async def _verify_account_owner(account_id: str, current_user: str, settings: Settings) -> None:
-    """Raise 404 if the account doesn't exist, 403 if it isn't the caller's."""
+    """Raise 404 if the account doesn't exist, 403 if the caller can't access it
+    (owner or a member of its organization)."""
     from adcopilot.domain.entities import AccountId
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
+    from adcopilot.interfaces.api.account_access import can_access_account
 
     engine = create_async_engine(settings.DATABASE_URL)
     try:
         async with AsyncSession(engine) as session:
             account = await SqlGoogleAdsAccountRepository(session).get(AccountId(account_id))
+            if account is None:
+                raise HTTPException(status_code=404, detail="Account not found")
+            if not await can_access_account(session, account, current_user):
+                raise HTTPException(status_code=403, detail="Access denied")
     finally:
         await engine.dispose()
-    if account is None:
-        raise HTTPException(status_code=404, detail="Account not found")
-    if str(account.user_id) != current_user:
-        raise HTTPException(status_code=403, detail="Access denied")
 
 
 class SnapshotRequest(BaseModel):

@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from adcopilot.application.use_cases.detect_search_term_waste import detect_search_term_waste
 from adcopilot.config import Settings, get_settings
+from adcopilot.interfaces.api.account_access import can_access_account
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 
 logger = structlog.get_logger(__name__)
@@ -77,7 +78,7 @@ async def list_search_terms(
 
             if account_id and not multi_account:
                 account = await account_repo.get(AccountId(account_id))
-                if account is None or str(account.user_id) != user_id:
+                if account is None or not await can_access_account(session, account, user_id):
                     raise HTTPException(status_code=404, detail="Account not found")
                 target_accounts = [account]
             else:
@@ -166,7 +167,7 @@ async def block_search_term(
             audit_repo = SqlAuditLogRepository(session)
 
             account = await account_repo.get(AccountId(body.account_id))
-            if account is None or str(account.user_id) != user_id:
+            if account is None or not await can_access_account(session, account, user_id):
                 raise HTTPException(status_code=404, detail="Account not found")
             if not account.write_enabled:
                 raise HTTPException(status_code=403, detail="Account write not enabled")

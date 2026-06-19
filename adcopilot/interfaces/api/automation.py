@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from adcopilot.application.entitlements import Capability
 from adcopilot.config import Settings, get_settings
 from adcopilot.domain.auto_apply import AutoApplyRisk, AutoApplySettings, parse_risk
+from adcopilot.interfaces.api.account_access import can_access_account
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
 from adcopilot.interfaces.api.deps import require_capability
 
@@ -45,7 +46,7 @@ async def _verify_account_owner(session, account_id: str, user_id: str) -> None:
     )
 
     account = await SqlGoogleAdsAccountRepository(session).get(AccountId(account_id))
-    if account is None or str(account.user_id) != user_id:
+    if account is None or not await can_access_account(session, account, user_id):
         raise HTTPException(status_code=404, detail="Konto Google Ads nie zostało znalezione")
 
 
