@@ -20,7 +20,7 @@ from adcopilot.config import Settings, get_settings
 from adcopilot.domain.entities import PlanTier, UserId
 from adcopilot.domain.organization import MembershipRole
 from adcopilot.interfaces.api.auth_middleware import CurrentUser
-from adcopilot.interfaces.api.deps import require_capability
+from adcopilot.interfaces.api.deps import require_capability, require_phase5_enabled
 
 logger = structlog.get_logger(__name__)
 
@@ -71,6 +71,7 @@ async def list_members(
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
     _cap: Annotated[None, Depends(require_capability(Capability.TEAM_SEATS))] = None,
+    _p5: Annotated[None, Depends(require_phase5_enabled)] = None,
 ) -> list[MemberResponse]:
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Brak dostępu")
@@ -103,6 +104,7 @@ async def invite_member(
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
     _cap: Annotated[None, Depends(require_capability(Capability.TEAM_SEATS))] = None,
+    _p5: Annotated[None, Depends(require_phase5_enabled)] = None,
 ) -> InviteResponse:
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Brak dostępu")
@@ -151,6 +153,7 @@ async def accept_invitation(
     token: str,
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
+    _p5: Annotated[None, Depends(require_phase5_enabled)] = None,
 ) -> AcceptResponse:
     """Accept an invitation (the authenticated user joins the org)."""
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -186,6 +189,7 @@ async def remove_member(
     current_user: CurrentUser,
     settings: Annotated[Settings, Depends(get_settings)],
     _cap: Annotated[None, Depends(require_capability(Capability.TEAM_SEATS))] = None,
+    _p5: Annotated[None, Depends(require_phase5_enabled)] = None,
 ) -> dict[str, str]:
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Brak dostępu")

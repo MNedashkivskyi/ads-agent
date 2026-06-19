@@ -103,6 +103,12 @@ class Settings(BaseSettings):
     # to T6.2 after a stabilization window.
     CAMPAIGN_CREATION_ENABLED: bool = False
 
+    # Phase 5 (agency go-to-market) kill-switch. When False (the default — Phase 5
+    # is frozen), the Phase 5 routes (portfolio rollup, team seats, cross-account
+    # report, agency prospects) respond 404, and the frontend hides their nav/routes
+    # via VITE_PHASE_5_ENABLED. Flip True to unlock. See docs/phase_5_frozen.md.
+    PHASE_5_ENABLED: bool = False
+
     # Global kill-switch for auto-apply (Phase 3 / T3.1). Default OFF: even
     # accounts that have opted into auto-apply will not have anything executed
     # automatically until this platform-level flag is turned on. This is the
