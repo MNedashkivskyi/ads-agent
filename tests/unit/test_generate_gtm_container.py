@@ -31,6 +31,10 @@ def test_real_values_leave_no_placeholders(platform: str) -> None:
     assert "AbC-D_efGhIjk" in serialized
 
 
+def _awct_tags(container: dict) -> list[dict]:
+    return [t for t in container["containerVersion"].get("tag", []) if t.get("type") == "awct"]
+
+
 def _conversion_ids(container: dict) -> list[str]:
     """Every awct tag's ``conversionId`` parameter value."""
     out: list[str] = []
@@ -39,6 +43,23 @@ def _conversion_ids(container: dict) -> list[str]:
             if param.get("key") == "conversionId":
                 out.append(param["value"])
     return out
+
+
+@pytest.mark.parametrize("platform", ["wordpress", "shopify", "woocommerce", "custom", "shoper"])
+def test_every_awct_tag_has_nonempty_conversion_label(platform: str) -> None:
+    # GTM's awct tag requires conversionLabel ("Wartość nie może być pusta"); a
+    # conversion tag without one (e.g. an all-pages "remarketing" awct) is both
+    # rejected on import and would mis-fire a conversion on every page.
+    container = generate_gtm_container(
+        conversion_id="AW-123456789",
+        conversion_label="AbC-D_efGhIjk",
+        platform=platform,
+    )
+    tags = _awct_tags(container)
+    assert tags, "expected at least one awct conversion tag"
+    for tag in tags:
+        params = {p["key"]: p.get("value") for p in tag.get("parameter", [])}
+        assert params.get("conversionLabel"), f"awct tag '{tag['name']}' has empty conversionLabel"
 
 
 @pytest.mark.parametrize(

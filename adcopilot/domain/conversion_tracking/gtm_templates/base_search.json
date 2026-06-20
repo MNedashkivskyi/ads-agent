@@ -30,18 +30,6 @@
           {"type": "BOOLEAN", "key": "enableRemarketing", "value": "false"}
         ],
         "firingTriggerId": ["2"]
-      },
-      {
-        "accountId": "0",
-        "containerId": "0",
-        "tagId": "3",
-        "name": "GA Remarketing",
-        "type": "awct",
-        "parameter": [
-          {"type": "TEMPLATE", "key": "conversionId", "value": "{{CONVERSION_ID}}"},
-          {"type": "BOOLEAN", "key": "enableRemarketing", "value": "true"}
-        ],
-        "firingTriggerId": ["4"]
       }
     ],
     "trigger": [
@@ -50,13 +38,6 @@
         "containerId": "0",
         "triggerId": "2",
         "name": "All Pages",
-        "type": "PAGEVIEW"
-      },
-      {
-        "accountId": "0",
-        "containerId": "0",
-        "triggerId": "4",
-        "name": "All Pages - Remarketing",
         "type": "PAGEVIEW"
       }
     ]
