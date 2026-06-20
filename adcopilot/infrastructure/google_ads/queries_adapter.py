@@ -168,6 +168,11 @@ class GoogleAdsQueriesAdapter:
     ) -> tuple[str, str] | None:
         return await queries.get_primary_conversion_tag(refresh_token, customer_id, self._settings)
 
+    async def list_conversion_action_tags(self, refresh_token: str, customer_id: str) -> list:
+        return await queries.list_conversion_action_tags(
+            refresh_token, customer_id, self._settings
+        )
+
     async def list_recent_search_terms(
         self,
         refresh_token: str,

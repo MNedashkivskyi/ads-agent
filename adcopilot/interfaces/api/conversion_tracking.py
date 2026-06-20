@@ -335,13 +335,20 @@ async def get_gtm_container(
     if current_user != user_id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    import json as _json
+
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+    from adcopilot.application.use_cases.build_conversion_plan import build_conversion_plan
+    from adcopilot.application.use_cases.build_gtm_container import build_gtm_container
     from adcopilot.application.use_cases.detect_website_platform import (
         detect_platform_from_final_urls,
     )
     from adcopilot.application.use_cases.generate_gtm_container import generate_gtm_container
     from adcopilot.domain.entities import AccountId, UserId
+    from adcopilot.infrastructure.db.repositories.business_economics_repository import (
+        BusinessEconomicsRepository,
+    )
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
@@ -361,13 +368,37 @@ async def get_gtm_container(
             account = accounts[0]
             final_urls_json = await _latest_final_urls_json(session, account.id)
             credentials = await credentials_repo.get(AccountId(account.id))
+            economics = await BusinessEconomicsRepository(session).get(account.id)
     finally:
         await engine.dispose()
 
     platform = await detect_platform_from_final_urls(final_urls_json)
 
-    # Prefer the account's real conversion tag (AW-<id>/<label>); fall back to
-    # placeholders the user fills in manually only if it can't be retrieved.
+    # Premium path: build one tag + trigger per enabled conversion action, each
+    # pointing at its own AW-<id>/<label> with a category-derived trigger. Used
+    # unless the caller passed an explicit conversion_id override.
+    if not conversion_id and credentials is not None:
+        try:
+            actions = await GoogleAdsQueriesAdapter(settings).list_conversion_action_tags(
+                credentials.refresh_token, account.customer_id
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort; fall back below
+            logger.warning("gtm_container.actions_lookup_failed", error=str(exc))
+            actions = []
+        if actions:
+            try:
+                final_urls = _json.loads(final_urls_json or "[]")
+            except (_json.JSONDecodeError, TypeError):
+                final_urls = []
+            plan = build_conversion_plan(actions, platform, final_urls, economics)
+            return GTMContainerResponse(
+                platform=platform,
+                filename=f"adswise_gtm_{platform}.json",
+                container=build_gtm_container(plan),
+            )
+
+    # Fallback: single-template container with the primary/placeholder tag (used
+    # for an explicit override or when no parseable conversion action exists).
     resolved_id = conversion_id
     resolved_label = conversion_label
     if not resolved_id and credentials is not None:
