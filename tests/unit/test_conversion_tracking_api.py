@@ -92,3 +92,93 @@ def test_revalidate_returns_json(mock_run: MagicMock, test_client: TestClient) -
 def test_revalidate_requires_auth(test_client: TestClient) -> None:
     resp = test_client.post("/api/user-123/conversion-tracking/revalidate")
     assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Premium per-action plan + container endpoints
+# ---------------------------------------------------------------------------
+
+
+def test_get_plan_requires_auth(test_client: TestClient) -> None:
+    resp = test_client.get("/api/user-123/conversion-tracking/plan")
+    assert resp.status_code == 401
+
+
+def test_get_plan_returns_items(test_client: TestClient) -> None:
+    from adcopilot.application.use_cases.build_conversion_plan import build_conversion_plan
+    from adcopilot.domain.conversion_tracking.setup import ConversionActionTagInfo
+
+    actions = [
+        ConversionActionTagInfo(
+            conversion_action_id=1,
+            name="Zakup",
+            category="PURCHASE",
+            conversion_id="AW-123456789",
+            conversion_label="lbl1",
+        ),
+        ConversionActionTagInfo(
+            conversion_action_id=2,
+            name="Telefon",
+            category="PHONE_CALL_LEAD",
+            conversion_id="AW-123456789",
+            conversion_label="lbl2",
+        ),
+    ]
+    plan = build_conversion_plan(actions, "woocommerce", [])
+
+    async def _fake_gather(user_id, settings):  # noqa: ANN001
+        return "woocommerce", plan, "123-456", "refresh-token"
+
+    with patch(
+        "adcopilot.interfaces.api.conversion_tracking._gather_premium_plan",
+        new=_fake_gather,
+    ):
+        resp = test_client.get(
+            "/api/user-123/conversion-tracking/plan", headers=_auth_headers()
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["platform"] == "woocommerce"
+    assert [i["category"] for i in body["items"]] == ["PURCHASE", "PHONE_CALL_LEAD"]
+    assert body["items"][0]["trigger_kind"] == "page_url_contains"
+    assert body["items"][1]["trigger_kind"] == "tel_click"
+
+
+def test_post_container_builds_from_confirmed_plan(test_client: TestClient) -> None:
+    payload = {
+        "platform": "woocommerce",
+        "items": [
+            {
+                "conversion_action_id": 1,
+                "name": "Zakup",
+                "category": "PURCHASE",
+                "conversion_id": "AW-123456789",
+                "conversion_label": "lbl1",
+                "trigger_kind": "page_url_contains",
+                "needs_user_input": False,
+                "trigger_hint": "order-received",
+                "value": 50.0,
+                "currency": "PLN",
+            }
+        ],
+    }
+    resp = test_client.post(
+        "/api/user-123/conversion-tracking/gtm-container",
+        json=payload,
+        headers=_auth_headers(),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["platform"] == "woocommerce"
+    tags = body["container"]["containerVersion"]["tag"]
+    assert len(tags) == 1
+    params = {p["key"]: p.get("value") for p in tags[0]["parameter"]}
+    assert params["conversionId"] == "123456789"  # AW- stripped
+    assert params["conversionValue"] == "50.0"
+
+
+def test_post_container_requires_auth(test_client: TestClient) -> None:
+    resp = test_client.post(
+        "/api/user-123/conversion-tracking/gtm-container", json={"items": []}
+    )
+    assert resp.status_code == 401
