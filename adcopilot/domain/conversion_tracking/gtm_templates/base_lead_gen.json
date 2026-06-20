@@ -54,8 +54,9 @@
         "triggerId": "2",
         "name": "Form Submission",
         "type": "FORM_SUBMISSION",
-        "waitForTags": true,
-        "checkValidation": true
+        "waitForTags": {"type": "BOOLEAN", "value": "true"},
+        "waitForTagsTimeout": {"type": "TEMPLATE", "value": "2000"},
+        "checkValidation": {"type": "BOOLEAN", "value": "true"}
       },
       {
         "accountId": "0",
