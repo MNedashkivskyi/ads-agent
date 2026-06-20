@@ -116,14 +116,16 @@ class ConversionTrackingAuditUseCase:
             f"Konto Google Ads: {customer_id}\n"
             f"Ogólna ocena śledzenia: {overall.value}\n\n"
             f"Lista akcji konwersji:\n{action_summary}\n\n"
-            "Napisz diagnozę po polsku z konkretnymi instrukcjami naprawy dla każdej akcji "
-            "ze statusem 'stale' lub 'disabled'. Jeśli wszystko jest zdrowe, potwierdź to krótko."
+            "Napisz krótką diagnozę po polsku zgodnie z formatem z instrukcji systemowej. "
+            "Wypisz tylko akcje z problemem (brak konwersji w 7 dni lub wyłączone) i podaj "
+            "maksymalnie trzy kroki naprawy dla każdej. Jeśli wszystko jest zdrowe, "
+            "potwierdź to jednym zdaniem."
         )
 
         diagnostic = await self._llm.complete(
             system=system_prompt,
             user=user_message,
-            max_tokens=600,
+            max_tokens=350,
             temperature=0.2,
         )
 
