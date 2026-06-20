@@ -8,6 +8,15 @@
     "containerVersionId": "0",
     "name": "Adswise — Lead Generation",
     "description": "Google Ads conversion tracking for lead generation (form submissions)",
+    "container": {
+      "path": "accounts/0/containers/0",
+      "accountId": "0",
+      "containerId": "0",
+      "name": "Adswise Lead Gen Container",
+      "domainName": [],
+      "publicId": "GTM-XXXXXXX",
+      "usageContext": ["WEB"]
+    },
     "tag": [
       {
         "accountId": "0",
@@ -81,6 +90,9 @@
         "name": "All Pages",
         "type": "PAGEVIEW"
       }
+    ],
+    "builtInVariable": [
+      {"accountId": "0", "containerId": "0", "type": "PAGE_URL", "name": "Page URL"}
     ]
   }
 }

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
 from adcopilot.application.use_cases.generate_gtm_container import generate_gtm_container
+
+_VAR_REF_RE = re.compile(r"\{\{([^}]+)\}\}")
 
 
 @pytest.mark.parametrize("platform", ["wordpress", "shopify", "woocommerce", "custom", "shoper"])
@@ -54,3 +57,33 @@ def test_no_raw_booleans_so_gtm_import_succeeds(platform: str) -> None:
     )
     offenders = _raw_bool_paths(container)
     assert not offenders, f"raw booleans break GTM import at: {offenders}"
+
+
+def _declared_names(container: dict) -> set[str]:
+    """Names GTM can resolve: user-defined variables + declared built-ins."""
+    cv = container["containerVersion"]
+    names: set[str] = set()
+    for v in cv.get("variable", []):
+        names.add(v["name"])
+    for b in cv.get("builtInVariable", []):
+        names.add(b["name"])
+    return names
+
+
+@pytest.mark.parametrize("platform", ["wordpress", "shopify", "woocommerce", "custom", "shoper"])
+def test_all_variable_references_resolve(platform: str) -> None:
+    """Every {{ref}} must point at a declared variable/built-in.
+
+    An undeclared reference (e.g. {{Page URL}} with no PAGE_URL built-in) makes
+    GTM reject the import with "Nie znaleziono" / "Not found". The real
+    conversion id/label placeholders are substituted before this point, so any
+    {{...}} left in the serialized container must resolve.
+    """
+    container = generate_gtm_container(
+        conversion_id="AW-123456789",
+        conversion_label="AbC-D_efGhIjk",
+        platform=platform,
+    )
+    referenced = set(_VAR_REF_RE.findall(json.dumps(container)))
+    unresolved = referenced - _declared_names(container)
+    assert not unresolved, f"unresolved GTM variable references break import: {sorted(unresolved)}"
