@@ -24,9 +24,40 @@ def test_real_values_leave_no_placeholders(platform: str) -> None:
     # A functional container must not ship the template placeholders…
     assert "{{CONVERSION_ID}}" not in serialized
     assert "{{CONVERSION_LABEL}}" not in serialized
-    # …and must carry the real conversion identifiers.
-    assert "AW-123456789" in serialized
+    # …and must carry the real conversion identifiers. GTM's awct tag stores the
+    # Conversion ID as a bare number, so the "AW-" prefix must be stripped.
+    assert "123456789" in serialized
+    assert "AW-123456789" not in serialized
     assert "AbC-D_efGhIjk" in serialized
+
+
+def _conversion_ids(container: dict) -> list[str]:
+    """Every awct tag's ``conversionId`` parameter value."""
+    out: list[str] = []
+    for tag in container["containerVersion"].get("tag", []):
+        for param in tag.get("parameter", []):
+            if param.get("key") == "conversionId":
+                out.append(param["value"])
+    return out
+
+
+@pytest.mark.parametrize(
+    ("conversion_id_in", "expected"),
+    [("AW-709309053", "709309053"), ("709309053", "709309053"), ("aw-555", "555")],
+)
+def test_awct_conversion_id_is_a_bare_number(conversion_id_in: str, expected: str) -> None:
+    # GTM rejects "AW-..." in the conversionId field ("Wartość musi być dodatnią
+    # liczbą całkowitą") — it must be the numeric id only.
+    container = generate_gtm_container(
+        conversion_id=conversion_id_in,
+        conversion_label="AbC-D_efGhIjk",
+        platform="custom",
+    )
+    ids = _conversion_ids(container)
+    assert ids, "expected at least one awct conversionId parameter"
+    for value in ids:
+        assert value == expected
+        assert not value.upper().startswith("AW-")
 
 
 def _raw_bool_paths(node: object, path: str = "$") -> list[str]:
