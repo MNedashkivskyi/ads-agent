@@ -27,12 +27,18 @@ def generate_gtm_container(
     template_path = _pick_template(platform)
     template = json.loads(template_path.read_text())
     container = copy.deepcopy(template)
-    _substitute(container, "{{CONVERSION_ID}}", conversion_id)
+    # GTM's Google Ads Conversion Tracking (awct) tag stores the Conversion ID as
+    # a bare number and validates it as an integer — the "AW-" prefix lives only
+    # in the gtag send_to. Strip it so GTM accepts the import.
+    numeric_conversion_id = (
+        conversion_id[3:] if conversion_id.upper().startswith("AW-") else conversion_id
+    )
+    _substitute(container, "{{CONVERSION_ID}}", numeric_conversion_id)
     _substitute(container, "{{CONVERSION_LABEL}}", conversion_label)
     logger.info(
         "gtm_container_generated",
         platform=platform,
-        conversion_id=conversion_id,
+        conversion_id=numeric_conversion_id,
         template=template_path.name,
     )
     return container

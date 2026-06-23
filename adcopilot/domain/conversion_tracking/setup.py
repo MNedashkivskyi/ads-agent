@@ -57,3 +57,19 @@ class ConversionActionTag:
     def send_to(self) -> str:
         """The ``AW-<id>/<label>`` token used in a gtag ``send_to``."""
         return f"{self.conversion_id}/{self.conversion_label}"
+
+
+@dataclass(frozen=True)
+class ConversionActionTagInfo:
+    """One enabled conversion action plus its parsed conversion id/label.
+
+    The premium GTM generator builds a tag + trigger per action, so it needs the
+    action's ``name`` and ``category`` (to pick a trigger) alongside the real
+    ``AW-<id>`` / ``<label>`` (to point the tag at the right conversion).
+    """
+
+    conversion_action_id: int
+    name: str
+    category: str
+    conversion_id: str  # keeps the ``AW-`` prefix
+    conversion_label: str

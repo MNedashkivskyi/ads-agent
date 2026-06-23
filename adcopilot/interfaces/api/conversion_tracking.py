@@ -320,28 +320,84 @@ class GTMContainerResponse(BaseModel):
     container: dict
 
 
-@router.get(
-    "/{user_id}/conversion-tracking/gtm-container",
-    response_model=GTMContainerResponse,
-)
-async def get_gtm_container(
-    user_id: str,
-    current_user: CurrentUser,
-    settings: Annotated[Settings, Depends(get_settings)],
-    conversion_id: str = "",
-    conversion_label: str = "",
-) -> GTMContainerResponse:
-    """Generate and return a GTM container JSON for the user's detected platform."""
-    if current_user != user_id:
-        raise HTTPException(status_code=403, detail="Access denied")
+class ConversionPlanItemModel(BaseModel):
+    """One conversion action mapped to a proposed/confirmed GTM trigger."""
+
+    conversion_action_id: int
+    name: str
+    category: str
+    conversion_id: str
+    conversion_label: str
+    trigger_kind: str  # page_url_contains | form_submission | tel_click | file_download_click
+    needs_user_input: bool
+    trigger_hint: str = ""  # PAGE_URL_CONTAINS: the URL fragment to match
+    value: float | None = None
+    currency: str | None = None
+
+
+class ConversionPlanResponse(BaseModel):
+    platform: str
+    items: list[ConversionPlanItemModel]
+
+
+class BuildContainerRequest(BaseModel):
+    platform: str = "custom"
+    items: list[ConversionPlanItemModel]
+
+
+def _plan_item_to_model(item) -> ConversionPlanItemModel:
+    return ConversionPlanItemModel(
+        conversion_action_id=item.conversion_action_id,
+        name=item.name,
+        category=item.category,
+        conversion_id=item.conversion_id,
+        conversion_label=item.conversion_label,
+        trigger_kind=str(item.trigger_kind),
+        needs_user_input=item.needs_user_input,
+        trigger_hint=item.trigger_hint,
+        value=item.value,
+        currency=item.currency,
+    )
+
+
+def _model_to_plan_item(model: ConversionPlanItemModel):
+    from adcopilot.application.use_cases.build_conversion_plan import ConversionPlanItem
+    from adcopilot.domain.conversion_tracking.trigger_rules import TriggerKind
+
+    return ConversionPlanItem(
+        conversion_action_id=model.conversion_action_id,
+        name=model.name,
+        category=model.category,
+        conversion_id=model.conversion_id,
+        conversion_label=model.conversion_label,
+        trigger_kind=TriggerKind(model.trigger_kind),
+        needs_user_input=model.needs_user_input,
+        trigger_hint=model.trigger_hint,
+        value=model.value,
+        currency=model.currency,
+    )
+
+
+async def _gather_premium_plan(user_id: str, settings: Settings):
+    """Gather the per-action conversion plan for a user.
+
+    Returns ``(platform, plan_items, customer_id, refresh_token)``. ``plan_items``
+    is the premium per-action plan (possibly empty); ``customer_id`` and
+    ``refresh_token`` support the single-template fallback. Raises 404 when the
+    user has no Google Ads account connected.
+    """
+    import json as _json
 
     from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+    from adcopilot.application.use_cases.build_conversion_plan import build_conversion_plan
     from adcopilot.application.use_cases.detect_website_platform import (
         detect_platform_from_final_urls,
     )
-    from adcopilot.application.use_cases.generate_gtm_container import generate_gtm_container
     from adcopilot.domain.entities import AccountId, UserId
+    from adcopilot.infrastructure.db.repositories.business_economics_repository import (
+        BusinessEconomicsRepository,
+    )
     from adcopilot.infrastructure.db.repositories.google_ads_account_repository import (
         SqlGoogleAdsAccountRepository,
     )
@@ -361,19 +417,112 @@ async def get_gtm_container(
             account = accounts[0]
             final_urls_json = await _latest_final_urls_json(session, account.id)
             credentials = await credentials_repo.get(AccountId(account.id))
+            economics = await BusinessEconomicsRepository(session).get(account.id)
     finally:
         await engine.dispose()
 
     platform = await detect_platform_from_final_urls(final_urls_json)
+    refresh_token = credentials.refresh_token if credentials is not None else None
 
-    # Prefer the account's real conversion tag (AW-<id>/<label>); fall back to
-    # placeholders the user fills in manually only if it can't be retrieved.
+    plan_items: list = []
+    if refresh_token:
+        try:
+            actions = await GoogleAdsQueriesAdapter(settings).list_conversion_action_tags(
+                refresh_token, account.customer_id
+            )
+        except Exception as exc:  # noqa: BLE001 — best-effort; caller falls back
+            logger.warning("gtm_container.actions_lookup_failed", error=str(exc))
+            actions = []
+        if actions:
+            try:
+                final_urls = _json.loads(final_urls_json or "[]")
+            except (_json.JSONDecodeError, TypeError):
+                final_urls = []
+            plan_items = build_conversion_plan(actions, platform, final_urls, economics)
+
+    return platform, plan_items, account.customer_id, refresh_token
+
+
+@router.get(
+    "/{user_id}/conversion-tracking/plan",
+    response_model=ConversionPlanResponse,
+)
+async def get_conversion_plan(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> ConversionPlanResponse:
+    """Return the proposed per-action conversion plan for the guided wizard step."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    platform, plan_items, _customer_id, _refresh_token = await _gather_premium_plan(user_id, settings)
+    return ConversionPlanResponse(
+        platform=platform,
+        items=[_plan_item_to_model(i) for i in plan_items],
+    )
+
+
+@router.post(
+    "/{user_id}/conversion-tracking/gtm-container",
+    response_model=GTMContainerResponse,
+)
+async def build_gtm_container_from_plan(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+    body: BuildContainerRequest,
+) -> GTMContainerResponse:
+    """Build a GTM container from a user-confirmed conversion plan."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from adcopilot.application.use_cases.build_gtm_container import build_gtm_container
+
+    items = [_model_to_plan_item(m) for m in body.items]
+    return GTMContainerResponse(
+        platform=body.platform,
+        filename=f"adswise_gtm_{body.platform}.json",
+        container=build_gtm_container(items),
+    )
+
+
+@router.get(
+    "/{user_id}/conversion-tracking/gtm-container",
+    response_model=GTMContainerResponse,
+)
+async def get_gtm_container(
+    user_id: str,
+    current_user: CurrentUser,
+    settings: Annotated[Settings, Depends(get_settings)],
+    conversion_id: str = "",
+    conversion_label: str = "",
+) -> GTMContainerResponse:
+    """Generate a GTM container using smart auto-defaults (no confirmation step)."""
+    if current_user != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from adcopilot.application.use_cases.build_gtm_container import build_gtm_container
+    from adcopilot.application.use_cases.generate_gtm_container import generate_gtm_container
+    from adcopilot.infrastructure.google_ads.queries_adapter import GoogleAdsQueriesAdapter
+
+    platform, plan_items, customer_id, refresh_token = await _gather_premium_plan(user_id, settings)
+
+    # Premium path: one tag + trigger per enabled conversion action.
+    if not conversion_id and plan_items:
+        return GTMContainerResponse(
+            platform=platform,
+            filename=f"adswise_gtm_{platform}.json",
+            container=build_gtm_container(plan_items),
+        )
+
+    # Fallback: single-template container with the primary/placeholder tag (used
+    # for an explicit override or when no parseable conversion action exists).
     resolved_id = conversion_id
     resolved_label = conversion_label
-    if not resolved_id and credentials is not None:
+    if not resolved_id and refresh_token:
         try:
             tag = await GoogleAdsQueriesAdapter(settings).get_primary_conversion_tag(
-                credentials.refresh_token, account.customer_id
+                refresh_token, customer_id
             )
         except Exception as exc:  # noqa: BLE001 — tag retrieval is best-effort
             logger.warning("gtm_container.tag_lookup_failed", error=str(exc))

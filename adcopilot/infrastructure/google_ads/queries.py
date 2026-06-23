@@ -335,6 +335,64 @@ async def get_primary_conversion_tag(
         raise _wrap_exc(exc) from exc
 
 
+async def list_conversion_action_tags(
+    refresh_token: str,
+    customer_id: str,
+    settings: Settings,
+) -> list:
+    """Return one ``ConversionActionTagInfo`` per ENABLED conversion action.
+
+    Unlike :func:`get_primary_conversion_tag` (which returns only the first
+    parseable tag), this reads the name, category and ``AW-<id>/<label>`` of
+    every enabled action so the premium generator can build a tag per action.
+    Actions whose tag snippet can't be parsed are skipped.
+    """
+    from adcopilot.domain.conversion_tracking.setup import ConversionActionTagInfo
+    from adcopilot.domain.conversion_tracking.tag_parsing import parse_conversion_send_to
+
+    cid = customer_id.replace("-", "")
+    query = """
+        SELECT
+            conversion_action.id,
+            conversion_action.name,
+            conversion_action.category,
+            conversion_action.status,
+            conversion_action.tag_snippets
+        FROM conversion_action
+        WHERE conversion_action.status = 'ENABLED'
+    """
+    try:
+        client = _build_client(refresh_token, settings)
+        service = client.get_service("GoogleAdsService")
+        results: list = []
+        stream = service.search_stream(customer_id=cid, query=query)
+        for batch in stream:
+            for row in batch.results:
+                ca = row.conversion_action
+                parsed = None
+                for snippet in ca.tag_snippets:
+                    parsed = parse_conversion_send_to(snippet.event_snippet)
+                    if parsed is not None:
+                        break
+                if parsed is None:
+                    continue
+                conversion_id, conversion_label = parsed
+                results.append(
+                    ConversionActionTagInfo(
+                        conversion_action_id=ca.id,
+                        name=ca.name,
+                        category=ca.category.name,
+                        conversion_id=conversion_id,
+                        conversion_label=conversion_label,
+                    )
+                )
+        return results
+    except (GoogleAdsAuthError, GoogleAdsUnavailable):
+        raise
+    except Exception as exc:
+        raise _wrap_exc(exc) from exc
+
+
 async def list_recent_search_terms(
     refresh_token: str,
     customer_id: str,

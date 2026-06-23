@@ -8,6 +8,15 @@
     "containerVersionId": "0",
     "name": "Adswise — Lead Generation",
     "description": "Google Ads conversion tracking for lead generation (form submissions)",
+    "container": {
+      "path": "accounts/0/containers/0",
+      "accountId": "0",
+      "containerId": "0",
+      "name": "Adswise Lead Gen Container",
+      "domainName": [],
+      "publicId": "GTM-XXXXXXX",
+      "usageContext": ["WEB"]
+    },
     "tag": [
       {
         "accountId": "0",
@@ -33,18 +42,6 @@
           {"type": "TEMPLATE", "key": "conversionLabel", "value": "{{CONVERSION_LABEL}}"}
         ],
         "firingTriggerId": ["4"]
-      },
-      {
-        "accountId": "0",
-        "containerId": "0",
-        "tagId": "5",
-        "name": "GA Remarketing — All Pages",
-        "type": "awct",
-        "parameter": [
-          {"type": "TEMPLATE", "key": "conversionId", "value": "{{CONVERSION_ID}}"},
-          {"type": "BOOLEAN", "key": "enableRemarketing", "value": "true"}
-        ],
-        "firingTriggerId": ["6"]
       }
     ],
     "trigger": [
@@ -54,8 +51,9 @@
         "triggerId": "2",
         "name": "Form Submission",
         "type": "FORM_SUBMISSION",
-        "waitForTags": true,
-        "checkValidation": true
+        "waitForTags": {"type": "BOOLEAN", "value": "true"},
+        "waitForTagsTimeout": {"type": "TEMPLATE", "value": "2000"},
+        "checkValidation": {"type": "BOOLEAN", "value": "true"}
       },
       {
         "accountId": "0",
@@ -72,14 +70,10 @@
             ]
           }
         ]
-      },
-      {
-        "accountId": "0",
-        "containerId": "0",
-        "triggerId": "6",
-        "name": "All Pages",
-        "type": "PAGEVIEW"
       }
+    ],
+    "builtInVariable": [
+      {"accountId": "0", "containerId": "0", "type": "PAGE_URL", "name": "Page URL"}
     ]
   }
 }
