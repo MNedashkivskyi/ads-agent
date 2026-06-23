@@ -498,6 +498,36 @@ async def get_stats(
     )
 
 
+def dedupe_recommendations(recs: list[Any]) -> list[Any]:
+    """Drop duplicate recommendations, keeping the most recent of each group.
+
+    Two recommendations are considered duplicates when they share the same
+    ``(account_id, kind, severity, status, target_hash)``. ``target_hash``
+    is part of the key so recommendations of the same kind/severity/status
+    that target *different* entities (e.g. two different keywords) are kept
+    as distinct rows — only genuine duplicates are collapsed.
+
+    The input is expected to be ordered most-recent-first (created_at DESC);
+    the first row seen for a key wins, so the newest duplicate is retained.
+    Original order is otherwise preserved.
+    """
+    seen: set[tuple[Any, Any, Any, Any, Any]] = set()
+    deduped: list[Any] = []
+    for r in recs:
+        key = (
+            r.account_id,
+            r.kind,
+            r.severity,
+            r.status,
+            getattr(r, "target_hash", None),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(r)
+    return deduped
+
+
 @router.get("/{user_id}/recommendations", response_model=list[RecommendationResponse])
 async def list_recommendations(
     user_id: str,
@@ -538,6 +568,11 @@ async def list_recommendations(
                 .order_by(RecommendationModel.created_at.desc())
             )
             recs = result.scalars().all()
+
+            # Collapse duplicate recommendations (same account, kind, severity,
+            # status and target) that can accumulate across detection runs.
+            # recs is ordered created_at DESC, so the newest of each group wins.
+            recs = dedupe_recommendations(list(recs))
 
             # Compute which EXECUTED recommendations are still within the undo
             # window so the UI can show/hide the Undo action precisely. One
